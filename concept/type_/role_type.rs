@@ -52,50 +52,6 @@ pub struct RoleType<'a> {
     vertex: TypeVertex<'a>,
 }
 
-impl<'a> RoleType<'a> {
-    pub fn get_players_declared<'m>(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_for_role_type_declared(snapshot, self.clone().into_owned())
-    }
-
-    pub fn get_players<'m>(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<ObjectType<'static>, Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_for_role_type(snapshot, self.clone().into_owned())
-    }
-
-    pub fn get_relations<'m>(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashSet<Relates<'static>>>, ConceptReadError> {
-        type_manager.get_relations_for_role_type(snapshot, self.clone().into_owned())
-    }
-
-    pub fn get_ordering(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-    ) -> Result<Ordering, ConceptReadError> {
-        type_manager.get_role_ordering(snapshot, self.clone().into_owned())
-    }
-
-    pub fn set_ordering(
-        &self,
-        snapshot: &mut impl WritableSnapshot,
-        type_manager: &TypeManager,
-        thing_manager: &ThingManager,
-        ordering: Ordering,
-    ) -> Result<(), ConceptWriteError> {
-        type_manager.set_role_ordering(snapshot, thing_manager, self.clone().into_owned(), ordering)
-    }
-}
-
 impl Hkt for RoleType<'static> {
     type HktSelf<'a> = Self;
 }
@@ -230,7 +186,7 @@ impl<'a> RoleType<'a> {
     ) -> Result<(), ConceptWriteError> {
         match annotation {
             RoleTypeAnnotation::Abstract(_) => {
-                type_manager.set_role_type_annotation_abstract(snapshot, thing_manager, self.clone().into_owned())?
+                type_manager.set_annotation_abstract(snapshot, thing_manager, self.clone().into_owned())?
             }
         };
         Ok(())
@@ -252,12 +208,54 @@ impl<'a> RoleType<'a> {
         Ok(())
     }
 
+    pub fn get_ordering(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<Ordering, ConceptReadError> {
+        type_manager.get_role_type_ordering(snapshot, self.clone().into_owned())
+    }
+
+    pub fn set_ordering(
+        &self,
+        snapshot: &mut impl WritableSnapshot,
+        type_manager: &TypeManager,
+        thing_manager: &ThingManager,
+        ordering: Ordering,
+    ) -> Result<(), ConceptWriteError> {
+        type_manager.set_role_ordering(snapshot, thing_manager, self.clone().into_owned(), ordering)
+    }
+
     pub fn get_relates<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, Relates<'static>>, ConceptReadError> {
         type_manager.get_role_type_relates(snapshot, self.clone().into_owned())
+    }
+
+    pub fn get_relation_types<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+    ) -> Result<MaybeOwns<'m, HashMap<RelationType<'static>, Relates<'static>>>, ConceptReadError> {
+        type_manager.get_role_type_relation_types(snapshot, self.clone().into_owned())
+    }
+
+    pub fn get_plays<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+    ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError> {
+        type_manager.get_role_type_plays(snapshot, self.clone().into_owned())
+    }
+
+    pub fn get_players<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+    ) -> Result<MaybeOwns<'m, HashMap<ObjectType<'static>, Plays<'static>>>, ConceptReadError> {
+        type_manager.get_role_type_player_types(snapshot, self.clone().into_owned())
     }
 
     pub fn into_owned(self) -> RoleType<'static> {
@@ -268,25 +266,6 @@ impl<'a> RoleType<'a> {
 impl<'a> Display for RoleType<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "[RoleType:{}]", self.vertex.type_id_())
-    }
-}
-
-// --- Played API ---
-impl<'a> RoleType<'a> {
-    pub fn get_plays_declared<'m>(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_for_role_type_declared(snapshot, self.clone().into_owned())
-    }
-
-    pub fn get_plays<'m>(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<ObjectType<'static>, Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_for_role_type(snapshot, self.clone().into_owned())
     }
 }
 

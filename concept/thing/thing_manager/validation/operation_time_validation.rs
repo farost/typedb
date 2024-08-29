@@ -355,7 +355,7 @@ impl OperationTimeValidation {
                     .map_err(DataValidationError::ConceptRead)?
                     .into_iter()
                     .try_for_each(|subtype| {
-                        let overrides = subtype
+                        let overrides = subtype // todo: I remove get_owns_overrides, need to get specializes instead?
                             .get_owns_overrides(snapshot, thing_manager.type_manager())
                             .map_err(DataValidationError::ConceptRead)?;
                         let mut overridings = overrides.iter().filter_map(|(overriding, overridden)| {

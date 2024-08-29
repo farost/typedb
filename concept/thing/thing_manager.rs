@@ -85,7 +85,7 @@ use crate::{
         relation_type::RelationType,
         role_type::RoleType,
         type_manager::TypeManager,
-        Capability, EdgeOverride, ObjectTypeAPI, OwnerAPI, PlayerAPI, TypeAPI,
+        Capability, EdgeHidden, ObjectTypeAPI, OwnerAPI, PlayerAPI, TypeAPI,
     },
     ConceptStatus,
 };
@@ -1305,7 +1305,7 @@ impl ThingManager {
             ))
             .filter_map(|(key, _)| {
                 let bytes = Bytes::reference(key.bytes());
-                if EdgeOverride::<Owns<'static>>::is_decodable_from(bytes.clone()) {
+                if EdgeHidden::<Owns<'static>>::is_decodable_from(bytes.clone()) {
                     let property = TypeEdgeProperty::new(Bytes::Reference(key.byte_array().as_ref()));
                     let edge = property.type_edge();
                     let prefix = edge.prefix();
@@ -1389,7 +1389,7 @@ impl ThingManager {
             ))
             .filter_map(|(key, _)| {
                 let bytes = Bytes::reference(key.bytes());
-                if EdgeOverride::<Plays<'static>>::is_decodable_from(bytes.clone()) {
+                if EdgeHidden::<Plays<'static>>::is_decodable_from(bytes.clone()) {
                     let property = TypeEdgeProperty::new(Bytes::Reference(key.byte_array().as_ref()));
                     let edge = property.type_edge();
                     let prefix = edge.prefix();
@@ -1416,7 +1416,7 @@ impl ThingManager {
             ))
             .filter_map(|(key, _)| {
                 let bytes = Bytes::reference(key.bytes());
-                if EdgeOverride::<Relates<'static>>::is_decodable_from(bytes.clone()) {
+                if EdgeHidden::<Relates<'static>>::is_decodable_from(bytes.clone()) {
                     let property = TypeEdgeProperty::new(Bytes::Reference(key.byte_array().as_ref()));
                     let edge = property.type_edge();
                     let prefix = edge.prefix();

@@ -281,18 +281,18 @@ impl TypeCache {
         &T::get_cache(self, type_).common_type_cache().annotations
     }
 
-    pub(crate) fn get_owns_for_attribute_type_declared(
+    pub(crate) fn get_attribute_type_owns(
         &self,
         attribute_type: AttributeType<'_>,
     ) -> &HashSet<Owns<'static>> {
-        &AttributeType::get_cache(self, attribute_type).owns_declared
+        &AttributeType::get_cache(self, attribute_type).owns
     }
 
-    pub(crate) fn get_owns_for_attribute_type(
+    pub(crate) fn get_attribute_type_owner_types(
         &self,
         attribute_type: AttributeType<'_>,
     ) -> &HashMap<ObjectType<'static>, Owns<'static>> {
-        &AttributeType::get_cache(self, attribute_type).owns
+        &AttributeType::get_cache(self, attribute_type).owner_types
     }
 
     pub(crate) fn get_owns_declared<'a, 'this, T, CACHE>(&'this self, type_: T) -> &HashSet<Owns<'static>>
@@ -311,27 +311,16 @@ impl TypeCache {
         &T::get_cache(self, type_).object_cache().owns
     }
 
-    pub(crate) fn get_object_owns_overrides<'a, 'this, T, CACHE>(
-        &'this self,
-        type_: T,
-    ) -> &HashMap<Owns<'static>, Owns<'static>>
-    where
-        T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
-        CACHE: HasObjectCache + 'this,
-    {
-        &T::get_cache(self, type_).object_cache().owns_overrides
-    }
-
     pub(crate) fn get_role_type_ordering(&self, role_type: RoleType<'_>) -> Ordering {
         RoleType::get_cache(self, role_type).ordering
     }
 
-    pub(crate) fn get_role_type_relates_declared(&self, role_type: RoleType<'_>) -> &Relates<'static> {
-        &RoleType::get_cache(self, role_type).relates_declared
+    pub(crate) fn get_role_type_relates(&self, role_type: RoleType<'_>) -> &Relates<'static> {
+        &RoleType::get_cache(self, role_type).relates
     }
 
-    pub(crate) fn get_role_type_relates(&self, role_type: RoleType<'_>) -> &HashSet<Relates<'static>> {
-        &RoleType::get_cache(self, role_type).relates
+    pub(crate) fn get_role_type_relation_types(&self, role_type: RoleType<'_>) -> &HashMap<RelationType<'static>, Relates<'static>> {
+        &RoleType::get_cache(self, role_type).relation_types
     }
 
     pub(crate) fn get_relation_type_relates_declared(
@@ -359,30 +348,30 @@ impl TypeCache {
         &self.relates.get(&relates).unwrap().annotations
     }
 
-    pub(crate) fn get_relates_override<'c>(&'c self, relates: Relates<'c>) -> &'c Option<Relates<'static>> {
-        &self.relates.get(&relates).unwrap().overrides
+    pub(crate) fn get_relates_specializes<'c>(&'c self, relates: Relates<'c>) -> &'c Option<Relates<'static>> {
+        &self.relates.get(&relates).unwrap().specializes
     }
 
-    pub(crate) fn get_relates_overriding<'c>(&'c self, relates: Relates<'c>) -> &'c HashSet<Relates<'static>> {
-        &self.relates.get(&relates).unwrap().overriding
+    pub(crate) fn get_relates_specializing<'c>(&'c self, relates: Relates<'c>) -> &'c HashSet<Relates<'static>> {
+        &self.relates.get(&relates).unwrap().specializing
     }
 
-    pub(crate) fn get_relates_overriding_transitive<'c>(
+    pub(crate) fn get_relates_specializing_transitive<'c>(
         &'c self,
         relates: Relates<'c>,
     ) -> &'c HashSet<Relates<'static>> {
-        &self.relates.get(&relates).unwrap().overriding_transitive
+        &self.relates.get(&relates).unwrap().specializing_transitive
     }
 
-    pub(crate) fn get_plays_for_role_type_declared(&self, role_type: RoleType<'_>) -> &HashSet<Plays<'static>> {
-        &RoleType::get_cache(self, role_type).plays_declared
+    pub(crate) fn get_role_type_plays(&self, role_type: RoleType<'_>) -> &HashSet<Plays<'static>> {
+        &RoleType::get_cache(self, role_type).plays
     }
 
-    pub(crate) fn get_plays_for_role_type(
+    pub(crate) fn get_role_type_player_types(
         &self,
         role_type: RoleType<'_>,
     ) -> &HashMap<ObjectType<'static>, Plays<'static>> {
-        &RoleType::get_cache(self, role_type).plays
+        &RoleType::get_cache(self, role_type).player_types
     }
 
     pub(crate) fn get_plays_declared<'a, 'this, T, CACHE>(&'this self, type_: T) -> &HashSet<Plays<'static>>
@@ -401,27 +390,16 @@ impl TypeCache {
         &T::get_cache(self, type_).object_cache().plays
     }
 
-    pub(crate) fn get_object_plays_overrides<'a, 'this, T, CACHE>(
-        &'this self,
-        type_: T,
-    ) -> &'this HashMap<Plays<'static>, Plays<'static>>
-    where
-        T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
-        CACHE: HasObjectCache + 'this,
-    {
-        &T::get_cache(self, type_).object_cache().plays_overrides
+    pub(crate) fn get_plays_specializes<'c>(&'c self, plays: Plays<'c>) -> &'c Option<Plays<'static>> {
+        &self.plays.get(&plays).unwrap().specializes
     }
 
-    pub(crate) fn get_plays_override<'c>(&'c self, plays: Plays<'c>) -> &'c Option<Plays<'static>> {
-        &self.plays.get(&plays).unwrap().overrides
+    pub(crate) fn get_plays_specializing<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<Plays<'static>> {
+        &self.plays.get(&plays).unwrap().specializing
     }
 
-    pub(crate) fn get_plays_overriding<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<Plays<'static>> {
-        &self.plays.get(&plays).unwrap().overriding
-    }
-
-    pub(crate) fn get_plays_overriding_transitive<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<Plays<'static>> {
-        &self.plays.get(&plays).unwrap().overriding_transitive
+    pub(crate) fn get_plays_specializing_transitive<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<Plays<'static>> {
+        &self.plays.get(&plays).unwrap().specializing_transitive
     }
 
     pub(crate) fn get_plays_annotations_declared<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<PlaysAnnotation> {
@@ -461,16 +439,16 @@ impl TypeCache {
         self.owns.get(&owns).unwrap().ordering
     }
 
-    pub(crate) fn get_owns_override<'c>(&'c self, owns: Owns<'c>) -> &'c Option<Owns<'static>> {
-        &self.owns.get(&owns).unwrap().overrides
+    pub(crate) fn get_owns_specializes<'c>(&'c self, owns: Owns<'c>) -> &'c Option<Owns<'static>> {
+        &self.owns.get(&owns).unwrap().specializes
     }
 
-    pub(crate) fn get_owns_overriding<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<Owns<'static>> {
-        &self.owns.get(&owns).unwrap().overriding
+    pub(crate) fn get_owns_specializing<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<Owns<'static>> {
+        &self.owns.get(&owns).unwrap().specializing
     }
 
-    pub(crate) fn get_owns_overriding_transitive<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<Owns<'static>> {
-        &self.owns.get(&owns).unwrap().overriding_transitive
+    pub(crate) fn get_owns_specializing_transitive<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<Owns<'static>> {
+        &self.owns.get(&owns).unwrap().specializing_transitive
     }
 
     pub(crate) fn get_struct_definition_key(&self, label: &str) -> Option<DefinitionKey<'static>> {

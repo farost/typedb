@@ -203,12 +203,6 @@ pub trait OwnerAPI<'a>: TypeAPI<'a> {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError>;
 
-    fn get_owns_overrides<'m>(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<Owns<'static>, Owns<'static>>>, ConceptReadError>;
-
     fn get_owns_attribute_declared(
         &self,
         snapshot: &impl ReadableSnapshot,
@@ -426,19 +420,19 @@ pub trait Capability<'a>:
 
     fn interface(&self) -> Self::InterfaceType;
 
-    fn get_override<'this>(
+    fn get_specializes<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, Option<Self>>, ConceptReadError>;
 
-    fn get_overriding<'this>(
+    fn get_specializing<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, HashSet<Self>>, ConceptReadError>;
 
-    fn get_overriding_transitive<'this>(
+    fn get_specializing_transitive<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
@@ -479,18 +473,18 @@ pub trait Capability<'a>:
     ) -> Result<AnnotationCardinality, ConceptReadError>;
 }
 
-pub struct EdgeOverride<EDGE: TypeEdgeEncoding<'static>> {
-    overrides: EDGE, // TODO: Consider storing EDGE::To instead
+pub struct EdgeHidden<EDGE: TypeEdgeEncoding<'static>> {
+    hidden: EDGE,
 }
 
-impl<'a, EDGE: TypeEdgeEncoding<'static>> TypeEdgePropertyEncoding<'a> for EdgeOverride<EDGE> {
-    const INFIX: Infix = Infix::PropertyOverride;
+impl<'a, EDGE: TypeEdgeEncoding<'static>> TypeEdgePropertyEncoding<'a> for EdgeHidden<EDGE> {
+    const INFIX: Infix = Infix::PropertyHide;
 
     fn from_value_bytes(value: ByteReference<'_>) -> Self {
-        Self { overrides: EDGE::decode_canonical_edge(Bytes::Reference(value).into_owned()) }
+        Self { hidden: EDGE::decode_canonical_edge(Bytes::Reference(value).into_owned()) }
     }
 
     fn to_value_bytes(self) -> Option<Bytes<'a, BUFFER_VALUE_INLINE>> {
-        Some(Bytes::Reference(self.overrides.to_canonical_type_edge().bytes()).into_owned())
+        Some(Bytes::Reference(self.hidden.to_canonical_type_edge().bytes()).into_owned())
     }
 }

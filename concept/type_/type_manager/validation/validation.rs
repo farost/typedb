@@ -105,12 +105,12 @@ pub(crate) fn is_overridden_interface_object_declared_supertype_or_self<T: KindA
     Ok(TypeReader::get_supertype(snapshot, type_.clone())? == Some(overridden.clone()))
 }
 
-pub(crate) fn is_interface_hidden_by_overrides<CAP: Capability<'static>>(
+pub(crate) fn is_interface_hidden<CAP: Capability<'static>>(
     snapshot: &impl ReadableSnapshot,
     object_type: CAP::ObjectType,
     interface_type: CAP::InterfaceType,
 ) -> Result<bool, ConceptReadError> {
-    let capabilities_overrides = TypeReader::get_object_capabilities_overrides::<CAP>(snapshot, object_type)?;
+    let capabilities_overrides = TypeReader::get_object_capabilities_hides::<CAP>(snapshot, object_type)?;
     Ok(capabilities_overrides
         .iter()
         .find(|(capability, overridden_capability)| {
@@ -250,7 +250,7 @@ pub(crate) fn validate_edge_regex_narrows_inherited_regex<CAP: Capability<'stati
 ) -> Result<(), SchemaValidationError> {
     let overridden_owns = match overridden_owns {
         None => {
-            TypeReader::get_capability_override(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
+            TypeReader::get_capability_specializes(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
         }
         Some(_) => overridden_owns,
     };
@@ -331,7 +331,7 @@ pub(crate) fn validate_edge_range_narrows_inherited_range<CAP: Capability<'stati
 ) -> Result<(), SchemaValidationError> {
     let overridden_owns = match overridden_owns {
         None => {
-            TypeReader::get_capability_override(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
+            TypeReader::get_capability_specializes(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
         }
         Some(_) => overridden_owns,
     };
@@ -411,7 +411,7 @@ pub(crate) fn validate_edge_values_narrows_inherited_values<CAP: Capability<'sta
 ) -> Result<(), SchemaValidationError> {
     let overridden_owns = match overridden_owns {
         None => {
-            TypeReader::get_capability_override(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
+            TypeReader::get_capability_specializes(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
         }
         Some(_) => overridden_owns,
     };
@@ -653,7 +653,7 @@ pub(crate) fn capability_get_declared_annotation_by_category<CAP: Capability<'st
     capability: CAP,
     annotation_category: AnnotationCategory,
 ) -> Result<Option<Annotation>, ConceptReadError> {
-    let annotation = TypeReader::get_type_edge_annotations_declared(snapshot, capability.clone())?
+    let annotation = TypeReader::get_capability_annotations_declared(snapshot, capability.clone())?
         .into_iter()
         .find(|found_annotation| found_annotation.clone().into().category() == annotation_category);
     Ok(annotation.map(|val| val.clone().into()))
@@ -716,7 +716,7 @@ pub fn validate_capabilities_cardinality<CAP: Capability<'static>>(
         let mut current_overridden_capability = if let Some(not_stored_override) = not_stored_override {
             not_stored_override.clone()
         } else {
-            TypeReader::get_capability_override(snapshot, capability.clone())?
+            TypeReader::get_capability_specializes(snapshot, capability.clone())?
         };
 
         while let Some(overridden_capability) = current_overridden_capability {
@@ -751,7 +751,7 @@ pub fn validate_capabilities_cardinality<CAP: Capability<'static>>(
             let next_overridden_capability = if let Some(not_stored_override) = not_stored_override {
                 not_stored_override.clone()
             } else {
-                TypeReader::get_capability_override(snapshot, overridden_capability.clone())?
+                TypeReader::get_capability_specializes(snapshot, overridden_capability.clone())?
             };
 
             current_overridden_capability = match next_overridden_capability {

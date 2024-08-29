@@ -264,8 +264,8 @@ impl<'a> RelationType<'a> {
         type_manager: &TypeManager,
         thing_manager: &ThingManager,
         name: &str,
-        ordering: Ordering,
-        cardinality: Option<AnnotationCardinality>,
+        ordering: Ordering, // TODO: remove?
+        cardinality: Option<AnnotationCardinality>, // TODO: Remove!
     ) -> Result<Relates<'static>, ConceptWriteError> {
         let label = Label::build_scoped(name, self.get_label(snapshot, type_manager).unwrap().name().as_str());
         let role_type = type_manager.create_role_type(
@@ -419,14 +419,6 @@ impl<'a> OwnerAPI<'a> for RelationType<'a> {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
         type_manager.get_relation_type_owns(snapshot, self.clone().into_owned())
-    }
-
-    fn get_owns_overrides<'m>(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<Owns<'static>, Owns<'static>>>, ConceptReadError> {
-        type_manager.get_relation_type_owns_overrides(snapshot, self.clone().into_owned())
     }
 }
 

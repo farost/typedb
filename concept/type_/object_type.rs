@@ -117,14 +117,6 @@ impl<'a> OwnerAPI<'a> for ObjectType<'a> {
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
         with_object_type!(self, |object| { object.get_owns(snapshot, type_manager) })
     }
-
-    fn get_owns_overrides<'m>(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<Owns<'static>, Owns<'static>>>, ConceptReadError> {
-        with_object_type!(self, |object| { object.get_owns_overrides(snapshot, type_manager) })
-    }
 }
 
 impl<'a> ConceptAPI<'a> for ObjectType<'a> {}

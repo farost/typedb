@@ -25,7 +25,6 @@ use crate::{
     },
 };
 
-pub(crate) mod annotation_compatibility;
 pub(crate) mod commit_time_validation;
 pub(crate) mod operation_time_validation;
 pub(crate) mod validation;
@@ -59,7 +58,6 @@ pub enum SchemaValidationError {
     PlaysNotInherited(ObjectType<'static>, RoleType<'static>),
     OverriddenCapabilityCannotBeRedeclared(CapabilityKind, Label<'static>, Label<'static>),
     OverriddenCapabilityInterfaceIsNotSupertype(CapabilityKind, Label<'static>, Label<'static>, Label<'static>),
-    NonAbstractTypeCannotHaveAbstractInterfaceCapability(CapabilityKind, Label<'static>, Label<'static>),
     AttributeTypeSupertypeIsNotAbstract(Label<'static>),
     AbstractTypesSupertypeHasToBeAbstract(Label<'static>, Label<'static>),
     CannotUnsetAbstractnessAsItHasDeclaredCapabilityOfAbstractInterface(CapabilityKind, Label<'static>, Label<'static>),

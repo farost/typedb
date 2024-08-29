@@ -41,11 +41,14 @@ macro_rules! compute_constraint_one_to_one_annotation {
     };
 }
 
+// Siblings = both interface types i1 and i2 are capabilities of the same capability type (owns/plays/relates)
+// of the same object type (e.g. they are owned by the same type, they are played by the same type)
+// with "i1 isa $x; i2 isa $x;"
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum ConstraintValidationMode {
-    Type,                       // or Capability
-    TypeAndSiblings,            // or CapabilityAndSiblings (siblings = override the same capability)
-    TypeAndSiblingsAndSubtypes, // or CapabilityAndSiblingsAndOverridingCapabilities
+    SingleInstanceOfTypeOrSubtype,
+    AllInstancesOfSiblingTypeOrSubtypes,
+    AllInstancesOfTypeOrSubtypes,
 }
 
 impl Constraint {
@@ -108,7 +111,7 @@ impl Constraint {
 
         for annotation in annotations.into_iter() {
             let annotation = annotation.clone().into();
-            let modes = Self::inherited_constraint_validation_mode(annotation.category());
+            let modes = Self::constraint_validation_mode(annotation.category());
 
             for mode in modes {
                 map.entry(mode).or_insert_with(HashSet::default).insert(annotation.clone());
@@ -118,31 +121,26 @@ impl Constraint {
         Ok(map)
     }
 
-    fn inherited_constraint_validation_mode(
+    pub(crate) fn constraint_validation_mode(
         annotation_category: AnnotationCategory,
     ) -> &'static [ConstraintValidationMode] {
         match annotation_category {
-            AnnotationCategory::Abstract => &[ConstraintValidationMode::Type],
-            AnnotationCategory::Distinct => &[ConstraintValidationMode::Type],
-            AnnotationCategory::Independent => &[],
-            AnnotationCategory::Unique => &[ConstraintValidationMode::TypeAndSiblingsAndSubtypes],
-            AnnotationCategory::Cardinality =>
-            // ::Type for min, ::TypeAndSiblings for max
-            {
-                &[ConstraintValidationMode::Type, ConstraintValidationMode::TypeAndSiblings]
-            }
-            AnnotationCategory::Key => {
+            AnnotationCategory::Abstract => &[ConstraintValidationMode::SingleInstanceOfTypeOrSubtype],
+            AnnotationCategory::Distinct => &[ConstraintValidationMode::SingleInstanceOfTypeOrSubtype],
+            AnnotationCategory::Unique => &[ConstraintValidationMode::AllInstancesOfTypeOrSubtypes],
+            AnnotationCategory::Cardinality => &[ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes],
+            AnnotationCategory::Key => { // TODO: use ConstraintCategory or something like that not to face Key...
                 // WARNING: must match Unique + Cardinality checks!
                 &[
-                    ConstraintValidationMode::Type,
-                    ConstraintValidationMode::TypeAndSiblings,
-                    ConstraintValidationMode::TypeAndSiblingsAndSubtypes,
+                    ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes,
+                    ConstraintValidationMode::AllInstancesOfTypeOrSubtypes,
                 ]
             }
-            AnnotationCategory::Regex => &[ConstraintValidationMode::Type],
+            AnnotationCategory::Regex => &[ConstraintValidationMode::SingleInstanceOfTypeOrSubtype],
+            AnnotationCategory::Range => &[ConstraintValidationMode::SingleInstanceOfTypeOrSubtype],
+            AnnotationCategory::Values => &[ConstraintValidationMode::SingleInstanceOfTypeOrSubtype],
             AnnotationCategory::Cascade => &[],
-            AnnotationCategory::Range => &[ConstraintValidationMode::Type],
-            AnnotationCategory::Values => &[ConstraintValidationMode::Type],
+            AnnotationCategory::Independent => &[],
         }
     }
 }

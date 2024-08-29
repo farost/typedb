@@ -35,7 +35,7 @@ pub struct Relates<'a> {
 }
 
 impl<'a> Relates<'a> {
-    pub const DEFAULT_UNORDERED_CARDINALITY: AnnotationCardinality = AnnotationCardinality::new(1, Some(1));
+    pub const DEFAULT_UNORDERED_CARDINALITY: AnnotationCardinality = AnnotationCardinality::new(0, Some(1));
     pub const DEFAULT_ORDERED_CARDINALITY: AnnotationCardinality = AnnotationCardinality::new(0, None);
 
     pub fn relation(&self) -> RelationType<'a> {
@@ -156,28 +156,28 @@ impl<'a> Capability<'a> for Relates<'a> {
         self.role.clone()
     }
 
-    fn get_override<'this>(
+    fn get_specializes<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, Option<Relates<'static>>>, ConceptReadError> {
-        type_manager.get_relates_override(snapshot, self.clone().into_owned())
+        type_manager.get_relates_specializes(snapshot, self.clone().into_owned())
     }
 
-    fn get_overriding<'this>(
+    fn get_specializing<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, HashSet<Relates<'static>>>, ConceptReadError> {
-        type_manager.get_relates_overriding(snapshot, self.clone().into_owned())
+        type_manager.get_relates_specializing(snapshot, self.clone().into_owned())
     }
 
-    fn get_overriding_transitive<'this>(
+    fn get_specializing_transitive<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, HashSet<Relates<'static>>>, ConceptReadError> {
-        type_manager.get_relates_overriding_transitive(snapshot, self.clone().into_owned())
+        type_manager.get_relates_specializing_transitive(snapshot, self.clone().into_owned())
     }
 
     fn get_annotations_declared<'m>(

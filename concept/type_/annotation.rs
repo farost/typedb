@@ -517,6 +517,9 @@ impl AnnotationCategory {
     }
 
     pub fn inheritable_alongside(&self, other: AnnotationCategory) -> bool {
+        if !self.inheritable() {
+            return false;
+        }
         // Note: this function implies that all the compared annotations already processed
         // the type manager validations (other "declarable" methods) and only considers
         // valid inheritance scenarios.
@@ -529,8 +532,12 @@ impl AnnotationCategory {
                 AnnotationCategory::Key => false,
                 _ => true,
             },
+            | AnnotationCategory::Key => match other {
+                | AnnotationCategory::Cardinality
+                | AnnotationCategory::Unique => unreachable!("You presumably wanted to call for other.inheritable_alongside(self)"),
+                _ => true,
+            }
             | AnnotationCategory::Abstract
-            | AnnotationCategory::Key
             | AnnotationCategory::Distinct
             | AnnotationCategory::Independent
             | AnnotationCategory::Regex

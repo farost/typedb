@@ -368,25 +368,20 @@ impl<'a> Display for AttributeType<'a> {
 
 // --- Owned API ---
 impl<'a> AttributeType<'a> {
-    pub fn get_owns_declared<'m>(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
-        type_manager.get_owns_for_attribute_declared(snapshot, self.clone().into_owned())
-    }
-
     pub fn get_owns<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<ObjectType<'static>, Owns<'static>>>, ConceptReadError> {
-        type_manager.get_owns_for_attribute(snapshot, self.clone().into_owned())
+    ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_attribute_type_owns(snapshot, self.clone().into_owned())
     }
 
-    fn get_owns_owners(&self) {
-        // TODO: Why not just have owns?
-        todo!()
+    pub fn get_owners<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+    ) -> Result<MaybeOwns<'m, HashMap<ObjectType<'static>, Owns<'static>>>, ConceptReadError> {
+        type_manager.get_attribute_type_owner_types(snapshot, self.clone().into_owned())
     }
 }
 
