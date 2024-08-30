@@ -85,7 +85,8 @@ impl CommitTimeValidation {
     pub(crate) fn validate_object_has<'a>(
         snapshot: &impl WritableSnapshot,
         thing_manager: &ThingManager,
-        object: &Object<'a>,
+        object: Object<'a>,
+        modified_owns: HashSet<Owns<'a>>,
         out_errors: &mut Vec<DataValidationError>,
     ) -> Result<(), ConceptReadError> {
         let type_ = object.type_();
@@ -108,7 +109,8 @@ impl CommitTimeValidation {
     pub(crate) fn validate_object_links<'a>(
         snapshot: &impl WritableSnapshot,
         thing_manager: &ThingManager,
-        object: &Object<'a>,
+        object: Object<'a>,
+        modified_plays: HashSet<Plays<'a>>,
         out_errors: &mut Vec<DataValidationError>,
     ) -> Result<(), ConceptReadError> {
         let type_ = object.type_();
@@ -131,7 +133,8 @@ impl CommitTimeValidation {
     pub(crate) fn validate_relation_links<'a>(
         snapshot: &impl WritableSnapshot,
         thing_manager: &ThingManager,
-        relation: &Relation<'a>,
+        relation: Relation<'a>,
+        modified_relates: HashSet<Relates<'a>>,
         out_errors: &mut Vec<DataValidationError>,
     ) -> Result<(), ConceptReadError> {
         let type_ = relation.type_();

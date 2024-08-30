@@ -5,6 +5,7 @@
  */
 
 use std::{borrow::Cow, collections::HashSet, io::Read, iter::once, sync::Arc};
+use std::collections::HashMap;
 
 use bytes::{byte_array::ByteArray, Bytes};
 use encoding::{
@@ -1183,43 +1184,29 @@ impl ThingManager {
     fn validate(&self, snapshot: &mut impl WritableSnapshot) -> Result<(), Vec<ConceptWriteError>> {
         let mut errors = Vec::new();
 
-        let mut modified_objects = HashSet::new();
-        let mut modified_objects_only_has = HashSet::new();
-        let mut modified_objects_only_links = HashSet::new();
-        let mut modified_relations = HashSet::new();
+        let mut modified_objects_owns = HashMap::new();
+        let mut modified_objects_plays = HashMap::new();
+        let mut modified_relations_relates = HashMap::new();
 
-        let mut res = self.collect_new_objects(snapshot, &mut modified_objects, &mut modified_relations);
+        let mut res = self.collect_new_objects(snapshot, &mut modified_objects_owns, &mut modified_objects_plays, &mut modified_relations_relates);
         collect_errors!(errors, res, DataValidationError::ConceptRead);
-        res = self.collect_modified_has(snapshot, &mut modified_objects_only_has);
+        res = self.collect_modified_has(snapshot, &mut modified_objects_owns);
         collect_errors!(errors, res, DataValidationError::ConceptRead);
-        res = self.collect_modified_links(snapshot, &mut modified_relations, &mut modified_objects_only_links);
+        res = self.collect_modified_links(snapshot, &mut modified_relations_relates, &mut modified_objects_plays);
         collect_errors!(errors, res, DataValidationError::ConceptRead);
 
-        for object in &modified_objects {
-            res = CommitTimeValidation::validate_object_has(snapshot, self, object, &mut errors);
-            collect_errors!(errors, res, DataValidationError::ConceptRead);
-            res = CommitTimeValidation::validate_object_links(snapshot, self, object, &mut errors);
+        for (object, modified_owns) in modified_objects_owns {
+            res = CommitTimeValidation::validate_object_has(snapshot, self, object, modified_owns, &mut errors);
             collect_errors!(errors, res, DataValidationError::ConceptRead);
         }
 
-        for object in &modified_objects_only_has {
-            if modified_objects.contains(&object) {
-                continue;
-            }
-            res = CommitTimeValidation::validate_object_has(snapshot, self, object, &mut errors);
+        for (object, modified_plays) in modified_objects_plays {
+            res = CommitTimeValidation::validate_object_links(snapshot, self, object, modified_plays, &mut errors);
             collect_errors!(errors, res, DataValidationError::ConceptRead);
         }
 
-        for object in &modified_objects_only_links {
-            if modified_objects.contains(&object) {
-                continue;
-            }
-            res = CommitTimeValidation::validate_object_links(snapshot, self, object, &mut errors);
-            collect_errors!(errors, res, DataValidationError::ConceptRead);
-        }
-
-        for relation in &modified_relations {
-            res = CommitTimeValidation::validate_relation_links(snapshot, self, relation, &mut errors);
+        for (relation, modified_relates) in modified_relations_relates {
+            res = CommitTimeValidation::validate_relation_links(snapshot, self, relation, modified_relates, &mut errors);
             collect_errors!(errors, res, DataValidationError::ConceptRead);
         }
 
@@ -1233,8 +1220,9 @@ impl ThingManager {
     fn collect_new_objects(
         &self,
         snapshot: &impl WritableSnapshot,
-        out_objects: &mut HashSet<Object<'static>>,
-        out_relations: &mut HashSet<Relation<'static>>,
+        out_object_owns: &mut HashMap<Object<'static>, HashSet<Owns<'static>>>,
+        out_object_plays: &mut HashMap<Object<'static>, HashSet<Plays<'static>>>,
+        out_relation_relates: &mut HashMap<Relation<'static>, HashSet<Relates<'static>>>,
     ) -> Result<(), ConceptReadError> {
         for key in snapshot
             .iterate_writes_range(KeyRange::new_inclusive(
@@ -1253,14 +1241,26 @@ impl ThingManager {
                 Write::Put { .. } => unreachable!("Encountered a Put for an entity"),
             })
         {
-            let owner = Object::new(ObjectVertex::new(Bytes::reference(key.bytes()))).into_owned();
-            match &owner {
+            let object = Object::new(ObjectVertex::new(Bytes::reference(key.bytes()))).into_owned();
+            match &object {
                 Object::Entity(_) => {}
                 Object::Relation(relation) => {
-                    out_relations.insert(relation.clone());
+                    let updated_relates = out_relation_relates.entry(relation.clone()).or_insert(HashSet::new());
+                    for relates in relation.type_().get_relates(snapshot, self.type_manager())?.into_iter() {
+                        updated_relates.insert(relates.clone())
+                    }
                 }
             }
-            out_objects.insert(owner);
+
+            let updated_owns = out_object_owns.entry(object.clone()).or_insert(HashSet::new());
+            for owns in object.type_().get_owns(snapshot, self.type_manager())?.into_iter() {
+                updated_owns.insert(owns.clone())
+            }
+
+            let updated_plays = out_object_plays.entry(object.clone()).or_insert(HashSet::new());
+            for plays in object.type_().get_plays(snapshot, self.type_manager())?.into_iter() {
+                updated_plays.insert(plays.clone())
+            }
         }
         Ok(())
     }
@@ -1268,59 +1268,18 @@ impl ThingManager {
     fn collect_modified_has(
         &self,
         snapshot: &impl WritableSnapshot,
-        out_objects: &mut HashSet<Object<'static>>,
+        out_object_owns: &mut HashMap<Object<'static>, HashSet<Owns<'static>>>,
     ) -> Result<(), ConceptReadError> {
         for (key, _) in snapshot
             .iterate_writes_range(KeyRange::new_within(ThingEdgeHas::prefix(), ThingEdgeHas::FIXED_WIDTH_ENCODING))
         {
             let edge = ThingEdgeHas::new(Bytes::Reference(key.byte_array().as_ref()));
             let owner = Object::new(edge.from());
+            let attribute = Attribute::new(edge.to());
             if self.object_exists(snapshot, &owner)? {
-                out_objects.insert(owner.into_owned());
-            }
-        }
-
-        for (key, _) in snapshot
-            .iterate_writes_range(KeyRange::new_within(
-                TypeEdge::build_prefix(Prefix::EdgeOwns),
-                TypeEdge::FIXED_WIDTH_ENCODING,
-            ))
-            .filter(|(_, write)| !matches!(write, Write::Delete))
-        {
-            let edge = TypeEdge::new(Bytes::Reference(key.byte_array().as_ref()));
-            let owner_type = ObjectType::new(edge.from().into_owned());
-            let mut owners = self.get_objects_in(snapshot, owner_type);
-            while let Some(owner) = owners.next().transpose()? {
-                if self.object_exists(snapshot, &owner)? {
-                    out_objects.insert(owner.into_owned());
-                }
-            }
-        }
-
-        // TODO: Should probably remove it
-        for owner_type in snapshot
-            .iterate_writes_range(KeyRange::new_within(
-                TypeEdgeProperty::build_prefix(),
-                TypeEdge::FIXED_WIDTH_ENCODING,
-            ))
-            .filter_map(|(key, _)| {
-                let bytes = Bytes::reference(key.bytes());
-                if EdgeHidden::<Owns<'static>>::is_decodable_from(bytes.clone()) {
-                    let property = TypeEdgeProperty::new(Bytes::Reference(key.byte_array().as_ref()));
-                    let edge = property.type_edge();
-                    let prefix = edge.prefix();
-                    if prefix == Owns::CANONICAL_PREFIX {
-                        return Some(ObjectType::new(edge.from()).into_owned());
-                    }
-                }
-                None
-            })
-        {
-            let mut owners = self.get_objects_in(snapshot, owner_type);
-            while let Some(owner) = owners.next().transpose()? {
-                if self.object_exists(snapshot, &owner)? {
-                    out_objects.insert(owner.into_owned());
-                }
+                let owns = owner.type_().get_owns_attribute(snapshot, self.type_manager(), attribute.type_())?.ok_or(ConceptReadError::CorruptFoundHasWithoutOwns)?;
+                let updated_owns = out_object_owns.entry(owner.into_owned()).or_insert(HashSet::new());
+                updated_owns.insert(owns);
             }
         }
 
@@ -1330,8 +1289,8 @@ impl ThingManager {
     fn collect_modified_links(
         &self,
         snapshot: &impl WritableSnapshot,
-        out_relations: &mut HashSet<Relation<'static>>,
-        out_players: &mut HashSet<Object<'static>>,
+        out_relation_relates: &mut HashMap<Relation<'static>, HashSet<Relates<'static>>>,
+        out_object_plays: &mut HashMap<Object<'static>, HashSet<Plays<'static>>>,
     ) -> Result<(), ConceptReadError> {
         for (key, _) in snapshot
             .iterate_writes_range(KeyRange::new_within(ThingEdgeLinks::prefix(), ThingEdgeLinks::FIXED_WIDTH_ENCODING))
@@ -1339,99 +1298,18 @@ impl ThingManager {
             let edge = ThingEdgeLinks::new(Bytes::reference(key.bytes()));
             let relation = Relation::new(edge.relation());
             let player = Object::new(edge.player());
+            let role_type = RoleType::build_from_type_id(edge.role_id());
+
             if self.object_exists(snapshot, &relation)? {
-                out_relations.insert(relation.into_owned());
+                let relates = relation.type_().get_relates_role(snapshot, self.type_manager(), role_type.clone())?.ok_or(ConceptReadError::CorruptFoundLinksWithoutRelates)?;
+                let updated_relates = out_relation_relates.entry(relation.into_owned()).or_insert(HashSet::new());
+                updated_relates.insert(relates);
             }
+
             if self.object_exists(snapshot, &player)? {
-                out_players.insert(player.into_owned());
-            }
-        }
-
-        for (key, _) in snapshot
-            .iterate_writes_range(KeyRange::new_within(
-                TypeEdge::build_prefix(Prefix::EdgePlays),
-                TypeEdge::FIXED_WIDTH_ENCODING,
-            ))
-            .filter(|(_, write)| !matches!(write, Write::Delete))
-        {
-            let edge = TypeEdge::new(Bytes::Reference(key.byte_array().as_ref()));
-            let player_type = ObjectType::new(edge.from().into_owned());
-            let mut players = self.get_objects_in(snapshot, player_type);
-            while let Some(player) = players.next().transpose()? {
-                if self.object_exists(snapshot, &player)? {
-                    out_players.insert(player.into_owned());
-                }
-            }
-        }
-
-        for (key, _) in snapshot
-            .iterate_writes_range(KeyRange::new_within(
-                TypeEdge::build_prefix(Prefix::EdgeRelates),
-                TypeEdge::FIXED_WIDTH_ENCODING,
-            ))
-            .filter(|(_, write)| !matches!(write, Write::Delete))
-        {
-            let edge = TypeEdge::new(Bytes::Reference(key.byte_array().as_ref()));
-            let relation_type = RelationType::new(edge.from().into_owned());
-            let mut relations = self.get_relations_in(snapshot, relation_type);
-            while let Some(relation) = relations.next().transpose()? {
-                if self.object_exists(snapshot, &relation)? {
-                    out_relations.insert(relation.into_owned());
-                }
-            }
-        }
-
-        // TODO: Should probably remove it
-        for player_type in snapshot
-            .iterate_writes_range(KeyRange::new_within(
-                TypeEdgeProperty::build_prefix(),
-                TypeEdge::FIXED_WIDTH_ENCODING,
-            ))
-            .filter_map(|(key, _)| {
-                let bytes = Bytes::reference(key.bytes());
-                if EdgeHidden::<Plays<'static>>::is_decodable_from(bytes.clone()) {
-                    let property = TypeEdgeProperty::new(Bytes::Reference(key.byte_array().as_ref()));
-                    let edge = property.type_edge();
-                    let prefix = edge.prefix();
-                    if prefix == Plays::CANONICAL_PREFIX {
-                        return Some(ObjectType::new(edge.from()).into_owned());
-                    }
-                }
-                None
-            })
-        {
-            let mut players = self.get_objects_in(snapshot, player_type);
-            while let Some(player) = players.next().transpose()? {
-                if self.object_exists(snapshot, &player)? {
-                    out_players.insert(player.into_owned());
-                }
-            }
-        }
-
-        // TODO: Should probably remove it
-        for relation_type in snapshot
-            .iterate_writes_range(KeyRange::new_within(
-                TypeEdgeProperty::build_prefix(),
-                TypeEdge::FIXED_WIDTH_ENCODING,
-            ))
-            .filter_map(|(key, _)| {
-                let bytes = Bytes::reference(key.bytes());
-                if EdgeHidden::<Relates<'static>>::is_decodable_from(bytes.clone()) {
-                    let property = TypeEdgeProperty::new(Bytes::Reference(key.byte_array().as_ref()));
-                    let edge = property.type_edge();
-                    let prefix = edge.prefix();
-                    if prefix == Relates::CANONICAL_PREFIX {
-                        return Some(RelationType::new(edge.from()).into_owned());
-                    }
-                }
-                None
-            })
-        {
-            let mut relations = self.get_relations_in(snapshot, relation_type);
-            while let Some(relation) = relations.next().transpose()? {
-                if self.object_exists(snapshot, &relation)? {
-                    out_relations.insert(relation.into_owned());
-                }
+                let plays = player.type_().get_plays_role(snapshot, self.type_manager(), role_type)?.ok_or(ConceptReadError::CorruptFoundLinksWithoutPlays)?;
+                let updated_plays = out_object_plays.entry(player.into_owned()).or_insert(HashSet::new());
+                updated_plays.insert(plays);
             }
         }
 

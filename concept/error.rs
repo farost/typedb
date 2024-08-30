@@ -101,6 +101,9 @@ impl From<ConceptReadError> for ConceptWriteError {
             ConceptReadError::CorruptMissingMandatoryOrdering => Self::ConceptRead { source: error },
             ConceptReadError::CorruptMissingMandatoryValueType => Self::ConceptRead { source: error },
             ConceptReadError::CorruptMissingMandatoryRelatesForRole => Self::ConceptRead { source: error },
+            ConceptReadError::CorruptFoundHasWithoutOwns => Self::ConceptRead { source: error },
+            ConceptReadError::CorruptFoundLinksWithoutPlays => Self::ConceptRead { source: error },
+            ConceptReadError::CorruptFoundLinksWithoutRelates => Self::ConceptRead { source: error },
             ConceptReadError::CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(_, _, _) => {
                 Self::ConceptRead { source: error }
             }
@@ -130,6 +133,9 @@ pub enum ConceptReadError {
     CorruptMissingMandatoryOrdering,
     CorruptMissingMandatoryValueType,
     CorruptMissingMandatoryRelatesForRole,
+    CorruptFoundHasWithoutOwns,
+    CorruptFoundLinksWithoutPlays,
+    CorruptFoundLinksWithoutRelates,
     CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(Label<'static>, ValueType, Annotation),
     CannotGetOwnsDoesntExist(Label<'static>, Label<'static>),
     CannotGetPlaysDoesntExist(Label<'static>, Label<'static>),
@@ -163,6 +169,9 @@ impl Error for ConceptReadError {
             Self::CorruptMissingMandatoryValueType => None,
             Self::CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(_, _, _) => None,
             Self::CorruptMissingMandatoryRelatesForRole => None,
+            Self::CorruptFoundHasWithoutOwns => None,
+            Self::CorruptFoundLinksWithoutPlays => None,
+            Self::CorruptFoundLinksWithoutRelates => None,
             Self::CannotGetOwnsDoesntExist(_, _) => None,
             Self::CannotGetPlaysDoesntExist(_, _) => None,
             Self::CannotGetRelatesDoesntExist(_, _) => None,

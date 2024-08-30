@@ -462,7 +462,7 @@ pub trait Capability<'a>:
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<Option<AnnotationCardinality>, ConceptReadError> {
+    ) -> Result<Option<AnnotationCardinality>, ConceptReadError> { // Maybe should return default if not set!
         type_manager.get_cardinality_declared(snapshot, self.clone())
     }
 
