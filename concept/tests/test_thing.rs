@@ -404,9 +404,10 @@ fn role_player_distinct() {
         let (type_manager, thing_manager) = load_managers(storage.clone());
 
         let employment_type = type_manager.create_relation_type(&mut snapshot, &employment_label).unwrap();
-        employment_type
-            .create_relates(&mut snapshot, &type_manager, &thing_manager, employee_role, Ordering::Ordered, None)
+        let employment_employee_relates = employment_type
+            .create_relates(&mut snapshot, &type_manager, &thing_manager, employee_role)
             .unwrap();
+        employment_employee_relates.role().set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Ordered).unwrap();
         let employee_relates =
             employment_type.get_relates_role_name(&snapshot, &type_manager, employee_role).unwrap().unwrap();
         employee_relates
@@ -427,9 +428,10 @@ fn role_player_distinct() {
             .unwrap();
         let employee_type = employee_relates.role();
 
-        employment_type
-            .create_relates(&mut snapshot, &type_manager, &thing_manager, employer_role, Ordering::Ordered, None)
+        let employment_employer_relates = employment_type
+            .create_relates(&mut snapshot, &type_manager, &thing_manager, employer_role)
             .unwrap();
+        employment_employer_relates.role().set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Ordered).unwrap();
         let employer_relates =
             employment_type.get_relates_role_name(&snapshot, &type_manager, employer_role).unwrap().unwrap();
         employer_relates
@@ -540,9 +542,10 @@ fn role_player_duplicates() {
     {
         let (type_manager, thing_manager) = load_managers(storage.clone());
         let list_type = type_manager.create_relation_type(&mut snapshot, &list_label).unwrap();
-        list_type
-            .create_relates(&mut snapshot, &type_manager, &thing_manager, entry_role_label, Ordering::Unordered, None)
+        let list_entry_relates = list_type
+            .create_relates(&mut snapshot, &type_manager, &thing_manager, entry_role_label)
             .unwrap();
+        list_entry_relates.role().set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Unordered).unwrap();
         let entry_relates =
             list_type.get_relates_role_name(&snapshot, &type_manager, entry_role_label).unwrap().unwrap();
         entry_relates
@@ -554,9 +557,10 @@ fn role_player_duplicates() {
             )
             .unwrap();
         let entry_type = entry_relates.role();
-        list_type
-            .create_relates(&mut snapshot, &type_manager, &thing_manager, owner_role_label, Ordering::Unordered, None)
+        let list_owner_relates = list_type
+            .create_relates(&mut snapshot, &type_manager, &thing_manager, owner_role_label)
             .unwrap();
+        list_owner_relates.role().set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Unordered).unwrap();
         let owner_type =
             list_type.get_relates_role_name(&snapshot, &type_manager, owner_role_label).unwrap().unwrap().role();
 

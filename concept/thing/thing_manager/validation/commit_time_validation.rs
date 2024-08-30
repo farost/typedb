@@ -57,11 +57,11 @@ macro_rules! validate_capability_cardinality_constraint {
 
             let mut next_capability = capability;
             while let Some(checked_capability) = &*next_capability
-                .get_override(snapshot, thing_manager.type_manager())
+                .get_specializes(snapshot, thing_manager.type_manager())
                 .map_err(DataValidationError::ConceptRead)?
             {
                 let overriding = checked_capability
-                    .get_overriding_transitive(snapshot, thing_manager.type_manager())
+                    .get_specializing_transitive(snapshot, thing_manager.type_manager())
                     .map_err(DataValidationError::ConceptRead)?;
                 let count = overriding
                     .iter()

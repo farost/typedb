@@ -59,8 +59,6 @@ fn setup_database(storage: Arc<MVCCStorage<WALClient>>) {
             &type_manager,
             &thing_manager,
             MEMBERSHIP_MEMBER_LABEL.name().as_str(),
-            Ordering::Unordered,
-            None,
         )
         .unwrap();
     relates_member.set_annotation(&mut snapshot, &type_manager, &thing_manager, RELATES_CARDINALITY_ANY).unwrap();
@@ -72,8 +70,6 @@ fn setup_database(storage: Arc<MVCCStorage<WALClient>>) {
             &type_manager,
             &thing_manager,
             MEMBERSHIP_GROUP_LABEL.name().as_str(),
-            Ordering::Unordered,
-            None,
         )
         .unwrap();
     relates_group.set_annotation(&mut snapshot, &type_manager, &thing_manager, RELATES_CARDINALITY_ANY).unwrap();

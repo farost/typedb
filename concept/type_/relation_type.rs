@@ -264,8 +264,6 @@ impl<'a> RelationType<'a> {
         type_manager: &TypeManager,
         thing_manager: &ThingManager,
         name: &str,
-        ordering: Ordering, // TODO: remove?
-        cardinality: Option<AnnotationCardinality>, // TODO: Remove!
     ) -> Result<Relates<'static>, ConceptWriteError> {
         let label = Label::build_scoped(name, self.get_label(snapshot, type_manager).unwrap().name().as_str());
         let role_type = type_manager.create_role_type(
@@ -273,8 +271,6 @@ impl<'a> RelationType<'a> {
             &thing_manager,
             &label,
             self.clone().into_owned(),
-            ordering,
-            cardinality,
         )?;
         Ok(Relates::new(self.clone().into_owned(), role_type))
     }

@@ -248,9 +248,10 @@ fn role_usage() {
 
         // --- friendship sub relation, relates friend ---
         let friendship_type = type_manager.create_relation_type(&mut snapshot, &friendship_label).unwrap();
-        friendship_type
-            .create_relates(&mut snapshot, &type_manager, &thing_manager, friend_name, Ordering::Unordered, None)
+        let friendship_friend_relates = friendship_type
+            .create_relates(&mut snapshot, &type_manager, &thing_manager, friend_name)
             .unwrap();
+        friendship_friend_relates.role().set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Unordered).unwrap();
         let relates = friendship_type.get_relates_role_name(&snapshot, &type_manager, friend_name).unwrap().unwrap();
         let role_type =
             type_manager.resolve_relates(&snapshot, friendship_type.clone(), friend_name).unwrap().unwrap().role();

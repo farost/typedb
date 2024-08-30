@@ -180,8 +180,6 @@ fn test_links_planning_traversal() {
             &type_manager,
             &thing_manager,
             MEMBERSHIP_MEMBER_LABEL.name().as_str(),
-            Ordering::Unordered,
-            None,
         )
         .unwrap();
     relates_member.set_annotation(&mut snapshot, &type_manager, &thing_manager, RELATES_CARDINALITY_ANY).unwrap();

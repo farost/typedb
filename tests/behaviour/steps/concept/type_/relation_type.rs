@@ -36,76 +36,7 @@ pub async fn relation_type_create_role(
     role_label: Label,
     may_error: MayError,
 ) {
-    let res = relation_type_create_role_impl(
-        context,
-        type_label,
-        role_label,
-        Ordering::Unordered,
-        None, // annotation
-    );
-    may_error.check_concept_write_without_read_errors(&res);
-}
-
-#[apply(generic_step)]
-#[step(expr = r"relation\({type_label}\) create role: {type_label}, with {annotation}{may_error}")]
-pub async fn relation_type_create_role_with_cardinality(
-    context: &mut Context,
-    type_label: Label,
-    role_label: Label,
-    annotation: Annotation,
-    may_error: MayError,
-) {
-    let res = relation_type_create_role_impl(context, type_label, role_label, Ordering::Unordered, Some(annotation));
-    may_error.check_concept_write_without_read_errors(&res);
-}
-
-#[apply(generic_step)]
-#[step(expr = r"relation\({type_label}\) create role: {type_label}[]{may_error}")]
-pub async fn relation_type_create_ordered_role(
-    context: &mut Context,
-    type_label: Label,
-    role_label: Label,
-    may_error: MayError,
-) {
-    let res = relation_type_create_role_impl(
-        context,
-        type_label,
-        role_label,
-        Ordering::Ordered,
-        None, // annotation
-    );
-    may_error.check_concept_write_without_read_errors(&res);
-}
-
-#[apply(generic_step)]
-#[step(expr = r"relation\({type_label}\) create role: {type_label}[], with {annotation}{may_error}")]
-pub async fn relation_type_create_ordered_role_with_cardinality(
-    context: &mut Context,
-    type_label: Label,
-    role_label: Label,
-    annotation: Annotation,
-    may_error: MayError,
-) {
-    let res = relation_type_create_role_impl(context, type_label, role_label, Ordering::Ordered, Some(annotation));
-    may_error.check_concept_write_without_read_errors(&res);
-}
-
-pub fn relation_type_create_role_impl(
-    context: &mut Context,
-    type_label: Label,
-    role_label: Label,
-    ordering: Ordering,
-    annotation: Option<Annotation>,
-) -> Result<Relates<'static>, ConceptWriteError> {
-    let cardinality = match annotation {
-        None => None,
-        Some(annotation) => Some(match annotation.into_typedb(None) {
-            TypeDBAnnotation::Cardinality(cardinality) => cardinality.clone(),
-            _ => panic!("Expected cardinality annotation"),
-        }),
-    };
-
-    with_schema_tx!(context, |tx| {
+    let res = with_schema_tx!(context, |tx| {
         let relation_type =
             tx.type_manager.get_relation_type(tx.snapshot.as_ref(), &type_label.into_typedb()).unwrap().unwrap();
         relation_type.create_relates(
@@ -113,10 +44,9 @@ pub fn relation_type_create_role_impl(
             &tx.type_manager,
             &tx.thing_manager,
             role_label.into_typedb().name().as_str(),
-            ordering,
-            cardinality,
         )
-    })
+    });
+    may_error.check_concept_write_without_read_errors(&res);
 }
 
 #[apply(generic_step)]

@@ -672,7 +672,7 @@ macro_rules! new_annotation_compatible_with_capability_and_overriding_capabiliti
     };
 }
 
-macro_rules! changed_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_override_validation {
+macro_rules! updated_annotations_compatible_with_capability_and_specializing_capabilities_instances_on_interface_supertype_change_validation {
     ($func_name:ident, $capability_kind:path, $capability_type:ident, $validation_func:path) => {
         pub(crate) fn $func_name(
             snapshot: &impl ReadableSnapshot,
@@ -729,7 +729,7 @@ macro_rules! changed_annotations_compatible_with_capability_and_overriding_capab
     };
 }
 
-macro_rules! changed_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_supertype_change_validation {
+macro_rules! updated_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_object_supertype_change_validation {
     ($func_name:ident, $capability_kind:path, $capability_type:ident, $object_type:ident, $validation_func:path) => {
         pub(crate) fn $func_name(
             snapshot: &impl ReadableSnapshot,
@@ -4129,41 +4129,41 @@ impl OperationTimeValidation {
         Self::get_relates_or_its_overriding_relates_with_violated_new_annotation_constraints
     );
 
-    changed_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_override_validation!(
-        validate_updated_annotations_compatible_with_owns_and_overriding_owns_instances_on_override,
+    updated_annotations_compatible_with_capability_and_specializing_capabilities_instances_on_interface_supertype_change_validation!(
+        validate_updated_annotations_compatible_with_owns_and_specializing_owns_instances_on_attribute_supertype_change,
         CapabilityKind::Owns,
         Owns,
         Self::get_owns_or_its_overriding_owns_with_violated_new_annotation_constraints
     );
-    changed_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_override_validation!(
-        validate_updated_annotations_compatible_with_plays_and_overriding_plays_instances_on_override,
+    updated_annotations_compatible_with_capability_and_specializing_capabilities_instances_on_interface_supertype_change_validation!(
+        validate_updated_annotations_compatible_with_plays_and_specializing_plays_instances_on_role_supertype_change,
         CapabilityKind::Plays,
         Plays,
         Self::get_plays_or_its_overriding_plays_with_violated_new_annotation_constraints
     );
-    changed_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_override_validation!(
-        validate_updated_annotations_compatible_with_relates_and_overriding_relates_instances_on_override,
+    updated_annotations_compatible_with_capability_and_specializing_capabilities_instances_on_interface_supertype_change_validation!(
+        validate_updated_annotations_compatible_with_relates_and_specializing_relates_instances_on_role_supertype_change,
         CapabilityKind::Relates,
         Relates,
         Self::get_relates_or_its_overriding_relates_with_violated_new_annotation_constraints
     );
 
-    changed_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_supertype_change_validation!(
-        validate_changed_annotations_compatible_with_owns_and_overriding_owns_instances_on_supertype_change,
+    updated_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_object_supertype_change_validation!(
+        validate_updated_annotations_compatible_with_owns_and_overriding_owns_instances_on_object_supertype_change,
         CapabilityKind::Owns,
         Owns,
         ObjectType,
         Self::get_owns_or_its_overriding_owns_with_violated_new_annotation_constraints
     );
-    changed_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_supertype_change_validation!(
-        validate_changed_annotations_compatible_with_plays_and_overriding_plays_instances_on_supertype_change,
+    updated_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_object_supertype_change_validation!(
+        validate_updated_annotations_compatible_with_plays_and_overriding_plays_instances_on_object_supertype_change,
         CapabilityKind::Plays,
         Plays,
         ObjectType,
         Self::get_plays_or_its_overriding_plays_with_violated_new_annotation_constraints
     );
-    changed_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_supertype_change_validation!(
-        validate_changed_annotations_compatible_with_relates_and_overriding_relates_instances_on_supertype_change,
+    updated_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_object_supertype_change_validation!(
+        validate_updated_annotations_compatible_with_relates_and_overriding_relates_instances_on_relation_supertype_change,
         CapabilityKind::Relates,
         Relates,
         RelationType,

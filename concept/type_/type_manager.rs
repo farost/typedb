@@ -1234,8 +1234,6 @@ impl TypeManager {
         thing_manager: &ThingManager,
         label: &Label<'_>,
         relation_type: RelationType<'static>,
-        ordering: Ordering,
-        cardinality: Option<AnnotationCardinality>,
     ) -> Result<RoleType<'static>, ConceptWriteError> {
         OperationTimeValidation::validate_new_role_name_uniqueness(
             snapshot,
@@ -1254,41 +1252,29 @@ impl TypeManager {
             .map_err(|err| ConceptWriteError::Encoding { source: err })?;
         let role_type = RoleType::new(type_vertex);
         let relates = Relates::new(relation_type, role_type.clone());
+        let default_ordering = Ordering::default();
 
         TypeWriter::storage_put_label(snapshot, role_type.clone(), &label);
-        TypeWriter::storage_put_type_vertex_property(snapshot, role_type.clone(), Some(ordering));
+        TypeWriter::storage_put_type_vertex_property(snapshot, role_type.clone(), Some(default_ordering));
         TypeWriter::storage_put_edge(snapshot, relates.clone());
 
-        let cardinality_error: Option<ConceptWriteError> = match cardinality {
-            None => {
-                if let Err(error) = OperationTimeValidation::validate_new_acquired_relates_compatible_with_instances(
-                    snapshot,
-                    self,
-                    thing_manager,
-                    relates.clone().into_owned(),
-                    HashSet::from([Annotation::Cardinality(self.get_relates_default_cardinality(ordering))]),
-                ) {
-                    Some(ConceptWriteError::SchemaValidation { source: error })
-                } else {
-                    None
-                }
-            }
-            Some(cardinality) => {
-                if let Err(error) =
-                    self.set_relates_annotation_cardinality(snapshot, thing_manager, relates.clone(), cardinality)
-                {
-                    Some(error)
-                } else {
-                    None
-                }
-            }
+        let cardinality_error: Option<ConceptWriteError> = if let Err(error) = OperationTimeValidation::validate_new_acquired_relates_compatible_with_instances(
+            snapshot,
+            self,
+            thing_manager,
+            relates.clone().into_owned(),
+            HashSet::from([Annotation::Cardinality(self.get_relates_default_cardinality(default_ordering))]),
+        ) {
+            Some(ConceptWriteError::SchemaValidation { source: error })
+        } else {
+            None
         };
 
         match cardinality_error {
             None => Ok(role_type),
             Some(error) => {
                 TypeWriter::storage_unput_edge(snapshot, relates);
-                TypeWriter::storage_unput_type_vertex_property::<Ordering>(snapshot, role_type.clone(), Some(ordering));
+                TypeWriter::storage_unput_type_vertex_property::<Ordering>(snapshot, role_type.clone(), Some(default_ordering));
                 TypeWriter::storage_unput_label(snapshot, role_type.clone(), &label);
                 TypeWriter::storage_unput_vertex(snapshot, role_type);
                 Err(error)
@@ -1793,7 +1779,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_changed_annotations_compatible_with_owns_and_overriding_owns_instances_on_supertype_change(
+        OperationTimeValidation::validate_updated_annotations_compatible_with_owns_and_overriding_owns_instances_on_object_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -1823,7 +1809,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_changed_annotations_compatible_with_plays_and_overriding_plays_instances_on_supertype_change(
+        OperationTimeValidation::validate_updated_annotations_compatible_with_plays_and_overriding_plays_instances_on_object_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -1951,7 +1937,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_changed_annotations_compatible_with_relates_and_overriding_relates_instances_on_supertype_change(
+        OperationTimeValidation::validate_updated_annotations_compatible_with_relates_and_overriding_relates_instances_on_relation_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -2389,7 +2375,7 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_relates_and_overriding_relates_instances_on_override(
+        OperationTimeValidation::validate_updated_annotations_compatible_with_relates_and_specializing_relates_instances_on_role_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -2426,7 +2412,7 @@ impl TypeManager {
             )
                 .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-            OperationTimeValidation::validate_updated_annotations_compatible_with_relates_and_overriding_relates_instances_on_override(
+            OperationTimeValidation::validate_updated_annotations_compatible_with_relates_and_specializing_relates_instances_on_role_supertype_change(
                 snapshot,
                 self,
                 thing_manager,

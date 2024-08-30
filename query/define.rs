@@ -522,39 +522,20 @@ fn define_relates_with_annotations(
         let definition_status =
             get_relates_status(snapshot, type_manager, relation_type.clone(), &role_label, ordering)
                 .map_err(|source| DefineError::UnexpectedConceptRead { source })?;
-        let (defined, is_new) = match definition_status {
+        let defined = match definition_status {
             DefinitionStatus::DoesNotExist => {
-                let init_cardinality = if let Some(typeql_cardinality) = capability
-                    .annotations
-                    .iter()
-                    .find(|annotation| matches!(annotation, TypeQLAnnotation::Cardinality(_)))
-                {
-                    let annotation = translate_annotation(typeql_cardinality)
-                        .map_err(|source| DefineError::LiteralParseError { source })?;
-                    match annotation {
-                        Annotation::Cardinality(card) => Some(card),
-                        other => {
-                            debug_assert!(false, "Expected to translate found typeql annotation for relates to Cardinality. Got {:?} instead", other);
-                            None
-                        }
-                    }
-                } else {
-                    None
-                };
-
                 let relates = relation_type
                     .create_relates(
                         snapshot,
                         type_manager,
                         thing_manager,
                         role_label.name.as_str(),
-                        ordering,
-                        init_cardinality,
                     )
                     .map_err(|source| DefineError::CreateRelates { source, relates: relates.to_owned() })?;
-                (relates, true)
+                relates.role().set_ordering(snapshot, type_manager, thing_manager, ordering)?;
+                relates
             }
-            DefinitionStatus::ExistsSame(Some((existing_relates, _))) => (existing_relates, false),
+            DefinitionStatus::ExistsSame(Some((existing_relates, _))) => existing_relates,
             DefinitionStatus::ExistsSame(None) => unreachable!("Existing relates concept expected"),
             DefinitionStatus::ExistsDifferent((existing_relates, existing_ordering)) => {
                 return Err(DefineError::RelatesAlreadyDefinedButDifferent {
@@ -574,7 +555,6 @@ fn define_relates_with_annotations(
             &label,
             defined.clone(),
             &capability,
-            is_new,
         )?;
     }
     Ok(())
@@ -587,7 +567,6 @@ fn define_relates_annotations<'a>(
     relation_label: &Label<'a>,
     relates: Relates<'a>,
     typeql_capability: &TypeQLCapability,
-    is_new: bool,
 ) -> Result<(), DefineError> {
     for typeql_annotation in &typeql_capability.annotations {
         let annotation =
@@ -601,14 +580,6 @@ fn define_relates_annotations<'a>(
         );
         match converted_for_relates {
             Ok(Some(relates_annotation)) => {
-                // New relates should set Cardinality on initialization
-                if matches!(relates_annotation, RelatesAnnotation::Cardinality(_)) && is_new {
-                    debug_assert!(relates
-                        .get_annotations_declared(snapshot, type_manager)
-                        .unwrap()
-                        .contains(&relates_annotation));
-                    continue;
-                }
                 relates.set_annotation(snapshot, type_manager, thing_manager, relates_annotation).map_err(
                     |source| DefineError::SetAnnotation {
                         label: relation_label.clone().into_owned(),
