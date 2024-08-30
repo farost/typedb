@@ -46,6 +46,7 @@ use crate::{
     },
     ConceptAPI,
 };
+use crate::type_::constraint::TypeConstraint;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct EntityType<'a> {
@@ -165,12 +166,12 @@ impl<'a> KindAPI<'a> for EntityType<'a> {
         type_manager.get_entity_type_annotations_declared(snapshot, self.clone().into_owned())
     }
 
-    fn get_annotations<'m>(
+    fn get_constraints<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<EntityTypeAnnotation, EntityType<'static>>>, ConceptReadError> {
-        type_manager.get_entity_type_annotations(snapshot, self.clone().into_owned())
+    ) -> Result<MaybeOwns<'m, HashMap<TypeConstraint<EntityType<'static>>, HashSet<EntityType<'static>>>>, ConceptReadError> {
+        type_manager.get_entity_type_constraints(snapshot, self.clone().into_owned())
     }
 }
 

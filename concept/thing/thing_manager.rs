@@ -940,7 +940,7 @@ impl ThingManager {
     ) -> Result<(), ConceptReadError> {
         let mut current_capability = Some(owns);
         while let Some(locked_capability) = current_capability {
-            let cardinality = locked_capability.get_cardinality(snapshot, self.type_manager())?;
+            let cardinality = locked_capability.get_cardinalities(snapshot, self.type_manager())?;
             if cardinality == AnnotationCardinality::unchecked() {
                 break;
             }
@@ -969,7 +969,7 @@ impl ThingManager {
     ) -> Result<(), ConceptReadError> {
         let mut current_capability = Some(plays);
         while let Some(locked_capability) = current_capability {
-            let cardinality = locked_capability.get_cardinality(snapshot, self.type_manager())?;
+            let cardinality = locked_capability.get_cardinalities(snapshot, self.type_manager())?;
             if cardinality == AnnotationCardinality::unchecked() {
                 break;
             }
@@ -998,7 +998,7 @@ impl ThingManager {
     ) -> Result<(), ConceptReadError> {
         let mut current_capability = Some(relates);
         while let Some(locked_capability) = current_capability {
-            let cardinality = locked_capability.get_cardinality(snapshot, self.type_manager())?;
+            let cardinality = locked_capability.get_cardinalities(snapshot, self.type_manager())?;
             if cardinality == AnnotationCardinality::unchecked() {
                 break;
             }

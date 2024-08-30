@@ -621,7 +621,7 @@ impl CommitTimeValidation {
         }
 
         if let Some(supertype) = TypeReader::get_supertype(snapshot, type_.clone())? {
-            let supertype_annotations = TypeReader::get_type_annotations(snapshot, supertype.clone())?;
+            let supertype_annotations = TypeReader::get_type_constraints(snapshot, supertype.clone())?;
 
             if supertype_annotations.keys().contains(&annotation) {
                 validation_errors.push(
@@ -650,7 +650,7 @@ impl CommitTimeValidation {
         }
 
         if let Some(overridden_edge) = TypeReader::get_capability_specializes(snapshot, edge.clone())? {
-            let overridden_edge_annotations = TypeReader::get_type_edge_annotations(snapshot, overridden_edge.clone())?;
+            let overridden_edge_annotations = TypeReader::get_capability_constraints(snapshot, overridden_edge.clone())?;
 
             if overridden_edge_annotations.keys().contains(&annotation) {
                 validation_errors.push(

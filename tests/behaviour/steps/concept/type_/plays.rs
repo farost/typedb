@@ -323,7 +323,7 @@ pub async fn get_plays_annotations_contains(
             tx.type_manager.get_role_type(tx.snapshot.as_ref(), &role_label.into_typedb()).unwrap().unwrap();
         let plays = player_type.get_plays_role(tx.snapshot.as_ref(), &tx.type_manager, role_type).unwrap().unwrap();
         let actual_contains = plays
-            .get_annotations(tx.snapshot.as_ref(), &tx.type_manager)
+            .get_constraints(tx.snapshot.as_ref(), &tx.type_manager)
             .unwrap()
             .contains_key(&annotation.into_typedb(None).try_into().unwrap());
         assert_eq!(contains_or_doesnt.expected_contains(), actual_contains);
@@ -348,7 +348,7 @@ pub async fn get_plays_annotation_categories_contains(
             tx.type_manager.get_role_type(tx.snapshot.as_ref(), &role_label.into_typedb()).unwrap().unwrap();
         let plays = player_type.get_plays_role(tx.snapshot.as_ref(), &tx.type_manager, role_type).unwrap().unwrap();
         let actual_contains = plays
-            .get_annotations(tx.snapshot.as_ref(), &tx.type_manager)
+            .get_constraints(tx.snapshot.as_ref(), &tx.type_manager)
             .unwrap()
             .iter()
             .map(|(annotation, _)| {
@@ -398,7 +398,7 @@ pub async fn get_owns_annotations_is_empty(
         let role_type =
             tx.type_manager.get_role_type(tx.snapshot.as_ref(), &role_label.into_typedb()).unwrap().unwrap();
         let plays = player_type.get_plays_role(tx.snapshot.as_ref(), &tx.type_manager, role_type).unwrap().unwrap();
-        let actual_is_empty = plays.get_annotations(tx.snapshot.as_ref(), &tx.type_manager).unwrap().is_empty();
+        let actual_is_empty = plays.get_constraints(tx.snapshot.as_ref(), &tx.type_manager).unwrap().is_empty();
         is_empty_or_not.check(actual_is_empty);
     });
 }
@@ -437,7 +437,7 @@ pub async fn get_plays_cardinality(
         let role_type =
             tx.type_manager.get_role_type(tx.snapshot.as_ref(), &role_label.into_typedb()).unwrap().unwrap();
         let plays = player_type.get_plays_role(tx.snapshot.as_ref(), &tx.type_manager, role_type).unwrap().unwrap();
-        let actual_cardinality = plays.get_cardinality(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
+        let actual_cardinality = plays.get_cardinalities(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
         match cardinality_annotation.into_typedb(None) {
             annotation::Annotation::Cardinality(card) => assert_eq!(actual_cardinality, card),
             _ => panic!("Expected annotations is not Cardinality"),

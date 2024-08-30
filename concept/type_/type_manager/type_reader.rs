@@ -4,7 +4,8 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
+use itertools::Itertools;
 
 use bytes::Bytes;
 use encoding::{
@@ -22,6 +23,7 @@ use encoding::{
     value::{label::Label, value_type::ValueType},
     Keyable,
 };
+use encoding::graph::type_::CapabilityKind;
 use iterator::Collector;
 use lending_iterator::LendingIterator;
 use resource::constants::snapshot::{BUFFER_KEY_INLINE, BUFFER_VALUE_INLINE};
@@ -45,6 +47,8 @@ use crate::{
         Capability, EdgeHidden, KindAPI, Ordering, TypeAPI,
     },
 };
+use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, ConstraintValidationMode, TypeConstraint};
+use crate::type_::plays::Plays;
 
 pub struct TypeReader {}
 
@@ -225,14 +229,10 @@ impl TypeReader {
             .map(|(key, _)| Sub::<T>::decode_canonical_edge(Bytes::Array(key.into_byte_array())).supertype()))
     }
 
-    pub(crate) fn get_supertypes_transitive<T>(
+    pub(crate) fn get_supertypes_transitive<T: TypeAPI<'static>>(
         snapshot: &impl ReadableSnapshot,
         subtype: T,
-    ) -> Result<Vec<T>, ConceptReadError>
-    where
-        T: TypeAPI<'static>,
-    {
-        // supertypes do NOT include themselves by design
+    ) -> Result<Vec<T>, ConceptReadError> {
         let mut supertypes: Vec<T> = Vec::new();
         let mut supertype_opt = TypeReader::get_supertype(snapshot, subtype.clone())?;
         while let Some(supertype) = supertype_opt {
@@ -368,10 +368,10 @@ impl TypeReader {
         let mut current_interface_type_opt = Some(interface_type.clone());
 
         while let Some(current_interface_type) = current_interface_type_opt {
-            let specialized = capabilities.iter().find(|potential_specialized| {
+            let specialized = capabilities.iter().filter(|potential_specialized| {
                 potential_specialized != capability
                     && &potential_specialized.interface() == &current_interface_type
-            });
+            }).sorted_by(|lhs, rhs| lhs.interface().is_subtype_transitive_of(rhs.interface())).next();
             if specialized.is_some() {
                 return Ok(specialized);
             }
@@ -379,6 +379,21 @@ impl TypeReader {
         }
 
         Ok(None)
+    }
+
+    pub(crate) fn get_capability_specializes_transitive<CAP: Capability<'static>>(
+        snapshot: &impl ReadableSnapshot,
+        capability: CAP,
+    ) -> Result<Vec<CAP>, ConceptReadError> {
+        let mut capability_specializes: Vec<CAP> = Vec::new();
+
+        let mut specializes_opt = TypeReader::get_capability_specializes(snapshot, capability)?;
+        while let Some(specializes) = specializes_opt {
+            capability_specializes.push(specializes.clone());
+            specializes_opt = TypeReader::get_supertype(snapshot, specializes)?;
+        }
+
+        Ok(capability_specializes)
     }
 
     pub(crate) fn get_specializing_capabilities<CAP: Capability<'static>>(
@@ -557,7 +572,7 @@ impl TypeReader {
         }
     }
 
-    pub(crate) fn get_type_edge_ordering(
+    pub(crate) fn get_capability_ordering(
         snapshot: &impl ReadableSnapshot,
         owns: Owns<'_>,
     ) -> Result<Ordering, ConceptReadError> {
@@ -612,29 +627,36 @@ impl TypeReader {
             .map_err(|err| ConceptReadError::SnapshotIterate { source: err.clone() })
     }
 
-    pub(crate) fn get_type_annotations<T: KindAPI<'static>>(
+    pub(crate) fn get_type_constraints<T: KindAPI<'static>>(
         snapshot: &impl ReadableSnapshot,
         type_: T,
-    ) -> Result<HashMap<T::AnnotationType, T>, ConceptReadError> {
-        let mut annotations: HashMap<T::AnnotationType, T> = HashMap::new();
+    ) -> Result<HashMap<TypeConstraint<T>, HashSet<T>>, ConceptReadError> {
+        let mut constraints: HashMap<TypeConstraint<T>, HashSet<T>> = HashMap::new();
         let mut type_opt = Some(type_);
-        let mut declared = true;
         while let Some(curr_type) = type_opt {
             let declared_annotations = Self::get_type_annotations_declared(snapshot, curr_type.clone())?;
             for annotation in declared_annotations {
-                let annotation_category = annotation.clone().into().category();
-                let inheritance_blocked = annotations.keys().find(|existing_annotation| {
-                    !annotation_category.inheritable_alongside(existing_annotation.clone().into().category())
-                }).is_some();
-                debug_assert!(!inheritance_blocked || inheritance_blocked && !declared);
-                if !inheritance_blocked || declared {
-                    annotations.insert(annotation, curr_type.clone());
+                for constraint in annotation.clone().into().into_type_constraints::<T>() {
+                    let sources_of_duplicate_opt = constraints.get_mut(&constraint);
+                    if let Some(sources_of_duplicate) = sources_of_duplicate_opt {
+                        match constraint.description().validation_mode() {
+                            ConstraintValidationMode::SingleInstanceOfTypeOrSubtype
+                            | ConstraintValidationMode::AllInstancesOfTypeOrSubtypes => {
+                                debug_assert!(sources_of_duplicate.len() == 1);
+                                sources_of_duplicate.clear();
+                            },
+
+                            ConstraintValidationMode::SingleInstanceOfType
+                            | ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes => {}
+                        }
+                    }
+                    let constraint_sources = constraints.entry(constraint).or_insert(HashSet::new());
+                    constraint_sources.insert(curr_type.clone());
                 }
             }
             type_opt = Self::get_supertype(snapshot, curr_type.clone())?;
-            declared = false;
         }
-        Ok(annotations)
+        Ok(constraints)
     }
 
     pub(crate) fn get_capability_annotations_declared<CAP: Capability<'static>>(
@@ -683,28 +705,90 @@ impl TypeReader {
             .map_err(|err| ConceptReadError::SnapshotIterate { source: err.clone() })
     }
 
-    pub(crate) fn get_type_edge_annotations<CAP: Capability<'static>>(
+    pub(crate) fn get_capability_constraints<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         capability: CAP,
     ) -> Result<HashMap<CAP::AnnotationType, CAP>, ConceptReadError> {
-        let mut annotations: HashMap<CAP::AnnotationType, CAP> = HashMap::new();
-        let mut current_capability_opt = Some(capability);
-        let mut declared = true;
-        while let Some(current_capability) = current_capability_opt {
-            let declared_edge_annotations = Self::get_capability_annotations_declared(snapshot, current_capability.clone())?;
-            for annotation in declared_edge_annotations {
-                let annotation_category = annotation.clone().into().category();
-                let inheritance_blocked = annotations.keys().find(|existing_annotation| {
-                    !annotation_category.inheritable_alongside(existing_annotation.clone().into().category())
-                }).is_some();
-                debug_assert!(!inheritance_blocked || inheritance_blocked && !declared);
-                if !inheritance_blocked || declared {
-                    annotations.insert(annotation, current_capability.clone());
+        let mut constraints: HashMap<CapabilityConstraint<CAP>, HashSet<CAP>> = HashMap::new();
+        let mut capability_opt = Some(capability);
+        while let Some(curr_capability) = capability_opt {
+            let mut has_declared_cardinality = false;
+            let declared_annotations = Self::get_capability_annotations_declared(snapshot, curr_capability.clone())?;
+
+            for annotation in declared_annotations {
+                for constraint in annotation.clone().into().into_capability_constraints::<CAP>() {
+                    let sources_of_duplicate_opt = constraints.get_mut(&constraint);
+                    if let Some(sources_of_duplicate) = sources_of_duplicate_opt {
+                        match constraint.description().validation_mode() {
+                            ConstraintValidationMode::SingleInstanceOfTypeOrSubtype
+                            | ConstraintValidationMode::AllInstancesOfTypeOrSubtypes => {
+                                debug_assert!(sources_of_duplicate.len() == 1);
+                                sources_of_duplicate.clear();
+                            },
+
+                            ConstraintValidationMode::SingleInstanceOfType
+                            | ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes => {}
+                        }
+                    }
+                    let constraint_sources = constraints.entry(constraint).or_insert(HashSet::new());
+                    constraint_sources.insert(curr_capability.clone());
+
+                    let constraint_description = constraint.description();
+                    if matches!(constraint_description, ConstraintDescription::Cardinality(_)) {
+                        has_declared_cardinality = true;
+                    }
                 }
             }
-            current_capability_opt = Self::get_capability_specializes(snapshot, current_capability.clone())?;
-            declared = false;
+
+            if !has_declared_cardinality {
+                let constraint_sources = constraints
+                    .entry(CapabilityConstraint::new(ConstraintDescription::Cardinality(
+                        Self::get_capability_default_cardinality(snapshot, curr_capability)?
+                    )))
+                    .or_insert(HashSet::new());
+                constraint_sources.insert(curr_capability.clone());
+            }
+
+            capability_opt = Self::get_capability_specializes(snapshot, curr_capability.clone())?;
         }
-        Ok(annotations)
+        Ok(constraints)
+    }
+
+    // TODO: A dirty hack to get access to it from get_capability_constraints() because we want to cache constraints!
+    fn get_capability_default_cardinality<CAP: Capability<'static>>(snapshot: &impl ReadableSnapshot, capability: CAP) -> Result<AnnotationCardinality, ConceptReadError> {
+        match CAP::KIND {
+            CapabilityKind::Relates => {
+                let relates = Relates::new(RelationType::new(capability.canonical_from().into_vertex()), RoleType::new(capability.canonical_to().into_vertex()));
+                TypeReader::get_relates_default_cardinality(snapshot, relates)
+            }
+            CapabilityKind::Plays => {
+                let plays = Plays::new(ObjectType::new(capability.canonical_from().into_vertex()), RoleType::new(capability.canonical_to().into_vertex()));
+                TypeReader::get_plays_default_cardinality(snapshot, plays)
+            }
+            CapabilityKind::Owns => {
+                let owns = Owns::new(ObjectType::new(capability.canonical_from().into_vertex()), AttributeType::new(capability.canonical_to().into_vertex()));
+                TypeReader::get_owns_default_cardinality(snapshot, owns)
+            }
+        }
+    }
+
+    pub fn get_owns_default_cardinality(snapshot: &impl ReadableSnapshot, owns: Owns<'static>) -> Result<AnnotationCardinality, ConceptReadError> {
+        let ordering = Self::get_capability_ordering(snapshot, owns)?;
+        Ok(match ordering {
+            Ordering::Unordered => Owns::DEFAULT_UNORDERED_CARDINALITY,
+            Ordering::Ordered => Owns::DEFAULT_ORDERED_CARDINALITY,
+        })
+    }
+
+    pub fn get_plays_default_cardinality(_snapshot: &impl ReadableSnapshot, _plays: Plays<'static>) -> Result<AnnotationCardinality, ConceptReadError> {
+        Ok(Plays::DEFAULT_CARDINALITY)
+    }
+
+    pub fn get_relates_default_cardinality(snapshot: &impl ReadableSnapshot, relates: Relates<'static>) -> Result<AnnotationCardinality, ConceptReadError> {
+        let role_type_ordering = Self::get_type_ordering(snapshot, relates.role())?;
+        Ok(match role_type_ordering {
+            Ordering::Unordered => Relates::DEFAULT_UNORDERED_CARDINALITY,
+            Ordering::Ordered => Relates::DEFAULT_ORDERED_CARDINALITY,
+        })
     }
 }

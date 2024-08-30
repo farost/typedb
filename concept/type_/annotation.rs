@@ -31,6 +31,8 @@ use encoding::{
 use regex::Regex;
 use resource::constants::snapshot::BUFFER_VALUE_INLINE;
 use serde::{Deserialize, Serialize};
+use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, TypeConstraint};
+use crate::type_::{Capability, KindAPI, TypeAPI};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Annotation {
@@ -61,6 +63,7 @@ pub struct AnnotationUnique;
 pub struct AnnotationKey;
 
 impl AnnotationKey {
+    pub const UNIQUE: AnnotationUnique = AnnotationUnique;
     pub const CARDINALITY: AnnotationCardinality = AnnotationCardinality::new(1, Some(1));
 }
 
@@ -437,6 +440,46 @@ impl Annotation {
             Self::Values(_) => AnnotationCategory::Values,
         }
     }
+
+    pub fn to_type_constraints<T: KindAPI<'static>>(&self) -> HashSet<TypeConstraint<T>> {
+        self.clone().into_type_constraints()
+    }
+
+    pub fn to_capability_constraints<CAP: Capability<'static>>(&self) -> HashSet<CapabilityConstraint<CAP>> {
+        self.clone().into_capability_constraints()
+    }
+
+    pub fn into_type_constraints<T: KindAPI<'static>>(self) -> HashSet<TypeConstraint<T>> {
+        match self {
+            Annotation::Abstract(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Abstract(annotation)) ]),
+            Annotation::Distinct(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Distinct(annotation)) ]),
+            Annotation::Independent(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Independent(annotation)) ]), // TODO: Is not really useful, can be removed
+            Annotation::Unique(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Unique(annotation)) ]),
+            Annotation::Key(_) => HashSet::from([TypeConstraint::new(ConstraintDescription::Unique(AnnotationKey::UNIQUE)), TypeConstraint::new(ConstraintDescription::Cardinality(AnnotationKey::CARDINALITY)) ]),
+            Annotation::Cardinality(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Cardinality(annotation)) ]),
+            Annotation::Regex(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Regex(annotation)) ]),
+            Annotation::Range(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Range(annotation)) ]),
+            Annotation::Values(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Values(annotation)) ]),
+
+            Annotation::Cascade(_) => HashSet::new(),
+        }
+    }
+
+    pub fn into_capability_constraints<CAP: Capability<'static>>(self) -> HashSet<CapabilityConstraint<CAP>> {
+        match self {
+            Annotation::Abstract(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Abstract(annotation)) ]),
+            Annotation::Distinct(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Distinct(annotation)) ]),
+            Annotation::Independent(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Independent(annotation)) ]), // TODO: Is not really useful, can be removed
+            Annotation::Unique(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Unique(annotation)) ]),
+            Annotation::Key(_) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Unique(AnnotationKey::UNIQUE)), CapabilityConstraint::new(ConstraintDescription::Cardinality(AnnotationKey::CARDINALITY)) ]),
+            Annotation::Cardinality(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Cardinality(annotation)) ]),
+            Annotation::Regex(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Regex(annotation)) ]),
+            Annotation::Range(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Range(annotation)) ]),
+            Annotation::Values(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Values(annotation)) ]),
+
+            Annotation::Cascade(_) => HashSet::new(),
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -516,37 +559,7 @@ impl AnnotationCategory {
         }
     }
 
-    pub fn inheritable_alongside(&self, other: AnnotationCategory) -> bool {
-        if !self.inheritable() {
-            return false;
-        }
-        // Note: this function implies that all the compared annotations already processed
-        // the type manager validations (other "declarable" methods) and only considers
-        // valid inheritance scenarios.
-        match self {
-            AnnotationCategory::Unique => match other {
-                AnnotationCategory::Key => false,
-                _ => true,
-            },
-            AnnotationCategory::Cardinality => match other {
-                AnnotationCategory::Key => false,
-                _ => true,
-            },
-            | AnnotationCategory::Key => match other {
-                | AnnotationCategory::Cardinality
-                | AnnotationCategory::Unique => unreachable!("You presumably wanted to call for other.inheritable_alongside(self)"),
-                _ => true,
-            }
-            | AnnotationCategory::Abstract
-            | AnnotationCategory::Distinct
-            | AnnotationCategory::Independent
-            | AnnotationCategory::Regex
-            | AnnotationCategory::Cascade
-            | AnnotationCategory::Range
-            | AnnotationCategory::Values => true,
-        }
-    }
-
+    // TODO: remove and use constraint
     pub fn inheritable(&self) -> bool {
         match self {
             AnnotationCategory::Abstract => false,

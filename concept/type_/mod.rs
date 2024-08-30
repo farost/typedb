@@ -86,6 +86,7 @@ macro_rules! get_with_overridden {
     }
 }
 pub(crate) use get_with_overridden;
+use crate::type_::constraint::{CapabilityConstraint, TypeConstraint};
 
 pub trait TypeAPI<'a>: ConceptAPI<'a> + TypeVertexEncoding<'a> + Sized + Clone + Hash + Eq + 'a {
     type SelfStatic: KindAPI<'static> + 'static;
@@ -147,6 +148,42 @@ pub trait TypeAPI<'a>: ConceptAPI<'a> + TypeVertexEncoding<'a> + Sized + Clone +
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, Vec<Self>>, ConceptReadError>;
+
+    fn is_supertype_of<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        other: Self,
+    ) -> Result<bool, ConceptReadError> {
+        Ok(other.get_supertype(snapshot, type_manager)?.eq(self))
+    }
+
+    fn is_supertype_transitive_of<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        other: Self,
+    ) -> Result<bool, ConceptReadError> {
+        Ok(other.get_supertypes_transitive(snapshot, type_manager)?.contains(self))
+    }
+
+    fn is_subtype_of<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        other: Self,
+    ) -> Result<bool, ConceptReadError> {
+        Ok(other.get_subtypes(snapshot, type_manager)?.contains(self))
+    }
+
+    fn is_subtype_transitive_of<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        other: Self,
+    ) -> Result<bool, ConceptReadError> {
+        Ok(other.get_subtypes_transitive(snapshot, type_manager)?.contains(self))
+    }
 }
 
 pub trait KindAPI<'a>: TypeAPI<'a> {
@@ -159,11 +196,11 @@ pub trait KindAPI<'a>: TypeAPI<'a> {
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, HashSet<Self::AnnotationType>>, ConceptReadError>;
 
-    fn get_annotations<'this>(
+    fn get_constraints<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashMap<Self::AnnotationType, Self>>, ConceptReadError>;
+    ) -> Result<MaybeOwns<'this, HashMap<TypeConstraint<Self>, HashSet<Self>>>, ConceptReadError>;
 }
 
 pub trait ObjectTypeAPI<'a>: TypeAPI<'a> + OwnerAPI<'a> + ThingTypeAPI<'a> {
@@ -426,6 +463,12 @@ pub trait Capability<'a>:
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, Option<Self>>, ConceptReadError>;
 
+    fn get_specializes_transitive<'this>(
+        &'this self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'this TypeManager,
+    ) -> Result<MaybeOwns<'this, Vec<Self>>, ConceptReadError>;
+
     fn get_specializing<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
@@ -444,18 +487,18 @@ pub trait Capability<'a>:
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, HashSet<Self::AnnotationType>>, ConceptReadError>;
 
-    fn get_annotations<'this>(
+    fn get_constraints<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashMap<Self::AnnotationType, Self>>, ConceptReadError>;
+    ) -> Result<MaybeOwns<'this, HashMap<CapabilityConstraint<Self>, HashSet<Self>>>, ConceptReadError>;
 
-    fn get_cardinality(
+    fn get_cardinalities(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<AnnotationCardinality, ConceptReadError> {
-        type_manager.get_cardinality(snapshot, self.clone())
+    ) -> Result<HashMap<Self, AnnotationCardinality>, ConceptReadError> {
+        type_manager.get_cardinalities(snapshot, self.clone())
     }
 
     fn get_cardinality_declared(

@@ -1432,7 +1432,7 @@ impl OperationTimeValidation {
             .map_err(SchemaValidationError::ConceptRead)?;
 
         for (_, capability) in capabilities {
-            let capability_annotations = TypeReader::get_type_edge_annotations(snapshot, capability)
+            let capability_annotations = TypeReader::get_capability_constraints(snapshot, capability)
                 .map_err(SchemaValidationError::ConceptRead)?;
             if capability_annotations
                 .keys()
@@ -1467,7 +1467,7 @@ impl OperationTimeValidation {
         capability: CAP,
         annotation_category: AnnotationCategory,
     ) -> Result<(), SchemaValidationError> {
-        let interface_annotations = TypeReader::get_type_annotations(snapshot, capability.interface())
+        let interface_annotations = TypeReader::get_type_constraints(snapshot, capability.interface())
             .map_err(SchemaValidationError::ConceptRead)?;
         if interface_annotations
             .keys()
@@ -1858,7 +1858,7 @@ impl OperationTimeValidation {
             // Does not check that declared cardinality narrows updated inherited one! Should be checked in a separate validation
             cardinality_declared
         } else if let Some(overridden_capability) = &overridden_capability {
-            overridden_capability.get_cardinality(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?
+            overridden_capability.get_cardinalities(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?
         } else {
             capability.get_default_cardinality(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?
         };
@@ -1934,7 +1934,7 @@ impl OperationTimeValidation {
                                 false,
                                 "Should not visit this capability until the overridden is recalculated"
                             );
-                            overridden.get_cardinality(snapshot, type_manager)?
+                            overridden.get_cardinalities(snapshot, type_manager)?
                         }
                     }
                 };
@@ -2076,7 +2076,7 @@ impl OperationTimeValidation {
     ) -> Result<(), SchemaValidationError> {
         let attribute = owns.attribute();
         let ordering = ordering.unwrap_or(
-            TypeReader::get_type_edge_ordering(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?,
+            TypeReader::get_capability_ordering(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?,
         );
         let distinct_set = distinct_set.unwrap_or(
             capability_get_annotation_by_category(snapshot, owns, AnnotationCategory::Distinct)
@@ -3023,7 +3023,7 @@ impl OperationTimeValidation {
         let distinct = Constraint::compute_distinct(annotations, None);
         let is_key = Constraint::compute_key(annotations).is_some();
         let unique = Constraint::compute_unique(annotations);
-        let cardinality = Constraint::compute_cardinality(annotations, None);
+        let cardinality = Constraint::compute_cardinalities(annotations, None);
         let regex = Constraint::compute_regex(annotations);
         let range = Constraint::compute_range(annotations);
         let values = Constraint::compute_values(annotations);
@@ -3131,7 +3131,7 @@ impl OperationTimeValidation {
             return Ok(None);
         }
 
-        let cardinality = Constraint::compute_cardinality(annotations, None);
+        let cardinality = Constraint::compute_cardinalities(annotations, None);
         debug_assert!(cardinality.is_some(), "At least one constraint should exist otherwise we don't need to iterate");
 
         let only_abstract_types = Self::are_all_abstract(snapshot, type_manager, role_types.iter())?;
@@ -3179,7 +3179,7 @@ impl OperationTimeValidation {
         }
 
         let distinct = Constraint::compute_distinct(annotations, None);
-        let cardinality = Constraint::compute_cardinality(annotations, None);
+        let cardinality = Constraint::compute_cardinalities(annotations, None);
         debug_assert!(
             cardinality.is_some() || distinct.is_some(),
             "At least one constraint should exist otherwise we don't need to iterate"
@@ -3317,7 +3317,7 @@ impl OperationTimeValidation {
         value_type: Option<ValueType>,
     ) -> Result<(), SchemaValidationError> {
         for_type_and_subtypes_transitive!(snapshot, attribute_type, |type_: AttributeType<'static>| {
-            let annotations = TypeReader::get_type_annotations(snapshot, type_.clone())
+            let annotations = TypeReader::get_type_constraints(snapshot, type_.clone())
                 .map_err(SchemaValidationError::ConceptRead)?;
             Self::validate_attribute_type_value_type_compatible_with_annotations_and_arguments(
                 snapshot,
@@ -3441,7 +3441,7 @@ impl OperationTimeValidation {
         owns: Owns<'static>,
         value_type: Option<ValueType>,
     ) -> Result<(), SchemaValidationError> {
-        let annotations = TypeReader::get_type_edge_annotations(snapshot, owns.clone())
+        let annotations = TypeReader::get_capability_constraints(snapshot, owns.clone())
             .map_err(SchemaValidationError::ConceptRead)?;
         for (annotation, _) in annotations {
             match annotation {
@@ -3821,9 +3821,9 @@ impl OperationTimeValidation {
             if let Some(new_capability) =
                 new_inherited_capabilities.iter().find(|cap| cap.interface() == old_capability.interface())
             {
-                let old_annotations = TypeReader::get_type_edge_annotations(snapshot, old_capability.clone())
+                let old_annotations = TypeReader::get_capability_constraints(snapshot, old_capability.clone())
                     .map_err(SchemaValidationError::ConceptRead)?;
-                let new_annotations = TypeReader::get_type_edge_annotations(snapshot, new_capability.clone())
+                let new_annotations = TypeReader::get_capability_constraints(snapshot, new_capability.clone())
                     .map_err(SchemaValidationError::ConceptRead)?;
 
                 let updated_annotations = new_annotations
@@ -3838,7 +3838,7 @@ impl OperationTimeValidation {
 
         for new_capability in new_inherited_capabilities.into_iter() {
             if !old_capabilities.iter().any(|cap| cap.interface() == new_capability.interface()) {
-                let annotations = TypeReader::get_type_edge_annotations(snapshot, new_capability.clone())
+                let annotations = TypeReader::get_capability_constraints(snapshot, new_capability.clone())
                     .map_err(SchemaValidationError::ConceptRead)?
                     .keys()
                     .map(|annotation| annotation.clone().try_into().unwrap())
@@ -3865,7 +3865,7 @@ impl OperationTimeValidation {
 
         let declared_annotations = TypeReader::get_capability_annotations_declared(snapshot, capability.clone())
             .map_err(SchemaValidationError::ConceptRead)?;
-        let old_annotations = TypeReader::get_type_edge_annotations(snapshot, capability.clone())
+        let old_annotations = TypeReader::get_capability_constraints(snapshot, capability.clone())
             .map_err(SchemaValidationError::ConceptRead)?;
         let old_inherited_annotations = old_annotations
             .into_iter()
@@ -3873,7 +3873,7 @@ impl OperationTimeValidation {
             .map(|(annotation, _)| annotation.clone().into())
             .collect::<HashSet<Annotation>>();
         let new_annotations = if let Some(capability_override) = &capability_override {
-            TypeReader::get_type_edge_annotations(snapshot, capability_override.clone())
+            TypeReader::get_capability_constraints(snapshot, capability_override.clone())
                 .map_err(SchemaValidationError::ConceptRead)?
         } else {
             HashMap::new()
@@ -3924,13 +3924,13 @@ impl OperationTimeValidation {
         let declared_annotations = TypeReader::get_type_annotations_declared(snapshot, type_.clone())
             .map_err(SchemaValidationError::ConceptRead)?;
         let old_annotations =
-            TypeReader::get_type_annotations(snapshot, type_.clone()).map_err(SchemaValidationError::ConceptRead)?;
+            TypeReader::get_type_constraints(snapshot, type_.clone()).map_err(SchemaValidationError::ConceptRead)?;
         let old_inherited_annotations = old_annotations
             .into_iter()
             .filter(|(_, source)| &type_ != source)
             .map(|(annotation, _)| annotation.clone().into())
             .collect::<HashSet<Annotation>>();
-        let new_annotations = TypeReader::get_type_annotations(snapshot, new_supertype.clone())
+        let new_annotations = TypeReader::get_type_constraints(snapshot, new_supertype.clone())
             .map_err(SchemaValidationError::ConceptRead)?;
 
         // We expect that our declared annotations correctly narrow new inherited annotations

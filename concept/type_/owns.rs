@@ -261,6 +261,14 @@ impl<'a> Capability<'a> for Owns<'a> {
         type_manager.get_owns_specializes(snapshot, self.clone().into_owned())
     }
 
+    fn get_specializes_transitive<'this>(
+        &'this self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'this TypeManager,
+    ) -> Result<MaybeOwns<'this, Vec<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_owns_specializes_transitive(snapshot, self.clone().into_owned())
+    }
+
     fn get_specializing<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
@@ -285,7 +293,7 @@ impl<'a> Capability<'a> for Owns<'a> {
         type_manager.get_owns_annotations_declared(snapshot, self.clone().into_owned())
     }
 
-    fn get_annotations<'this>(
+    fn get_constraints<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
@@ -298,8 +306,7 @@ impl<'a> Capability<'a> for Owns<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<AnnotationCardinality, ConceptReadError> {
-        let ordering = self.get_ordering(snapshot, type_manager)?;
-        Ok(type_manager.get_owns_default_cardinality(ordering))
+        type_manager.get_owns_default_cardinality(snapshot, self.clone().into_owned())
     }
 }
 

@@ -127,6 +127,14 @@ impl<'a> Capability<'a> for Plays<'a> {
         type_manager.get_plays_specializes(snapshot, self.clone().into_owned())
     }
 
+    fn get_specializes_transitive<'this>(
+        &'this self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'this TypeManager,
+    ) -> Result<MaybeOwns<'this, Vec<Plays<'static>>>, ConceptReadError> {
+        type_manager.get_plays_specializes_transitive(snapshot, self.clone().into_owned())
+    }
+
     fn get_specializing<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
@@ -151,7 +159,7 @@ impl<'a> Capability<'a> for Plays<'a> {
         type_manager.get_plays_annotations_declared(snapshot, self.clone().into_owned())
     }
 
-    fn get_annotations<'this>(
+    fn get_constraints<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
@@ -161,10 +169,10 @@ impl<'a> Capability<'a> for Plays<'a> {
 
     fn get_default_cardinality<'this>(
         &'this self,
-        _snapshot: &impl ReadableSnapshot,
+        snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<AnnotationCardinality, ConceptReadError> {
-        Ok(type_manager.get_plays_default_cardinality())
+        type_manager.get_plays_default_cardinality(snapshot, self.clone().into_owned())
     }
 }
 

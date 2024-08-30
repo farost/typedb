@@ -207,7 +207,7 @@ pub async fn get_owns_annotations_contains(
         let owns = object_type.get_owns_attribute(tx.snapshot.as_ref(), &tx.type_manager, attr_type).unwrap().unwrap();
         let value_type = owns.attribute().get_value_type(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
         let actual_contains = owns
-            .get_annotations(tx.snapshot.as_ref(), &tx.type_manager)
+            .get_constraints(tx.snapshot.as_ref(), &tx.type_manager)
             .unwrap()
             .contains_key(&annotation.into_typedb(value_type).try_into().unwrap());
         assert_eq!(contains_or_doesnt.expected_contains(), actual_contains);
@@ -232,7 +232,7 @@ pub async fn get_owns_annotations_categories_contains(
             tx.type_manager.get_attribute_type(tx.snapshot.as_ref(), &attr_type_label.into_typedb()).unwrap().unwrap();
         let owns = object_type.get_owns_attribute(tx.snapshot.as_ref(), &tx.type_manager, attr_type).unwrap().unwrap();
         let actual_contains = owns
-            .get_annotations(tx.snapshot.as_ref(), &tx.type_manager)
+            .get_constraints(tx.snapshot.as_ref(), &tx.type_manager)
             .unwrap()
             .iter()
             .map(|(annotation, _)| {
@@ -284,7 +284,7 @@ pub async fn get_owns_annotations_is_empty(
             tx.type_manager.get_attribute_type(tx.snapshot.as_ref(), &attr_type_label.into_typedb()).unwrap().unwrap();
         let owns = object_type.get_owns_attribute(tx.snapshot.as_ref(), &tx.type_manager, attr_type).unwrap().unwrap();
 
-        let actual_is_empty = owns.get_annotations(tx.snapshot.as_ref(), &tx.type_manager).unwrap().is_empty();
+        let actual_is_empty = owns.get_constraints(tx.snapshot.as_ref(), &tx.type_manager).unwrap().is_empty();
         is_empty_or_not.check(actual_is_empty);
     });
 }
@@ -324,7 +324,7 @@ pub async fn get_owns_cardinality(
             tx.type_manager.get_attribute_type(tx.snapshot.as_ref(), &attr_type_label.into_typedb()).unwrap().unwrap();
         let owns = object_type.get_owns_attribute(tx.snapshot.as_ref(), &tx.type_manager, attr_type).unwrap().unwrap();
         let value_type = owns.attribute().get_value_type(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
-        let actual_cardinality = owns.get_cardinality(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
+        let actual_cardinality = owns.get_cardinalities(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
         match cardinality_annotation.into_typedb(None) {
             annotation::Annotation::Cardinality(card) => assert_eq!(actual_cardinality, card),
             _ => panic!("Expected annotations is not Cardinality"),

@@ -22,6 +22,50 @@ use crate::{
     },
 };
 
+macro_rules! validate_capability_cardinality_constraint {
+    ($func_name:ident, $capability_type:ident, $interface_type:ident, $object_instance:ident, $check_func:path) => {
+        pub(crate) fn $func_name<'a>(
+            snapshot: &impl ReadableSnapshot,
+            thing_manager: &ThingManager,
+            owner: &$object_instance<'a>,
+            capabilities_to_check: HashSet<$capability_type<'static>>,
+            counts: &HashMap<$interface_type<'static>, u64>,
+        ) -> Result<(), DataValidationError> {
+            let checked_capabilities: HashSet<$capability_type<'static>> = HashSet::new();
+
+            for capability in capabilities_to_check {
+                if checked_capabilities.contains(capability) {
+                    continue;
+                }
+
+                let constraints = capability.get_constraints(snapshot, thing_manager.type_manager())
+                let cardinality_constraints: HashMap<CapabilityConstraint<$capability_type<'static>>, HashSet<$capability_type<'static>::ObjectType>> =
+                    filter_by_constraint_description_match!(constraints, ConstraintDescription::Cardinality(_));
+
+                for (cardinality, sources) in cardinality_constraints {
+                    for source in sources {
+                        checked_capabilities.insert(source.clone());
+                        if cardinality == AnnotationCardinality::unchecked() {
+                            continue;
+                        }
+
+                        let count = source.get_specializing_transitive(snapshot, thing_manager.type_manager())?
+                            .iter()
+                            .chain(iter::once(source))
+                            .map(|specializing| specializing.interface())
+                            .unique()
+                            .filter_map(|interface_type| counts.get(&interface_type))
+                            .sum();
+                        $check_func(snapshot, thing_manager, owner, capability.clone(), count)?; // TODO: Call for constraint check instead!
+                    }
+                }
+
+                Ok(())
+            }
+        }
+    };
+}
+
 macro_rules! collect_errors {
     ($vec:ident, $expr:expr, $wrap:expr) => {
         if let Err(e) = $expr {
@@ -35,49 +79,8 @@ macro_rules! collect_errors {
         }
     };
 }
+
 pub(crate) use collect_errors;
-
-macro_rules! validate_capability_cardinality_constraint {
-    ($func_name:ident, $capability_type:ident, $interface_type:ident, $object_instance:ident, $check_func:path) => {
-        pub(crate) fn $func_name<'a>(
-            snapshot: &impl ReadableSnapshot,
-            thing_manager: &ThingManager,
-            owner: &$object_instance<'a>,
-            capability: $capability_type<'static>,
-            counts: &HashMap<$interface_type<'static>, u64>,
-        ) -> Result<(), DataValidationError> {
-            if !CommitTimeValidation::needs_cardinality_validation(snapshot, thing_manager, capability.clone())
-                .map_err(DataValidationError::ConceptRead)?
-            {
-                return Ok(());
-            }
-
-            let count = counts.get(&capability.interface()).unwrap_or(&0).clone();
-            $check_func(snapshot, thing_manager, owner, capability.clone(), count)?;
-
-            let mut next_capability = capability;
-            while let Some(checked_capability) = &*next_capability
-                .get_specializes(snapshot, thing_manager.type_manager())
-                .map_err(DataValidationError::ConceptRead)?
-            {
-                let overriding = checked_capability
-                    .get_specializing_transitive(snapshot, thing_manager.type_manager())
-                    .map_err(DataValidationError::ConceptRead)?;
-                let count = overriding
-                    .iter()
-                    .map(|overriding| overriding.interface())
-                    .unique()
-                    .filter_map(|interface_type| counts.get(&interface_type))
-                    .sum();
-                $check_func(snapshot, thing_manager, owner, checked_capability.clone(), count)?;
-
-                next_capability = checked_capability.clone();
-            }
-
-            Ok(())
-        }
-    };
-}
 
 pub struct CommitTimeValidation {}
 
@@ -89,20 +92,17 @@ impl CommitTimeValidation {
         modified_owns: HashSet<Owns<'a>>,
         out_errors: &mut Vec<DataValidationError>,
     ) -> Result<(), ConceptReadError> {
-        let type_ = object.type_();
-        let object_owns = type_.get_owns(snapshot, thing_manager.type_manager())?;
         let has_counts = object.get_has_counts(snapshot, thing_manager)?;
 
-        for owns in object_owns.iter() {
-            let cardinality_check = CommitTimeValidation::validate_owns_cardinality_constraint(
-                snapshot,
-                thing_manager,
-                &object,
-                owns.clone().into_owned(),
-                &has_counts,
-            );
-            collect_errors!(out_errors, cardinality_check);
-        }
+        let cardinality_check = CommitTimeValidation::validate_owns_cardinality_constraint(
+            snapshot,
+            thing_manager,
+            &object,
+            modified_owns,
+            &has_counts,
+        );
+        collect_errors!(out_errors, cardinality_check);
+
         Ok(())
     }
 
@@ -162,7 +162,7 @@ impl CommitTimeValidation {
         count: u64,
     ) -> Result<(), DataValidationError> {
         let cardinality =
-            owns.get_cardinality(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)?;
+            owns.get_cardinalities(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)?;
         let is_key: bool =
             owns.is_key(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)?;
         if !cardinality.value_valid(count) {
@@ -185,7 +185,7 @@ impl CommitTimeValidation {
         count: u64,
     ) -> Result<(), DataValidationError> {
         let cardinality =
-            plays.get_cardinality(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)?;
+            plays.get_cardinalities(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)?;
         if !cardinality.value_valid(count) {
             let player = player.clone().into_owned();
             Err(DataValidationError::PlaysCardinalityViolated { player, plays, count, cardinality })
@@ -202,7 +202,7 @@ impl CommitTimeValidation {
         count: u64,
     ) -> Result<(), DataValidationError> {
         let cardinality = relates
-            .get_cardinality(snapshot, thing_manager.type_manager())
+            .get_cardinalities(snapshot, thing_manager.type_manager())
             .map_err(DataValidationError::ConceptRead)?;
         if !cardinality.value_valid(count) {
             let relation = relation.clone().into_owned();
@@ -210,15 +210,6 @@ impl CommitTimeValidation {
         } else {
             Ok(())
         }
-    }
-
-    fn needs_cardinality_validation<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
-        capability: CAP,
-    ) -> Result<bool, ConceptReadError> {
-        let cardinality = capability.get_cardinality(snapshot, thing_manager.type_manager())?;
-        Ok(cardinality != AnnotationCardinality::unchecked())
     }
 
     validate_capability_cardinality_constraint!(

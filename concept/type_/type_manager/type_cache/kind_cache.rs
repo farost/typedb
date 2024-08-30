@@ -33,6 +33,8 @@ use crate::type_::{
     type_manager::type_reader::TypeReader,
     Capability, KindAPI, ObjectTypeAPI, Ordering, PlayerAPI, TypeAPI,
 };
+use crate::type_::annotation::AnnotationCardinality;
+use crate::type_::constraint::{CapabilityConstraint, TypeConstraint};
 
 #[derive(Debug)]
 pub(crate) struct EntityTypeCache {
@@ -69,30 +71,18 @@ pub(crate) struct AttributeTypeCache {
 
 #[derive(Debug)]
 pub(crate) struct OwnsCache {
+    pub(super) common_capability_cache: CommonCapabilityCache<Owns<'static>>,
     pub(super) ordering: Ordering,
-    pub(super) specializes: Option<Owns<'static>>,
-    pub(super) specializing: HashSet<Owns<'static>>,
-    pub(super) specializing_transitive: HashSet<Owns<'static>>,
-    pub(super) annotations_declared: HashSet<OwnsAnnotation>,
-    pub(super) annotations: HashMap<OwnsAnnotation, Owns<'static>>,
 }
 
 #[derive(Debug)]
 pub(crate) struct PlaysCache {
-    pub(super) specializes: Option<Plays<'static>>,
-    pub(super) specializing: HashSet<Plays<'static>>,
-    pub(super) specializing_transitive: HashSet<Plays<'static>>,
-    pub(super) annotations_declared: HashSet<PlaysAnnotation>,
-    pub(super) annotations: HashMap<PlaysAnnotation, Plays<'static>>,
+    pub(super) common_capability_cache: CommonCapabilityCache<Plays<'static>>,
 }
 
 #[derive(Debug)]
 pub(crate) struct RelatesCache {
-    pub(super) specializes: Option<Relates<'static>>,
-    pub(super) specializing: HashSet<Relates<'static>>,
-    pub(super) specializing_transitive: HashSet<Relates<'static>>,
-    pub(super) annotations_declared: HashSet<RelatesAnnotation>,
-    pub(super) annotations: HashMap<RelatesAnnotation, Relates<'static>>,
+    pub(super) common_capability_cache: CommonCapabilityCache<Relates<'static>>,
 }
 
 #[derive(Debug)]
@@ -100,12 +90,24 @@ pub(crate) struct CommonTypeCache<T: KindAPI<'static>> {
     pub(super) type_: T,
     pub(super) label: Label<'static>,
     pub(super) annotations_declared: HashSet<T::AnnotationType>,
-    pub(super) annotations: HashMap<T::AnnotationType, T>,
+    pub(super) constraints: HashMap<TypeConstraint<T>, HashSet<T>>,
     // TODO: Should these all be sets instead of vec?
     pub(super) supertype: Option<T>, // TODO: use smallvec if we want to have some inline - benchmark.
-    pub(super) supertypes: Vec<T>,   // TODO: use smallvec if we want to have some inline - benchmark.
+    pub(super) supertypes_transitive: Vec<T>,   // TODO: use smallvec if we want to have some inline - benchmark.
     pub(super) subtypes: Vec<T>,     // TODO: benchmark smallvec.
     pub(super) subtypes_transitive: Vec<T>, // TODO: benchmark smallvec
+}
+
+#[derive(Debug)]
+pub(crate) struct CommonCapabilityCache<CAP: Capability<'static>> {
+    pub(super) capability: CAP,
+    pub(super) specializes: Option<CAP>,
+    pub(super) specializes_transitive: Vec<CAP>,
+    pub(super) specializing: HashSet<CAP>,
+    pub(super) specializing_transitive: HashSet<CAP>,
+    pub(super) annotations_declared: HashSet<CAP::AnnotationType>,
+    pub(super) constraints: HashMap<CapabilityConstraint<CAP>, HashSet<CAP>>,
+    pub(super) default_cardinality: AnnotationCardinality,
 }
 
 #[derive(Debug)]
@@ -228,21 +230,8 @@ impl OwnsCache {
             let owner = ObjectType::new(edge.to().into_owned());
             let owns = Owns::new(owner, attribute);
             let cache = OwnsCache {
-                ordering: TypeReader::get_type_edge_ordering(snapshot, owns.clone()).unwrap(),
-                specializes: TypeReader::get_capability_specializes(snapshot, owns.clone()).unwrap(),
-                specializing: TypeReader::get_specializing_capabilities(snapshot, owns.clone()).unwrap(),
-                specializing_transitive: TypeReader::get_specializing_capabilities_transitive(snapshot, owns.clone())
-                    .unwrap(),
-                annotations_declared: TypeReader::get_capability_annotations_declared(snapshot, owns.clone())
-                    .unwrap()
-                    .into_iter()
-                    .map(|annotation| OwnsAnnotation::try_from(annotation).unwrap())
-                    .collect(),
-                annotations: TypeReader::get_type_edge_annotations(snapshot, owns.clone())
-                    .unwrap()
-                    .into_iter()
-                    .map(|(annotation, owns)| (OwnsAnnotation::try_from(annotation).unwrap(), owns))
-                    .collect(),
+                common_capability_cache: CommonCapabilityCache::create(snapshot, owns.clone()),
+                ordering: TypeReader::get_capability_ordering(snapshot, owns.clone()).unwrap(),
             };
             map.insert(owns.clone(), cache);
         }
@@ -264,20 +253,7 @@ impl PlaysCache {
             let role = RoleType::new(edge.to().into_owned());
             let plays = Plays::new(player, role);
             let cache = PlaysCache {
-                specializes: TypeReader::get_capability_specializes(snapshot, plays.clone()).unwrap(),
-                specializing: TypeReader::get_specializing_capabilities(snapshot, plays.clone()).unwrap(),
-                specializing_transitive: TypeReader::get_specializing_capabilities_transitive(snapshot, plays.clone())
-                    .unwrap(),
-                annotations_declared: TypeReader::get_capability_annotations_declared(snapshot, plays.clone())
-                    .unwrap()
-                    .into_iter()
-                    .map(|annotation| PlaysAnnotation::try_from(annotation).unwrap())
-                    .collect(),
-                annotations: TypeReader::get_type_edge_annotations(snapshot, plays.clone())
-                    .unwrap()
-                    .into_iter()
-                    .map(|(annotation, plays)| (PlaysAnnotation::try_from(annotation).unwrap(), plays))
-                    .collect(),
+                common_capability_cache: CommonCapabilityCache::create(snapshot, plays.clone()),
             };
             map.insert(plays.clone(), cache);
         }
@@ -299,20 +275,7 @@ impl RelatesCache {
             let role = RoleType::new(edge.to().into_owned());
             let relates = Relates::new(relation, role);
             let cache = RelatesCache {
-                specializes: TypeReader::get_capability_specializes(snapshot, relates.clone()).unwrap(),
-                specializing: TypeReader::get_specializing_capabilities(snapshot, relates.clone()).unwrap(),
-                specializing_transitive: TypeReader::get_specializing_capabilities_transitive(snapshot, relates.clone())
-                    .unwrap(),
-                annotations_declared: TypeReader::get_capability_annotations_declared(snapshot, relates.clone())
-                    .unwrap()
-                    .into_iter()
-                    .map(|annotation| RelatesAnnotation::try_from(annotation).unwrap())
-                    .collect(),
-                annotations: TypeReader::get_type_edge_annotations(snapshot, relates.clone())
-                    .unwrap()
-                    .into_iter()
-                    .map(|(annotation, relates)| (RelatesAnnotation::try_from(annotation).unwrap(), relates))
-                    .collect(),
+                common_capability_cache: CommonCapabilityCache::create(snapshot, relates.clone()),
             };
             map.insert(relates.clone(), cache);
         }
@@ -327,20 +290,43 @@ impl<T: KindAPI<'static, SelfStatic = T>> CommonTypeCache<T> {
     {
         let label = TypeReader::get_label(snapshot, type_.clone()).unwrap().unwrap();
         let annotations_declared = TypeReader::get_type_annotations_declared(snapshot, type_.clone()).unwrap();
-        let annotations = TypeReader::get_type_annotations(snapshot, type_.clone()).unwrap();
+        let constraints = TypeReader::get_type_constraints(snapshot, type_.clone()).unwrap();
         let supertype = TypeReader::get_supertype(snapshot, type_.clone()).unwrap();
-        let supertypes = TypeReader::get_supertypes_transitive(snapshot, type_.clone()).unwrap();
+        let supertypes_transitive = TypeReader::get_supertypes_transitive(snapshot, type_.clone()).unwrap();
         let subtypes = TypeReader::get_subtypes(snapshot, type_.clone()).unwrap();
         let subtypes_transitive = TypeReader::get_subtypes_transitive(snapshot, type_.clone()).unwrap();
         CommonTypeCache {
             type_,
             label,
             annotations_declared,
-            annotations,
+            constraints,
             supertype,
-            supertypes,
+            supertypes_transitive,
             subtypes,
             subtypes_transitive,
+        }
+    }
+}
+
+impl<CAP: Capability<'static>> CommonCapabilityCache<CAP> {
+    fn create<Snapshot>(snapshot: &Snapshot, capability: CAP) -> CommonCapabilityCache<CAP>
+        where
+            Snapshot: ReadableSnapshot,
+    {
+        let annotations_declared = TypeReader::get_capability_annotations_declared(snapshot, capability.clone()).unwrap();
+        let constraints = TypeReader::get_capability_constraints(snapshot, capability.clone()).unwrap();
+        let specializes = TypeReader::get_capability_specializes(snapshot, capability.clone()).unwrap();
+        let specializes_transitive = TypeReader::get_capability_specializes_transitive(snapshot, capability.clone()).unwrap();
+        let specializing = TypeReader::get_specializing_capabilities(snapshot, capability.clone()).unwrap();
+        let specializing_transitive = TypeReader::get_specializing_capabilities_transitive(snapshot, capability.clone()).unwrap();
+        CommonCapabilityCache {
+            capability,
+            annotations_declared,
+            constraints,
+            specializes,
+            specializes_transitive,
+            specializing,
+            specializing_transitive,
         }
     }
 }

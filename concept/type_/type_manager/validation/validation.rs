@@ -125,7 +125,7 @@ pub(crate) fn validate_declared_annotation_is_compatible_with_inherited_annotati
     annotation_category: AnnotationCategory,
 ) -> Result<(), SchemaValidationError> {
     let existing_annotations =
-        TypeReader::get_type_annotations(snapshot, type_.clone()).map_err(SchemaValidationError::ConceptRead)?;
+        TypeReader::get_type_constraints(snapshot, type_.clone()).map_err(SchemaValidationError::ConceptRead)?;
 
     for (existing_annotation, _) in existing_annotations {
         let existing_annotation_category = existing_annotation.clone().into().category();
@@ -148,7 +148,7 @@ pub(crate) fn validate_declared_capability_annotation_is_compatible_with_inherit
     capability: CAP,
     annotation_category: AnnotationCategory,
 ) -> Result<(), SchemaValidationError> {
-    let existing_annotations = TypeReader::get_type_edge_annotations(snapshot, capability.clone())
+    let existing_annotations = TypeReader::get_capability_constraints(snapshot, capability.clone())
         .map_err(SchemaValidationError::ConceptRead)?;
 
     for (existing_annotation, _) in existing_annotations {
@@ -175,7 +175,7 @@ pub(crate) fn validate_cardinality_narrows_inherited_cardinality<CAP: Capability
     is_key: bool,
 ) -> Result<(), SchemaValidationError> {
     let overridden_cardinality =
-        overridden_edge.get_cardinality(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?;
+        overridden_edge.get_cardinalities(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?;
 
     if overridden_cardinality.narrowed_correctly_by(&cardinality) {
         Ok(())
@@ -554,9 +554,9 @@ pub(crate) fn validate_owns_override_ordering_match(
     set_subtype_owns_ordering: Option<Ordering>,
 ) -> Result<(), SchemaValidationError> {
     let edge_ordering = set_subtype_owns_ordering.unwrap_or(
-        TypeReader::get_type_edge_ordering(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?,
+        TypeReader::get_capability_ordering(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?,
     );
-    let overridden_edge_ordering = TypeReader::get_type_edge_ordering(snapshot, overridden_owns.clone())
+    let overridden_edge_ordering = TypeReader::get_capability_ordering(snapshot, overridden_owns.clone())
         .map_err(SchemaValidationError::ConceptRead)?;
 
     if edge_ordering == overridden_edge_ordering {
@@ -620,7 +620,7 @@ pub(crate) fn type_get_annotation_by_category(
     type_: impl KindAPI<'static>,
     annotation_category: AnnotationCategory,
 ) -> Result<Option<Annotation>, ConceptReadError> {
-    let annotation = TypeReader::get_type_annotations(snapshot, type_.clone())?
+    let annotation = TypeReader::get_type_constraints(snapshot, type_.clone())?
         .into_keys()
         .find(|found_annotation| found_annotation.clone().into().category() == annotation_category);
     Ok(annotation.map(|val| val.clone().into()))
@@ -642,7 +642,7 @@ pub(crate) fn capability_get_annotation_by_category<CAP: Capability<'static>>(
     edge: CAP,
     annotation_category: AnnotationCategory,
 ) -> Result<Option<Annotation>, ConceptReadError> {
-    let annotation = TypeReader::get_type_edge_annotations(snapshot, edge.clone())?
+    let annotation = TypeReader::get_capability_constraints(snapshot, edge.clone())?
         .into_keys()
         .find(|found_annotation| found_annotation.clone().into().category() == annotation_category);
     Ok(annotation.map(|val| val.clone().into()))
@@ -664,7 +664,7 @@ pub(crate) fn type_get_source_of_annotation_category<T: KindAPI<'static>>(
     type_: T,
     annotation_category: AnnotationCategory,
 ) -> Result<Option<T>, ConceptReadError> {
-    let annotations = TypeReader::get_type_annotations(snapshot, type_.clone())?;
+    let annotations = TypeReader::get_type_constraints(snapshot, type_.clone())?;
     let found_annotation = annotations
         .iter()
         .map(|(existing_annotation, source)| (existing_annotation.clone().into().category(), source))
@@ -677,7 +677,7 @@ pub(crate) fn capability_get_owner_of_annotation_category<CAP: Capability<'stati
     edge: CAP,
     annotation_category: AnnotationCategory,
 ) -> Result<Option<CAP>, ConceptReadError> {
-    let annotations = TypeReader::get_type_edge_annotations(snapshot, edge.clone())?;
+    let annotations = TypeReader::get_capability_constraints(snapshot, edge.clone())?;
     let found_annotation = annotations
         .iter()
         .map(|(existing_annotation, source)| (existing_annotation.clone().into().category(), source))
@@ -709,7 +709,7 @@ pub fn validate_capabilities_cardinality<CAP: Capability<'static>>(
 
     for capability in capability_declared {
         if !cardinalities.contains_key(&capability) {
-            cardinalities.insert(capability.clone(), capability.get_cardinality(snapshot, type_manager)?);
+            cardinalities.insert(capability.clone(), capability.get_cardinalities(snapshot, type_manager)?);
         }
 
         let not_stored_override = not_stored_overrides.get(&capability);
@@ -723,7 +723,7 @@ pub fn validate_capabilities_cardinality<CAP: Capability<'static>>(
             if !cardinalities.contains_key(&overridden_capability) {
                 cardinalities.insert(
                     overridden_capability.clone(),
-                    overridden_capability.get_cardinality(snapshot, type_manager)?,
+                    overridden_capability.get_cardinalities(snapshot, type_manager)?,
                 );
             }
 

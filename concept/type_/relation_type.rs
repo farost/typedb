@@ -51,6 +51,8 @@ use crate::{
     },
     ConceptAPI,
 };
+use crate::type_::constraint::TypeConstraint;
+use crate::type_::entity_type::EntityType;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct RelationType<'a> {
@@ -165,12 +167,12 @@ impl<'a> KindAPI<'a> for RelationType<'a> {
         type_manager.get_relation_type_annotations_declared(snapshot, self.clone().into_owned())
     }
 
-    fn get_annotations<'m>(
+    fn get_constraints<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<RelationTypeAnnotation, RelationType<'static>>>, ConceptReadError> {
-        type_manager.get_relation_type_annotations(snapshot, self.clone().into_owned())
+    ) -> Result<MaybeOwns<'m, HashMap<TypeConstraint<RelationType<'static>>, HashSet<RelationType<'static>>>>, ConceptReadError> {
+        type_manager.get_relation_type_constraints(snapshot, self.clone().into_owned())
     }
 }
 
