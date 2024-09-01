@@ -838,7 +838,7 @@ pub async fn relation_role_cardinality(
             .resolve_relates(tx.snapshot.as_ref(), relation, role_label.into_typedb().name().as_str())
             .unwrap()
             .unwrap();
-        let actual_cardinality = relates.get_cardinalities(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
+        let actual_cardinality = relates.get_cardinality_constraints(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
         match cardinality_annotation.into_typedb(None) {
             TypeDBAnnotation::Cardinality(card) => assert_eq!(actual_cardinality, card),
             _ => panic!("Expected annotations is not Cardinality"),

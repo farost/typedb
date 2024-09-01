@@ -102,7 +102,7 @@ impl<'a> TypeAPI<'a> for RelationType<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_type_is_abstract(snapshot, self.clone())
+        type_manager.get_is_abstract(snapshot, self.clone().into_owned())
     }
 
     fn delete(
@@ -142,7 +142,7 @@ impl<'a> TypeAPI<'a> for RelationType<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, Vec<RelationType<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'m, HashSet<RelationType<'static>>>, ConceptReadError> {
         type_manager.get_relation_type_subtypes(snapshot, self.clone().into_owned())
     }
 
@@ -213,14 +213,6 @@ impl<'a> RelationType<'a> {
         thing_manager: &ThingManager,
     ) -> Result<(), ConceptWriteError> {
         type_manager.unset_relation_type_supertype(snapshot, thing_manager, self.clone().into_owned())
-    }
-
-    pub(crate) fn is_cascade(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-    ) -> Result<bool, ConceptReadError> {
-        type_manager.get_relation_type_is_cascade(snapshot, self.clone())
     }
 
     pub fn set_annotation(

@@ -94,7 +94,7 @@ pub(crate) struct CommonTypeCache<T: KindAPI<'static>> {
     // TODO: Should these all be sets instead of vec?
     pub(super) supertype: Option<T>, // TODO: use smallvec if we want to have some inline - benchmark.
     pub(super) supertypes_transitive: Vec<T>,   // TODO: use smallvec if we want to have some inline - benchmark.
-    pub(super) subtypes: Vec<T>,     // TODO: benchmark smallvec.
+    pub(super) subtypes: HashSet<T>,
     pub(super) subtypes_transitive: Vec<T>, // TODO: benchmark smallvec
 }
 
@@ -104,10 +104,9 @@ pub(crate) struct CommonCapabilityCache<CAP: Capability<'static>> {
     pub(super) specializes: Option<CAP>,
     pub(super) specializes_transitive: Vec<CAP>,
     pub(super) specializing: HashSet<CAP>,
-    pub(super) specializing_transitive: HashSet<CAP>,
+    pub(super) specializing_transitive: Vec<CAP>,
     pub(super) annotations_declared: HashSet<CAP::AnnotationType>,
     pub(super) constraints: HashMap<CapabilityConstraint<CAP>, HashSet<CAP>>,
-    pub(super) default_cardinality: AnnotationCardinality,
 }
 
 #[derive(Debug)]

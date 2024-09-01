@@ -24,6 +24,8 @@ use crate::{
         Capability, TypeAPI,
     },
 };
+use crate::type_::constraint::CapabilityConstraint;
+use crate::type_::owns::Owns;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Plays<'a> {
@@ -147,7 +149,7 @@ impl<'a> Capability<'a> for Plays<'a> {
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashSet<Plays<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'this, Vec<Plays<'static>>>, ConceptReadError> {
         type_manager.get_plays_specializing_transitive(snapshot, self.clone().into_owned())
     }
 
@@ -163,16 +165,16 @@ impl<'a> Capability<'a> for Plays<'a> {
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashMap<PlaysAnnotation, Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_annotations(snapshot, self.clone().into_owned())
+    ) -> Result<MaybeOwns<'this, HashMap<CapabilityConstraint<Plays<'static>>, HashSet<Plays<'static>>>>, ConceptReadError> {
+        type_manager.get_plays_constraints(snapshot, self.clone().into_owned())
     }
 
-    fn get_default_cardinality<'this>(
+    fn get_cardinality_constraints<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<AnnotationCardinality, ConceptReadError> {
-        type_manager.get_plays_default_cardinality(snapshot, self.clone().into_owned())
+    ) -> Result<HashMap<CapabilityConstraint<Plays<'static>>, HashSet<Plays<'static>>>, ConceptReadError> {
+        type_manager.get_cardinality_constraints(snapshot, self.clone().into_owned())
     }
 }
 

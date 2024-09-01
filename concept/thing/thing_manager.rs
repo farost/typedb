@@ -940,7 +940,7 @@ impl ThingManager {
     ) -> Result<(), ConceptReadError> {
         let mut current_capability = Some(owns);
         while let Some(locked_capability) = current_capability {
-            let cardinality = locked_capability.get_cardinalities(snapshot, self.type_manager())?;
+            let cardinality = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
             if cardinality == AnnotationCardinality::unchecked() {
                 break;
             }
@@ -969,7 +969,7 @@ impl ThingManager {
     ) -> Result<(), ConceptReadError> {
         let mut current_capability = Some(plays);
         while let Some(locked_capability) = current_capability {
-            let cardinality = locked_capability.get_cardinalities(snapshot, self.type_manager())?;
+            let cardinality = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
             if cardinality == AnnotationCardinality::unchecked() {
                 break;
             }
@@ -998,7 +998,7 @@ impl ThingManager {
     ) -> Result<(), ConceptReadError> {
         let mut current_capability = Some(relates);
         while let Some(locked_capability) = current_capability {
-            let cardinality = locked_capability.get_cardinalities(snapshot, self.type_manager())?;
+            let cardinality = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
             if cardinality == AnnotationCardinality::unchecked() {
                 break;
             }
@@ -1089,7 +1089,7 @@ impl ThingManager {
                 }
                 let subtypes = relation_type.get_subtypes_transitive(snapshot, self.type_manager())?;
                 once(&relation_type).chain(subtypes.into_iter()).try_for_each(|type_| {
-                    let is_cascade = type_.is_cascade(snapshot, self.type_manager())?;
+                    let is_cascade = true; // TODO: Always consider cascade now, can be changed later.
                     if is_cascade {
                         let mut relations: InstanceIterator<Relation<'_>> =
                             self.get_instances_in(snapshot, type_.clone());
@@ -1278,7 +1278,7 @@ impl ThingManager {
             let attribute = Attribute::new(edge.to());
             if self.object_exists(snapshot, &owner)? {
                 let owns = owner.type_().get_owns_attribute(snapshot, self.type_manager(), attribute.type_())?.ok_or(ConceptReadError::CorruptFoundHasWithoutOwns)?;
-                let updated_owns = out_object_owns.entry(owner.into_owned()).or_insert(HashSet::new());
+                let updated_owns = out_object_owns.entry(owner.as_reference()).or_insert(HashSet::new());
                 updated_owns.insert(owns);
             }
         }
@@ -1302,13 +1302,13 @@ impl ThingManager {
 
             if self.object_exists(snapshot, &relation)? {
                 let relates = relation.type_().get_relates_role(snapshot, self.type_manager(), role_type.clone())?.ok_or(ConceptReadError::CorruptFoundLinksWithoutRelates)?;
-                let updated_relates = out_relation_relates.entry(relation.into_owned()).or_insert(HashSet::new());
+                let updated_relates = out_relation_relates.entry(relation.as_reference()).or_insert(HashSet::new());
                 updated_relates.insert(relates);
             }
 
             if self.object_exists(snapshot, &player)? {
                 let plays = player.type_().get_plays_role(snapshot, self.type_manager(), role_type)?.ok_or(ConceptReadError::CorruptFoundLinksWithoutPlays)?;
-                let updated_plays = out_object_plays.entry(player.into_owned()).or_insert(HashSet::new());
+                let updated_plays = out_object_plays.entry(player.as_reference()).or_insert(HashSet::new());
                 updated_plays.insert(plays);
             }
         }

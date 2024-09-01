@@ -95,7 +95,7 @@ impl<'a> TypeAPI<'a> for RoleType<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_type_is_abstract(snapshot, self.clone())
+        type_manager.get_is_abstract(snapshot, self.clone().into_owned())
     }
 
     fn delete(
@@ -135,7 +135,7 @@ impl<'a> TypeAPI<'a> for RoleType<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, Vec<RoleType<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'m, HashSet<RoleType<'static>>>, ConceptReadError> {
         type_manager.get_role_type_subtypes(snapshot, self.clone().into_owned())
     }
 

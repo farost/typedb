@@ -39,7 +39,7 @@ use crate::{
     },
     ConceptAPI,
 };
-use crate::type_::constraint::TypeConstraint;
+use crate::type_::constraint::{CapabilityConstraint, TypeConstraint};
 use crate::type_::entity_type::EntityType;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -100,7 +100,7 @@ impl<'a> TypeAPI<'a> for AttributeType<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_type_is_abstract(snapshot, self.clone())
+        type_manager.get_is_abstract(snapshot, self.clone().into_owned())
     }
 
     fn delete(
@@ -140,7 +140,7 @@ impl<'a> TypeAPI<'a> for AttributeType<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, Vec<AttributeType<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'m, HashSet<AttributeType<'static>>>, ConceptReadError> {
         type_manager.get_attribute_type_subtypes(snapshot, self.clone().into_owned())
     }
 
@@ -275,31 +275,31 @@ impl<'a> AttributeType<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_attribute_type_is_independent(snapshot, self.clone())
+        type_manager.get_is_independent(snapshot, self.clone().into_owned())
     }
 
-    pub fn get_constraint_regex(
+    pub fn get_constraints_regex(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<Option<AnnotationRegex>, ConceptReadError> {
-        type_manager.get_attribute_type_regex(snapshot, self.clone())
+    ) -> Result<HashMap<TypeConstraint<AttributeType<'static>>, HashSet<AttributeType<'static>>>, ConceptReadError> {
+        type_manager.get_attribute_type_regex_constraints(snapshot, self.clone().into_owned())
     }
 
-    pub fn get_constraint_range(
+    pub fn get_constraints_range(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<Option<AnnotationRange>, ConceptReadError> {
-        type_manager.get_attribute_type_range(snapshot, self.clone())
+    ) -> Result<HashMap<TypeConstraint<AttributeType<'static>>, HashSet<AttributeType<'static>>>, ConceptReadError> {
+        type_manager.get_attribute_type_range_constraints(snapshot, self.clone().into_owned())
     }
 
-    pub fn get_constraint_values(
+    pub fn get_constraints_values(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<Option<AnnotationValues>, ConceptReadError> {
-        type_manager.get_attribute_type_values(snapshot, self.clone())
+    ) -> Result<HashMap<TypeConstraint<AttributeType<'static>>, HashSet<AttributeType<'static>>>, ConceptReadError> {
+        type_manager.get_attribute_type_values_constraints(snapshot, self.clone().into_owned())
     }
 
     pub fn set_annotation(

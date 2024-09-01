@@ -437,7 +437,7 @@ pub async fn get_plays_cardinality(
         let role_type =
             tx.type_manager.get_role_type(tx.snapshot.as_ref(), &role_label.into_typedb()).unwrap().unwrap();
         let plays = player_type.get_plays_role(tx.snapshot.as_ref(), &tx.type_manager, role_type).unwrap().unwrap();
-        let actual_cardinality = plays.get_cardinalities(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
+        let actual_cardinality = plays.get_cardinality_constraints(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
         match cardinality_annotation.into_typedb(None) {
             annotation::Annotation::Cardinality(card) => assert_eq!(actual_cardinality, card),
             _ => panic!("Expected annotations is not Cardinality"),

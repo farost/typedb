@@ -95,7 +95,7 @@ impl<'a> TypeAPI<'a> for EntityType<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_type_is_abstract(snapshot, self.clone())
+        type_manager.get_is_abstract(snapshot, self.clone().into_owned())
     }
 
     fn delete(
@@ -135,7 +135,7 @@ impl<'a> TypeAPI<'a> for EntityType<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, Vec<EntityType<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'m, HashSet<EntityType<'static>>>, ConceptReadError> {
         type_manager.get_entity_type_subtypes(snapshot, self.clone().into_owned())
     }
 

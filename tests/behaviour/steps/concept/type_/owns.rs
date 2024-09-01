@@ -324,7 +324,7 @@ pub async fn get_owns_cardinality(
             tx.type_manager.get_attribute_type(tx.snapshot.as_ref(), &attr_type_label.into_typedb()).unwrap().unwrap();
         let owns = object_type.get_owns_attribute(tx.snapshot.as_ref(), &tx.type_manager, attr_type).unwrap().unwrap();
         let value_type = owns.attribute().get_value_type(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
-        let actual_cardinality = owns.get_cardinalities(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
+        let actual_cardinality = owns.get_cardinality_constraints(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
         match cardinality_annotation.into_typedb(None) {
             annotation::Annotation::Cardinality(card) => assert_eq!(actual_cardinality, card),
             _ => panic!("Expected annotations is not Cardinality"),

@@ -56,7 +56,7 @@ use crate::{
         Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI,
     },
 };
-use crate::type_::constraint::TypeConstraint;
+use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, get_abstract_constraint, get_cardinality_constraints, get_distinct_constraints, get_independent_constraints, get_range_constraints, get_regex_constraints, get_unique_constraint, get_values_constraints, TypeConstraint};
 
 pub mod type_cache;
 pub mod type_reader;
@@ -152,7 +152,7 @@ macro_rules! get_subtypes_methods {
         $(
             pub(crate) fn $method_name(
                 &self, snapshot: &impl ReadableSnapshot, type_: $type_<'static>
-            ) -> Result<MaybeOwns<'_, Vec<$type_<'static>>>, ConceptReadError> {
+            ) -> Result<MaybeOwns<'_, HashSet<$type_<'static>>>, ConceptReadError> {
                 if let Some(cache) = &self.type_cache {
                     Ok(MaybeOwns::Borrowed(cache.$cache_method(type_)))
                 } else {
@@ -284,14 +284,14 @@ macro_rules! storage_delete_annotation {
 
 macro_rules! get_has_constraint {
     ($(
-        fn $method_name:ident<'a>() -> $type_:ty = $constraint_method:path;
+        fn $method_name:ident() -> $type_:ty = $constraint_method:path;
     )*) => {
         $(
-            pub(crate) fn $method_name<'a>(
+            pub(crate) fn $method_name(
                 &self, snapshot: &impl ReadableSnapshot, type_: $type_
             ) -> Result<bool, ConceptReadError> {
-                let constraint = $constraint_method(type_.get_annotations(snapshot, self)?.keys());
-                Ok(constraint.is_some())
+                let constraints = $constraint_method(type_.get_constraints(snapshot, self)?.into_iter());
+                Ok(!constraints.is_empty())
             }
         )*
     }
@@ -299,13 +299,13 @@ macro_rules! get_has_constraint {
 
 macro_rules! get_constraint {
     ($(
-        fn $method_name:ident<'a>() -> $type_:ty = $constraint_type:ident | $constraint_method:path;
+        fn $method_name:ident() -> $type_:ty = $constraint_type:ident | $constraint_method:path;
     )*) => {
         $(
-            pub(crate) fn $method_name<'a>(
+            pub(crate) fn $method_name(
                 &self, snapshot: &impl ReadableSnapshot, type_: $type_
-            ) -> Result<Option<$constraint_type>, ConceptReadError> {
-                Ok($constraint_method(type_.get_annotations(snapshot, self)?.keys()))
+            ) -> Result<HashMap<$constraint_type<$type_>, HashSet<$type_>>, ConceptReadError> {
+                Ok($constraint_method(type_.get_constraints(snapshot, self)?.into_iter()))
             }
         )*
     }
@@ -656,7 +656,7 @@ impl TypeManager {
         let mut max_card = 0;
         let relates = relation_type.get_relates(snapshot, self)?;
         for relates in relates.iter() {
-            let card = relates.get_cardinalities(snapshot, self)?;
+            let card = relates.get_cardinality_constraints(snapshot, self)?;
             match card.end() {
                 None => return Ok(false),
                 Some(end) => max_card += end,
@@ -758,7 +758,7 @@ impl TypeManager {
         &self,
         snapshot: &impl ReadableSnapshot,
         plays: Plays<'static>,
-    ) -> Result<MaybeOwns<'_, HashSet<Plays<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'_, Vec<Plays<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
             Ok(MaybeOwns::Borrowed(cache.get_plays_specializing_transitive(plays)))
         } else {
@@ -844,7 +844,7 @@ impl TypeManager {
         &self,
         snapshot: &impl ReadableSnapshot,
         owns: Owns<'static>,
-    ) -> Result<MaybeOwns<'_, HashSet<Owns<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'_, Vec<Owns<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
             Ok(MaybeOwns::Borrowed(cache.get_owns_specializing_transitive(owns)))
         } else {
@@ -904,7 +904,7 @@ impl TypeManager {
         &self,
         snapshot: &impl ReadableSnapshot,
         relates: Relates<'static>,
-    ) -> Result<MaybeOwns<'_, HashSet<Relates<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'_, Vec<Relates<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
             Ok(MaybeOwns::Borrowed(cache.get_relates_specializing_transitive(relates)))
         } else {
@@ -928,19 +928,15 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_owns_annotations<'this>(
+    pub(crate) fn get_owns_constraints<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         owns: Owns<'static>,
-    ) -> Result<MaybeOwns<'this, HashMap<OwnsAnnotation, Owns<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'this, HashMap<CapabilityConstraint<Owns<'static>>, HashSet<Owns<'static>>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
             Ok(MaybeOwns::Borrowed(cache.get_owns_constraints(owns)))
         } else {
-            let annotations = TypeReader::get_capability_constraints(snapshot, owns)?
-                .into_iter()
-                .map(|(annotation, owns)| (OwnsAnnotation::try_from(annotation).unwrap(), owns))
-                .collect();
-            Ok(MaybeOwns::Owned(annotations))
+            Ok(MaybeOwns::Owned(TypeReader::get_capability_constraints(snapshot, owns)?))
         }
     }
 
@@ -960,19 +956,15 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_plays_annotations<'this>(
+    pub(crate) fn get_plays_constraints<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         plays: Plays<'static>,
-    ) -> Result<MaybeOwns<'this, HashMap<PlaysAnnotation, Plays<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'this, HashMap<CapabilityConstraint<Plays<'static>>, HashSet<Plays<'static>>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
             Ok(MaybeOwns::Borrowed(cache.get_plays_constraints(plays)))
         } else {
-            let annotations = TypeReader::get_capability_constraints(snapshot, plays)?
-                .into_iter()
-                .map(|(annotation, plays)| (PlaysAnnotation::try_from(annotation).unwrap(), plays))
-                .collect();
-            Ok(MaybeOwns::Owned(annotations))
+            Ok(MaybeOwns::Owned(TypeReader::get_capability_constraints(snapshot, plays)?))
         }
     }
 
@@ -992,34 +984,15 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_relates_annotations<'this>(
+    pub(crate) fn get_relates_constraints<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         relates: Relates<'static>,
-    ) -> Result<MaybeOwns<'this, HashMap<RelatesAnnotation, Relates<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'this, HashMap<CapabilityConstraint<Relates<'static>>, HashSet<Relates<'static>>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
             Ok(MaybeOwns::Borrowed(cache.get_relates_constraints(relates)))
         } else {
-            let annotations = TypeReader::get_capability_constraints(snapshot, relates)?
-                .into_iter()
-                .map(|(annotation, relates)| (RelatesAnnotation::try_from(annotation).unwrap(), relates))
-                .collect();
-            Ok(MaybeOwns::Owned(annotations))
-        }
-    }
-
-    pub fn get_cardinalities<'a, CAP: Capability<'a>>(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        capability: CAP,
-    ) -> Result<HashMap<CAP, AnnotationCardinality>, ConceptReadError> {
-        let cardinality = Constraint::compute_cardinalities(
-            capability.get_constraints(snapshot, self)?,
-            Some(capability.get_default_cardinality(snapshot, self)?),
-        );
-        match cardinality {
-            Some(cardinality) => Ok(cardinality),
-            None => Err(ConceptReadError::CorruptMissingMandatoryCardinality),
+            Ok(MaybeOwns::Owned(TypeReader::get_capability_constraints(snapshot, relates)?))
         }
     }
 
@@ -1028,7 +1001,7 @@ impl TypeManager {
         snapshot: &impl ReadableSnapshot,
         capability: CAP,
     ) -> Result<Option<AnnotationCardinality>, ConceptReadError> {
-        let cardinality = Constraint::compute_cardinalities(
+        let cardinality = compute_cardinalities(
             capability.get_annotations_declared(snapshot, self)?.iter(),
             None, // no default
         );
@@ -1048,77 +1021,51 @@ impl TypeManager {
         };
 
         if let Some(capability_override) = capability_override {
-            capability_override.get_cardinalities(snapshot, self)
+            capability_override.get_cardinality_constraints(snapshot, self)
         } else {
             capability.get_default_cardinality(snapshot, self)
         }
     }
 
-    pub fn get_owns_default_cardinality<'a>(&self, snapshot: &impl ReadableSnapshot, owns: Owns<'static>) -> Result<AnnotationCardinality, ConceptReadError> {
-        if let Some(cache) = &self.type_cache {
-            Ok(cache.get_owns_default_cardinality(owns).clone())
-        } else {
-            TypeReader::get_owns_default_cardinality(snapshot, owns)
-        }
+    pub(crate) fn get_is_abstract<T: KindAPI<'static>>(
+        &self, snapshot: &impl ReadableSnapshot, type_: T,
+    ) -> Result<bool, ConceptReadError> {
+        let constraints = type_.get_constraints(snapshot, self)?;
+        let constraints = get_abstract_constraint(type_, constraints.into_iter());
+        Ok(constraints.is_some())
     }
 
-    pub fn get_plays_default_cardinality<'a>(&self, snapshot: &impl ReadableSnapshot, plays: Plays<'static>) -> Result<AnnotationCardinality, ConceptReadError> {
-        if let Some(cache) = &self.type_cache {
-            Ok(cache.get_plays_default_cardinality(plays).clone())
-        } else {
-            TypeReader::get_plays_default_cardinality(snapshot, plays)
-        }
+    pub(crate) fn get_unique_constraints(
+        &self, snapshot: &impl ReadableSnapshot, owns: Owns<'static>,
+    ) -> Result<Option<(CapabilityConstraint<Owns<'static>>, Owns<'static>)>, ConceptReadError> {
+        Ok(get_unique_constraint(owns.get_constraints(snapshot, self)?.into_iter()))
     }
 
-    pub fn get_relates_default_cardinality<'a>(&self, snapshot: &impl ReadableSnapshot, relates: Relates<'static>) -> Result<AnnotationCardinality, ConceptReadError> {
-        if let Some(cache) = &self.type_cache {
-            Ok(cache.get_relates_default_cardinality(relates).clone())
-        } else {
-            TypeReader::get_relates_default_cardinality(snapshot, relates)
-        }
-    }
-
-    pub fn get_owns_is_distinct<'a>(
+    pub(crate) fn get_is_key(
         &self,
         snapshot: &impl ReadableSnapshot,
-        owns: Owns<'a>,
+        owns: Owns<'static>,
     ) -> Result<bool, ConceptReadError> {
-        let default = match owns.get_ordering(snapshot, self)? {
-            Ordering::Ordered => None,
-            Ordering::Unordered => Some(AnnotationDistinct),
-        };
-
-        Ok(Constraint::compute_distinct(owns.get_constraints(snapshot, self)?.keys(), default).is_some())
-    }
-
-    pub fn get_relates_is_distinct<'a>(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        relates: Relates<'a>,
-    ) -> Result<bool, ConceptReadError> {
-        let default = match relates.role().get_ordering(snapshot, self)? {
-            Ordering::Ordered => None,
-            Ordering::Unordered => Some(AnnotationDistinct),
-        };
-
-        Ok(Constraint::compute_distinct(relates.get_constraints(snapshot, self)?.keys(), default).is_some())
+        Ok(if let Some((_, source)) = get_unique_constraint::<CapabilityConstraint<Owns<'static>>, Owns<'static>>(owns.get_constraints(snapshot, self)?.into_iter())? {
+            source.get_annotations_declared(snapshot, self)?.contains(&OwnsAnnotation::Key(AnnotationKey {}))
+        } else {
+            false
+        })
     }
 
     get_has_constraint! {
-        fn get_type_is_abstract<'a>() -> impl KindAPI<'a> = Constraint::compute_abstract;
-        fn get_owns_is_unique<'a>() -> Owns<'a> = Constraint::compute_unique;
-        fn get_owns_is_key<'a>() -> Owns<'a> = Constraint::compute_key;
-        fn get_attribute_type_is_independent<'a>() -> AttributeType<'a> = Constraint::compute_independent;
-        fn get_relation_type_is_cascade<'a>() -> RelationType<'a> = Constraint::compute_cascade;
+        fn get_is_distinct() -> impl Capability<'static> = get_distinct_constraints;
+        fn get_is_independent() -> AttributeType<'static> = get_independent_constraints;
     }
 
     get_constraint! {
-        fn get_owns_regex<'a>() -> Owns<'a> = AnnotationRegex | Constraint::compute_regex;
-        fn get_owns_range<'a>() -> Owns<'a> = AnnotationRange | Constraint::compute_range;
-        fn get_owns_values<'a>() -> Owns<'a> = AnnotationValues | Constraint::compute_values;
-        fn get_attribute_type_regex<'a>() -> AttributeType<'a> = AnnotationRegex | Constraint::compute_regex;
-        fn get_attribute_type_range<'a>() -> AttributeType<'a> = AnnotationRange | Constraint::compute_range;
-        fn get_attribute_type_values<'a>() -> AttributeType<'a> = AnnotationValues | Constraint::compute_values;
+        fn get_cardinality_constraints() -> impl Capability<'static> = CapabilityConstraint | get_cardinality_constraints;
+        fn get_owns_regex_constraints() -> Owns<'static> = CapabilityConstraint | get_regex_constraints;
+        fn get_owns_range_constraints() -> Owns<'static> = CapabilityConstraint | get_range_constraints;
+        fn get_owns_values_constraints() -> Owns<'static> = CapabilityConstraint | get_values_constraints;
+        fn get_attribute_type_regex_constraints() -> AttributeType<'static> = TypeConstraint | get_regex_constraints;
+        fn get_attribute_type_range_constraints() -> AttributeType<'static> = TypeConstraint | get_range_constraints;
+        fn get_attribute_type_values_constraints() -> AttributeType<'static> = TypeConstraint | get_values_constraints;
     }
 
     // todo: remove or refactor
@@ -2686,7 +2633,7 @@ impl TypeManager {
         if capability_get_declared_annotation_by_category(snapshot, owns.clone(), annotation_category)?.is_some() {
             let updated_cardinality = self.get_cardinality_inherited_or_default(snapshot, owns.clone(), None)?;
 
-            if updated_cardinality != owns.get_cardinalities(snapshot, self)? {
+            if updated_cardinality != owns.get_cardinality_constraints(snapshot, self)? {
                 self.validate_updated_capability_cardinality(snapshot, owns.clone(), updated_cardinality, false)?;
 
                 OperationTimeValidation::validate_new_annotation_compatible_with_owns_and_overriding_owns_instances(

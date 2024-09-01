@@ -188,13 +188,13 @@ impl<'a> TypeAPI<'a> for ObjectType<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, Vec<ObjectType<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'m, HashSet<ObjectType<'static>>>, ConceptReadError> {
         Ok(MaybeOwns::Owned(with_object_type!(self, |object| {
             object
                 .get_subtypes(snapshot, type_manager)?
                 .iter()
                 .map(|type_| type_.clone().into_owned_object_type())
-                .collect_vec()
+                .collect()
         })))
     }
 

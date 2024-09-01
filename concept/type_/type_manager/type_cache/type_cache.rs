@@ -238,7 +238,7 @@ impl TypeCache {
         &T::get_cache(self, type_).common_type_cache().supertypes_transitive
     }
 
-    pub(crate) fn get_subtypes<'a, 'this, T, CACHE>(&'this self, type_: T) -> &'this Vec<T::SelfStatic>
+    pub(crate) fn get_subtypes<'a, 'this, T, CACHE>(&'this self, type_: T) -> &'this HashSet<T::SelfStatic>
     where
         T: KindAPI<'a> + CacheGetter<CacheType = CACHE>,
         CACHE: HasCommonTypeCache<T::SelfStatic> + 'this,
@@ -276,9 +276,9 @@ impl TypeCache {
     pub(crate) fn get_constraints<'a, 'this, T, CACHE>(
         &'this self,
         type_: T,
-    ) -> &HashMap<TypeConstraint<<T as TypeAPI<'a>>::SelfStatic as KindAPI<'static>>, HashSet<<T as TypeAPI<'a>>::SelfStatic>>
+    ) -> &HashMap<TypeConstraint<T>, HashSet<T>>
     where
-        T: KindAPI<'a> + CacheGetter<CacheType = CACHE>,
+        T: KindAPI<'static> + CacheGetter<CacheType = CACHE>,
         CACHE: HasCommonTypeCache<T::SelfStatic> + 'this,
     {
         &T::get_cache(self, type_).common_type_cache().constraints
@@ -366,12 +366,8 @@ impl TypeCache {
     pub(crate) fn get_relates_specializing_transitive<'c>(
         &'c self,
         relates: Relates<'c>,
-    ) -> &'c HashSet<Relates<'static>> {
+    ) -> &'c Vec<Relates<'static>> {
         &self.relates.get(&relates).unwrap().common_capability_cache.specializing_transitive
-    }
-
-    pub(crate) fn get_relates_default_cardinality<'c>(&'c self, relates: Relates<'c>) -> &'c AnnotationCardinality {
-        &self.relates.get(&relates).unwrap().common_capability_cache.default_cardinality
     }
 
     pub(crate) fn get_role_type_plays(&self, role_type: RoleType<'_>) -> &HashSet<Plays<'static>> {
@@ -413,7 +409,7 @@ impl TypeCache {
         &self.plays.get(&plays).unwrap().common_capability_cache.specializing
     }
 
-    pub(crate) fn get_plays_specializing_transitive<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<Plays<'static>> {
+    pub(crate) fn get_plays_specializing_transitive<'c>(&'c self, plays: Plays<'c>) -> &'c Vec<Plays<'static>> {
         &self.plays.get(&plays).unwrap().common_capability_cache.specializing_transitive
     }
 
@@ -426,10 +422,6 @@ impl TypeCache {
         plays: Plays<'c>,
     ) -> &'c HashMap<CapabilityConstraint<Plays<'static>>, HashSet<Plays<'static>>> {
         &self.plays.get(&plays).unwrap().common_capability_cache.constraints
-    }
-
-    pub(crate) fn get_plays_default_cardinality<'c>(&'c self, plays: Plays<'c>) -> &'c AnnotationCardinality {
-        &self.plays.get(&plays).unwrap().common_capability_cache.default_cardinality
     }
 
     pub(crate) fn get_attribute_type_value_type_declared(
@@ -470,12 +462,8 @@ impl TypeCache {
         &self.owns.get(&owns).unwrap().common_capability_cache.specializing
     }
 
-    pub(crate) fn get_owns_specializing_transitive<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<Owns<'static>> {
+    pub(crate) fn get_owns_specializing_transitive<'c>(&'c self, owns: Owns<'c>) -> &'c Vec<Owns<'static>> {
         &self.owns.get(&owns).unwrap().common_capability_cache.specializing_transitive
-    }
-
-    pub(crate) fn get_owns_default_cardinality<'c>(&'c self, owns: Owns<'c>) -> &'c AnnotationCardinality {
-        &self.owns.get(&owns).unwrap().common_capability_cache.default_cardinality
     }
 
     pub(crate) fn get_struct_definition_key(&self, label: &str) -> Option<DefinitionKey<'static>> {

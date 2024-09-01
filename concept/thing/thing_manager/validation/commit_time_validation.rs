@@ -23,24 +23,22 @@ use crate::{
 };
 
 macro_rules! validate_capability_cardinality_constraint {
-    ($func_name:ident, $capability_type:ident, $interface_type:ident, $object_instance:ident, $check_func:path) => {
+    ($func_name:ident, $capability_type:ident, $object_instance:ident, $get_interface_counts_func:ident, $check_func:path) => {
         pub(crate) fn $func_name<'a>(
             snapshot: &impl ReadableSnapshot,
             thing_manager: &ThingManager,
-            owner: &$object_instance<'a>,
+            object: $object_instance<'a>,
             capabilities_to_check: HashSet<$capability_type<'static>>,
-            counts: &HashMap<$interface_type<'static>, u64>,
         ) -> Result<(), DataValidationError> {
             let checked_capabilities: HashSet<$capability_type<'static>> = HashSet::new();
+            let counts = object.$get_interface_counts_func(snapshot, thing_manager)?;
 
             for capability in capabilities_to_check {
-                if checked_capabilities.contains(capability) {
+                if checked_capabilities.contains(&capability) {
                     continue;
                 }
 
-                let constraints = capability.get_constraints(snapshot, thing_manager.type_manager())
-                let cardinality_constraints: HashMap<CapabilityConstraint<$capability_type<'static>>, HashSet<$capability_type<'static>::ObjectType>> =
-                    filter_by_constraint_description_match!(constraints, ConstraintDescription::Cardinality(_));
+                let cardinality_constraints: capability.get_cardinalities(snapshot, thing_manager.type_manager())?;
 
                 for (cardinality, sources) in cardinality_constraints {
                     for source in sources {
@@ -56,7 +54,7 @@ macro_rules! validate_capability_cardinality_constraint {
                             .unique()
                             .filter_map(|interface_type| counts.get(&interface_type))
                             .sum();
-                        $check_func(snapshot, thing_manager, owner, capability.clone(), count)?; // TODO: Call for constraint check instead!
+                        $check_func(snapshot, thing_manager, &object, capability.clone(), cardinality.clone(), count)?; // TODO: Call for constraint check instead!
                     }
                 }
 
@@ -92,17 +90,13 @@ impl CommitTimeValidation {
         modified_owns: HashSet<Owns<'a>>,
         out_errors: &mut Vec<DataValidationError>,
     ) -> Result<(), ConceptReadError> {
-        let has_counts = object.get_has_counts(snapshot, thing_manager)?;
-
         let cardinality_check = CommitTimeValidation::validate_owns_cardinality_constraint(
             snapshot,
             thing_manager,
-            &object,
+            object,
             modified_owns,
-            &has_counts,
         );
         collect_errors!(out_errors, cardinality_check);
-
         Ok(())
     }
 
@@ -113,20 +107,13 @@ impl CommitTimeValidation {
         modified_plays: HashSet<Plays<'a>>,
         out_errors: &mut Vec<DataValidationError>,
     ) -> Result<(), ConceptReadError> {
-        let type_ = object.type_();
-        let object_plays = type_.get_plays(snapshot, thing_manager.type_manager())?;
-        let played_roles_counts = object.get_played_roles_counts(snapshot, thing_manager)?;
-
-        for plays in object_plays.iter() {
-            let cardinality_check = Self::validate_plays_cardinality_constraint(
-                snapshot,
-                thing_manager,
-                &object,
-                plays.clone().into_owned(),
-                &played_roles_counts,
-            );
-            collect_errors!(out_errors, cardinality_check);
-        }
+        let cardinality_check = Self::validate_plays_cardinality_constraint(
+            snapshot,
+            thing_manager,
+            object,
+            modified_plays,
+        );
+        collect_errors!(out_errors, cardinality_check);
         Ok(())
     }
 
@@ -137,20 +124,13 @@ impl CommitTimeValidation {
         modified_relates: HashSet<Relates<'a>>,
         out_errors: &mut Vec<DataValidationError>,
     ) -> Result<(), ConceptReadError> {
-        let type_ = relation.type_();
-        let relation_relates = type_.get_relates(snapshot, thing_manager.type_manager())?;
-        let role_player_count = relation.get_player_counts(snapshot, thing_manager)?;
-
-        for relates in relation_relates.iter() {
-            let cardinality_check = Self::validate_relates_cardinality_constraint(
-                snapshot,
-                thing_manager,
-                &relation,
-                relates.clone().into_owned(),
-                &role_player_count,
-            );
-            collect_errors!(out_errors, cardinality_check);
-        }
+        let cardinality_check = Self::validate_relates_cardinality_constraint(
+            snapshot,
+            thing_manager,
+            relation,
+            modified_relates,
+        );
+        collect_errors!(out_errors, cardinality_check);
         Ok(())
     }
 
@@ -159,13 +139,12 @@ impl CommitTimeValidation {
         thing_manager: &ThingManager,
         owner: &Object<'a>,
         owns: Owns<'static>,
+        cardinality: AnnotationCardinality,
         count: u64,
     ) -> Result<(), DataValidationError> {
-        let cardinality =
-            owns.get_cardinalities(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)?;
-        let is_key: bool =
-            owns.is_key(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)?;
         if !cardinality.value_valid(count) {
+            let is_key =
+                owns.is_key(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)?;
             let owner = owner.clone().into_owned();
             if is_key {
                 Err(DataValidationError::KeyCardinalityViolated { owner, owns, count })
@@ -178,14 +157,13 @@ impl CommitTimeValidation {
     }
 
     fn check_plays_cardinality<'a>(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
+        _snapshot: &impl ReadableSnapshot,
+        _thing_manager: &ThingManager,
         player: &Object<'a>,
         plays: Plays<'static>,
+        cardinality: AnnotationCardinality,
         count: u64,
     ) -> Result<(), DataValidationError> {
-        let cardinality =
-            plays.get_cardinalities(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)?;
         if !cardinality.value_valid(count) {
             let player = player.clone().into_owned();
             Err(DataValidationError::PlaysCardinalityViolated { player, plays, count, cardinality })
@@ -195,15 +173,13 @@ impl CommitTimeValidation {
     }
 
     fn check_relates_cardinality<'a>(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
+        _snapshot: &impl ReadableSnapshot,
+        _thing_manager: &ThingManager,
         relation: &Relation<'a>,
         relates: Relates<'static>,
+        cardinality: AnnotationCardinality,
         count: u64,
     ) -> Result<(), DataValidationError> {
-        let cardinality = relates
-            .get_cardinalities(snapshot, thing_manager.type_manager())
-            .map_err(DataValidationError::ConceptRead)?;
         if !cardinality.value_valid(count) {
             let relation = relation.clone().into_owned();
             Err(DataValidationError::RelatesCardinalityViolated { relation, relates, count, cardinality })
@@ -215,22 +191,22 @@ impl CommitTimeValidation {
     validate_capability_cardinality_constraint!(
         validate_owns_cardinality_constraint,
         Owns,
-        AttributeType,
         Object,
+        get_has_counts,
         Self::check_owns_cardinality
     );
     validate_capability_cardinality_constraint!(
         validate_plays_cardinality_constraint,
         Plays,
-        RoleType,
         Object,
+        get_played_roles_counts,
         Self::check_plays_cardinality
     );
     validate_capability_cardinality_constraint!(
         validate_relates_cardinality_constraint,
         Relates,
-        RoleType,
         Relation,
+        get_player_counts,
         Self::check_relates_cardinality
     );
 }

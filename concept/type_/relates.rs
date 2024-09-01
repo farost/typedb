@@ -27,6 +27,8 @@ use crate::{
         Capability, Ordering, TypeAPI,
     },
 };
+use crate::type_::constraint::CapabilityConstraint;
+use crate::type_::owns::Owns;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Relates<'a> {
@@ -51,7 +53,7 @@ impl<'a> Relates<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_relates_is_distinct(snapshot, self.clone())
+        type_manager.get_is_distinct(snapshot, self.clone().into_owned())
     }
 
     pub fn set_override(
@@ -184,7 +186,7 @@ impl<'a> Capability<'a> for Relates<'a> {
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashSet<Relates<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'this, Vec<Relates<'static>>>, ConceptReadError> {
         type_manager.get_relates_specializing_transitive(snapshot, self.clone().into_owned())
     }
 
@@ -200,16 +202,16 @@ impl<'a> Capability<'a> for Relates<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<RelatesAnnotation, Relates<'static>>>, ConceptReadError> {
-        type_manager.get_relates_annotations(snapshot, self.clone().into_owned())
+    ) -> Result<MaybeOwns<'m, HashMap<CapabilityConstraint<Relates<'static>>, HashSet<Relates<'static>>>>, ConceptReadError> {
+        type_manager.get_relates_constraints(snapshot, self.clone().into_owned())
     }
 
-    fn get_default_cardinality<'this>(
+    fn get_cardinality_constraints<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<AnnotationCardinality, ConceptReadError> {
-        type_manager.get_relates_default_cardinality(snapshot, self.clone().into_owned())
+    ) -> Result<HashMap<CapabilityConstraint<Relates<'static>>, HashSet<Relates<'static>>>, ConceptReadError> {
+        type_manager.get_cardinality_constraints(snapshot, self.clone().into_owned())
     }
 }
 

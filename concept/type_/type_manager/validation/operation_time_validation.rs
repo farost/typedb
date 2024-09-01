@@ -1858,7 +1858,7 @@ impl OperationTimeValidation {
             // Does not check that declared cardinality narrows updated inherited one! Should be checked in a separate validation
             cardinality_declared
         } else if let Some(overridden_capability) = &overridden_capability {
-            overridden_capability.get_cardinalities(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?
+            overridden_capability.get_cardinality_constraints(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?
         } else {
             capability.get_default_cardinality(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?
         };
@@ -1934,7 +1934,7 @@ impl OperationTimeValidation {
                                 false,
                                 "Should not visit this capability until the overridden is recalculated"
                             );
-                            overridden.get_cardinalities(snapshot, type_manager)?
+                            overridden.get_cardinality_constraints(snapshot, type_manager)?
                         }
                     }
                 };
@@ -2843,7 +2843,7 @@ impl OperationTimeValidation {
             return Ok(None);
         }
 
-        let is_abstract = Constraint::compute_abstract(annotations);
+        let is_abstract = compute_abstract(annotations);
         debug_assert!(is_abstract.is_some(), "At least one constraint should exist otherwise we don't need to iterate");
 
         let mut entity_iterator = thing_manager.get_entities_in(snapshot, entity_type.clone().into_owned());
@@ -2866,7 +2866,7 @@ impl OperationTimeValidation {
             return Ok(None);
         }
 
-        let is_abstract = Constraint::compute_abstract(annotations);
+        let is_abstract = compute_abstract(annotations);
         debug_assert!(is_abstract.is_some(), "At least one constraint should exist otherwise we don't need to iterate");
 
         let mut relation_iterator = thing_manager.get_relations_in(snapshot, relation_type.clone().into_owned());
@@ -2889,10 +2889,10 @@ impl OperationTimeValidation {
             return Ok(None);
         }
 
-        let is_abstract = Constraint::compute_abstract(annotations);
-        let regex = Constraint::compute_regex(annotations);
-        let range = Constraint::compute_range(annotations);
-        let values = Constraint::compute_values(annotations);
+        let is_abstract = compute_abstract(annotations);
+        let regex = compute_regex(annotations);
+        let range = compute_range(annotations);
+        let values = compute_values(annotations);
         debug_assert!(
             is_abstract.is_some() || regex.is_some() || range.is_some() || values.is_some(),
             "At least one constraint should exist otherwise we don't need to iterate"
@@ -2951,7 +2951,7 @@ impl OperationTimeValidation {
             return Ok(None);
         }
 
-        let is_abstract = Constraint::compute_abstract(annotations);
+        let is_abstract = compute_abstract(annotations);
         debug_assert!(is_abstract.is_some(), "At least one constraint should exist otherwise we don't need to iterate");
 
         let role_type = role_type.clone().into_owned();
@@ -3020,13 +3020,13 @@ impl OperationTimeValidation {
             return Ok(None);
         }
 
-        let distinct = Constraint::compute_distinct(annotations, None);
-        let is_key = Constraint::compute_key(annotations).is_some();
-        let unique = Constraint::compute_unique(annotations);
-        let cardinality = Constraint::compute_cardinalities(annotations, None);
-        let regex = Constraint::compute_regex(annotations);
-        let range = Constraint::compute_range(annotations);
-        let values = Constraint::compute_values(annotations);
+        let distinct = compute_distinct(annotations, None);
+        let is_key = compute_key(annotations).is_some();
+        let unique = compute_unique(annotations);
+        let cardinality = compute_cardinalities(annotations, None);
+        let regex = compute_regex(annotations);
+        let range = compute_range(annotations);
+        let values = compute_values(annotations);
         debug_assert!(
             cardinality.is_some()
                 || distinct.is_some()
@@ -3131,7 +3131,7 @@ impl OperationTimeValidation {
             return Ok(None);
         }
 
-        let cardinality = Constraint::compute_cardinalities(annotations, None);
+        let cardinality = compute_cardinalities(annotations, None);
         debug_assert!(cardinality.is_some(), "At least one constraint should exist otherwise we don't need to iterate");
 
         let only_abstract_types = Self::are_all_abstract(snapshot, type_manager, role_types.iter())?;
@@ -3178,8 +3178,8 @@ impl OperationTimeValidation {
             return Ok(None);
         }
 
-        let distinct = Constraint::compute_distinct(annotations, None);
-        let cardinality = Constraint::compute_cardinalities(annotations, None);
+        let distinct = compute_distinct(annotations, None);
+        let cardinality = compute_cardinalities(annotations, None);
         debug_assert!(
             cardinality.is_some() || distinct.is_some(),
             "At least one constraint should exist otherwise we don't need to iterate"

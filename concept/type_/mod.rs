@@ -45,7 +45,7 @@ use crate::{
 
 pub mod annotation;
 pub mod attribute_type;
-mod constraint;
+pub(crate) mod constraint;
 pub mod entity_type;
 pub mod object_type;
 pub mod owns;
@@ -141,7 +141,7 @@ pub trait TypeAPI<'a>: ConceptAPI<'a> + TypeVertexEncoding<'a> + Sized + Clone +
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, Vec<Self>>, ConceptReadError>;
+    ) -> Result<MaybeOwns<'m, HashSet<Self>>, ConceptReadError>;
 
     fn get_subtypes_transitive<'m>(
         &self,
@@ -493,13 +493,11 @@ pub trait Capability<'a>:
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, HashMap<CapabilityConstraint<Self>, HashSet<Self>>>, ConceptReadError>;
 
-    fn get_cardinalities(
+    fn get_cardinality_constraints(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<HashMap<Self, AnnotationCardinality>, ConceptReadError> {
-        type_manager.get_cardinalities(snapshot, self.clone())
-    }
+    ) -> Result<HashMap<CapabilityConstraint<Self>, HashSet<Self>>, ConceptReadError>;
 
     fn get_cardinality_declared(
         &self,
@@ -508,12 +506,6 @@ pub trait Capability<'a>:
     ) -> Result<Option<AnnotationCardinality>, ConceptReadError> { // Maybe should return default if not set!
         type_manager.get_cardinality_declared(snapshot, self.clone())
     }
-
-    fn get_default_cardinality(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-    ) -> Result<AnnotationCardinality, ConceptReadError>;
 }
 
 pub struct EdgeHidden<EDGE: TypeEdgeEncoding<'static>> {

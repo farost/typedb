@@ -175,7 +175,7 @@ pub(crate) fn validate_cardinality_narrows_inherited_cardinality<CAP: Capability
     is_key: bool,
 ) -> Result<(), SchemaValidationError> {
     let overridden_cardinality =
-        overridden_edge.get_cardinalities(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?;
+        overridden_edge.get_cardinality_constraints(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?;
 
     if overridden_cardinality.narrowed_correctly_by(&cardinality) {
         Ok(())
@@ -709,7 +709,7 @@ pub fn validate_capabilities_cardinality<CAP: Capability<'static>>(
 
     for capability in capability_declared {
         if !cardinalities.contains_key(&capability) {
-            cardinalities.insert(capability.clone(), capability.get_cardinalities(snapshot, type_manager)?);
+            cardinalities.insert(capability.clone(), capability.get_cardinality_constraints(snapshot, type_manager)?);
         }
 
         let not_stored_override = not_stored_overrides.get(&capability);
@@ -723,7 +723,7 @@ pub fn validate_capabilities_cardinality<CAP: Capability<'static>>(
             if !cardinalities.contains_key(&overridden_capability) {
                 cardinalities.insert(
                     overridden_capability.clone(),
-                    overridden_capability.get_cardinalities(snapshot, type_manager)?,
+                    overridden_capability.get_cardinality_constraints(snapshot, type_manager)?,
                 );
             }
 

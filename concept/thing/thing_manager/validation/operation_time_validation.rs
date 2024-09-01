@@ -4,7 +4,8 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::iter;
 
 use encoding::value::{value::Value, value_type::ValueType, ValueEncodable};
 use lending_iterator::LendingIterator;
@@ -22,11 +23,13 @@ use crate::{
         },
     },
     type_::{
+        constraint::{CapabilityConstraint, ConstraintDescription, TypeConstraint}
         annotation::Annotation, attribute_type::AttributeType, object_type::ObjectType, owns::Owns,
         relation_type::RelationType, role_type::RoleType, Capability, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI,
         TypeAPI,
     },
 };
+use crate::type_::constraint::Constraint;
 
 pub struct OperationTimeValidation {}
 
@@ -168,33 +171,34 @@ impl OperationTimeValidation {
         attribute_type: AttributeType<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        let regex = attribute_type
-            .get_constraint_regex(snapshot, thing_manager.type_manager())
-            .map_err(DataValidationError::ConceptRead)?;
-
-        match regex {
-            Some(regex) => match &value {
-                Value::String(string_value) => {
-                    if !regex.value_valid(&string_value) {
-                        Err(DataValidationError::AttributeViolatesRegexConstraint {
-                            attribute_type,
-                            value: value.into_owned(),
-                            regex,
-                        })
-                    } else {
-                        Ok(())
+        for (constraint, _) in attribute_type
+            .get_constraints_regex(snapshot, thing_manager.type_manager())
+            .map_err(DataValidationError::ConceptRead)?
+        {
+            match constraint.description() {
+                ConstraintDescription::Regex(regex) =>
+                    match &value {
+                        Value::String(string_value) => {
+                            if !regex.value_valid(&string_value) {
+                                return Err(DataValidationError::AttributeViolatesRegexConstraint {
+                                    attribute_type,
+                                    value: value.into_owned(),
+                                    regex,
+                                });
+                            }
+                        }
+                        _ => return Err(DataValidationError::ConceptRead(
+                            ConceptReadError::CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(
+                                get_label_or_data_err(snapshot, thing_manager.type_manager(), attribute_type)?,
+                                value.value_type(),
+                                Annotation::Regex(regex.clone()),
+                            ),
+                        )),
                     }
-                }
-                _ => Err(DataValidationError::ConceptRead(
-                    ConceptReadError::CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(
-                        get_label_or_data_err(snapshot, thing_manager.type_manager(), attribute_type)?,
-                        value.value_type(),
-                        Annotation::Regex(regex.clone()),
-                    ),
-                )),
-            },
-            _ => Ok(()),
+                _ => unreachable!("Expected only Regex constraints!"),
+            }
         }
+        Ok(())
     }
 
     pub(crate) fn validate_attribute_range_constraint(
@@ -203,20 +207,22 @@ impl OperationTimeValidation {
         attribute_type: AttributeType<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        let range = attribute_type
-            .get_constraint_range(snapshot, thing_manager.type_manager())
-            .map_err(DataValidationError::ConceptRead)?;
-
-        match range {
-            Some(range) if !range.value_valid(value.clone()) => {
-                Err(DataValidationError::AttributeViolatesRangeConstraint {
-                    attribute_type,
-                    value: value.into_owned(),
-                    range,
-                })
+        for (constraint, _) in attribute_type
+            .get_constraints_range(snapshot, thing_manager.type_manager())
+            .map_err(DataValidationError::ConceptRead)?
+        {
+            match constraint.description() {
+                ConstraintDescription::Range(range) => if !range.value_valid(value.clone()) {
+                    return Err(DataValidationError::AttributeViolatesRangeConstraint {
+                        attribute_type,
+                        value: value.into_owned(),
+                        range,
+                    });
+                }
+                _ => unreachable!("Expected only Range constraints!"),
             }
-            _ => Ok(()),
         }
+        Ok(())
     }
 
     pub(crate) fn validate_attribute_values_constraint(
@@ -225,20 +231,22 @@ impl OperationTimeValidation {
         attribute_type: AttributeType<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        let values = attribute_type
-            .get_constraint_values(snapshot, thing_manager.type_manager())
-            .map_err(DataValidationError::ConceptRead)?;
-
-        match values {
-            Some(values) if !values.value_valid(value.clone()) => {
-                Err(DataValidationError::AttributeViolatesValuesConstraint {
-                    attribute_type,
-                    value: value.into_owned(),
-                    values,
-                })
+        for (constraint, _) in attribute_type
+            .get_constraints_values(snapshot, thing_manager.type_manager())
+            .map_err(DataValidationError::ConceptRead)?
+        {
+            match constraint.description() {
+                ConstraintDescription::Values(values) => if !values.value_valid(value.clone()) {
+                    return Err(DataValidationError::AttributeViolatesValuesConstraint {
+                        attribute_type,
+                        value: value.into_owned(),
+                        values,
+                    });
+                }
+                _ => unreachable!("Expected only Values constraints!"),
             }
-            _ => Ok(()),
         }
+        Ok(())
     }
 
     pub(crate) fn validate_has_regex_constraint(
@@ -247,29 +255,30 @@ impl OperationTimeValidation {
         owns: Owns<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        let regex = owns
-            .get_constraint_regex(snapshot, thing_manager.type_manager())
-            .map_err(DataValidationError::ConceptRead)?;
-
-        match regex {
-            Some(regex) => match &value {
-                Value::String(string_value) => {
-                    if !regex.value_valid(string_value) {
-                        Err(DataValidationError::HasViolatesRegexConstraint { owns, value: value.into_owned(), regex })
-                    } else {
-                        Ok(())
+        for (constraint, _) in owns
+            .get_constraints_regex(snapshot, thing_manager.type_manager())
+            .map_err(DataValidationError::ConceptRead)?
+        {
+            match constraint.description() {
+                ConstraintDescription::Regex(regex) =>
+                    match &value {
+                        Value::String(string_value) => {
+                            if !regex.value_valid(&string_value) {
+                                return Err(DataValidationError::HasViolatesRegexConstraint { owns, value: value.into_owned(), regex });
+                            }
+                        }
+                        _ => return Err(DataValidationError::ConceptRead(
+                            ConceptReadError::CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(
+                                get_label_or_data_err(snapshot, thing_manager.type_manager(), owns.attribute())?,
+                                value.value_type(),
+                                Annotation::Regex(regex.clone()),
+                            ),
+                        )),
                     }
-                }
-                _ => Err(DataValidationError::ConceptRead(
-                    ConceptReadError::CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(
-                        get_label_or_data_err(snapshot, thing_manager.type_manager(), owns.attribute())?,
-                        value.value_type(),
-                        Annotation::Regex(regex.clone()),
-                    ),
-                )),
-            },
-            _ => Ok(()),
+                _ => unreachable!("Expected only Regex constraints!"),
+            }
         }
+        Ok(())
     }
 
     pub(crate) fn validate_has_range_constraint(
@@ -278,16 +287,18 @@ impl OperationTimeValidation {
         owns: Owns<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        let range = owns
-            .get_constraint_range(snapshot, thing_manager.type_manager())
-            .map_err(DataValidationError::ConceptRead)?;
-
-        match range {
-            Some(range) if !range.value_valid(value.clone()) => {
-                Err(DataValidationError::HasViolatesRangeConstraint { owns, value: value.into_owned(), range })
+        for (constraint, _) in owns
+            .get_constraints_range(snapshot, thing_manager.type_manager())
+            .map_err(DataValidationError::ConceptRead)?
+        {
+            match constraint.description() {
+                ConstraintDescription::Range(range) => if !range.value_valid(value.clone()) {
+                    return Err(DataValidationError::HasViolatesRangeConstraint { owns, value: value.into_owned(), range });
+                }
+                _ => unreachable!("Expected only Range constraints!"),
             }
-            _ => Ok(()),
         }
+        Ok(())
     }
 
     pub(crate) fn validate_has_values_constraint(
@@ -296,16 +307,18 @@ impl OperationTimeValidation {
         owns: Owns<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        let values = owns
-            .get_constraint_values(snapshot, thing_manager.type_manager())
-            .map_err(DataValidationError::ConceptRead)?;
-
-        match values {
-            Some(values) if !values.value_valid(value.clone()) => {
-                Err(DataValidationError::HasViolatesValuesConstraint { owns, value: value.into_owned(), values })
+        for (constraint, _) in owns
+            .get_constraints_values(snapshot, thing_manager.type_manager())
+            .map_err(DataValidationError::ConceptRead)?
+        {
+            match constraint.description() {
+                ConstraintDescription::Values(values) => if !values.value_valid(value.clone()) {
+                    return Err(DataValidationError::HasViolatesValuesConstraint { owns, value: value.into_owned(), values });
+                }
+                _ => unreachable!("Expected only Values constraints!"),
             }
-            _ => Ok(()),
         }
+        Ok(())
     }
 
     pub(crate) fn validate_has_unique_constraint(
@@ -314,68 +327,48 @@ impl OperationTimeValidation {
         owns: Owns<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        let uniqueness_source = owns
-            .get_uniqueness_source(snapshot, thing_manager.type_manager())
-            .map_err(DataValidationError::ConceptRead)?;
-        if let Some(unique_root) = uniqueness_source {
-            let mut queue = VecDeque::from([(unique_root.owner(), unique_root.clone())]);
+        if let Some((_, source)) = owns.get_constraint_unique(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)? {
+            let mut checked_pairs: HashSet<(ObjectType<'static>, Owns<'static>)> = HashSet::new();
+            let source_and_specializing = iter::once(source).chain(source.get_specializing_transitive(snapshot, thing_manager.type_manager())?.into_iter()).collect();
+            let owner_and_subtypes = iter::once(source.owner()).chain(source.owner().get_subtypes_transitive(snapshot, thing_manager.type_manager())?.into_iter());
 
-            while let Some((current_owner_type, current_owns)) = queue.pop_back() {
-                let mut objects = thing_manager.get_objects_in(snapshot, current_owner_type.clone());
+            for checked_owner_type in owner_and_subtypes {
+                let mut objects = thing_manager.get_objects_in(snapshot, checked_owner_type.clone());
                 while let Some(object) = objects.next().transpose().map_err(DataValidationError::ConceptRead)? {
-                    if object
-                        .has_attribute_with_value(snapshot, thing_manager, current_owns.attribute(), value.clone())
-                        .map_err(DataValidationError::ConceptRead)?
-                    {
-                        return if owns
-                            .is_key(snapshot, thing_manager.type_manager())
-                            .map_err(DataValidationError::ConceptRead)?
-                        {
-                            Err(DataValidationError::KeyValueTaken {
-                                owner_type: owns.owner(),
-                                attribute_type: owns.attribute(),
-                                taken_owner_type: current_owner_type,
-                                taken_attribute_type: current_owns.attribute(),
-                                value: value.into_owned(),
-                            })
-                        } else {
-                            Err(DataValidationError::UniqueValueTaken {
-                                owner_type: owns.owner(),
-                                attribute_type: owns.attribute(),
-                                taken_owner_type: current_owner_type,
-                                taken_attribute_type: current_owns.attribute(),
-                                value: value.into_owned(),
-                            })
-                        };
-                    }
-                }
-
-                current_owner_type
-                    .get_subtypes(snapshot, thing_manager.type_manager())
-                    .map_err(DataValidationError::ConceptRead)?
-                    .into_iter()
-                    .try_for_each(|subtype| {
-                        let overrides = subtype // todo: I remove get_owns_overrides, need to get specializes instead?
-                            .get_owns_overrides(snapshot, thing_manager.type_manager())
-                            .map_err(DataValidationError::ConceptRead)?;
-                        let mut overridings = overrides.iter().filter_map(|(overriding, overridden)| {
-                            if &current_owns == overridden {
-                                Some(overriding.clone())
-                            } else {
-                                None
-                            }
-                        });
-
-                        if overridings.clone().peekable().peek().is_some() {
-                            while let Some(overriding) = overridings.next() {
-                                queue.push_front((subtype.clone(), overriding));
-                            }
-                        } else {
-                            queue.push_front((subtype.clone(), current_owns.clone()));
+                    for checked_owns in source_and_specializing {
+                        if checked_pairs.contains((checked_owner_type.clone(), checked_owns.attribute())) {
+                            continue;
                         }
 
-                        Ok(())
-                    })?;
+                        if object
+                            .has_attribute_with_value(snapshot, thing_manager, checked_owns.attribute(), value.clone())
+                            .map_err(DataValidationError::ConceptRead)?
+                        {
+                            return if owns
+                                .is_key(snapshot, thing_manager.type_manager())
+                                .map_err(DataValidationError::ConceptRead)?
+                            {
+                                Err(DataValidationError::KeyValueTaken {
+                                    owner_type: owns.owner(),
+                                    attribute_type: owns.attribute(),
+                                    taken_owner_type: checked_owner_type,
+                                    taken_attribute_type: checked_owns.attribute(),
+                                    value: value.into_owned(),
+                                })
+                            } else {
+                                Err(DataValidationError::UniqueValueTaken {
+                                    owner_type: owns.owner(),
+                                    attribute_type: owns.attribute(),
+                                    taken_owner_type: checked_owner_type,
+                                    taken_attribute_type: checked_owns.attribute(),
+                                    value: value.into_owned(),
+                                })
+                            };
+                        }
+
+                        checked_pairs.insert((checked_owner_type.clone(), checked_owns.attribute()));
+                    }
+                }
             }
         }
 

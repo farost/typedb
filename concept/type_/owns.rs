@@ -27,6 +27,7 @@ use crate::{
         Capability, Ordering, TypeAPI,
     },
 };
+use crate::type_::constraint::CapabilityConstraint;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Owns<'a> {
@@ -51,15 +52,7 @@ impl<'a> Owns<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_owns_is_key(snapshot, self.clone())
-    }
-
-    pub fn is_unique(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-    ) -> Result<bool, ConceptReadError> {
-        type_manager.get_owns_is_unique(snapshot, self.clone())
+        type_manager.get_is_key(snapshot, self.clone())
     }
 
     pub fn is_distinct(
@@ -67,31 +60,39 @@ impl<'a> Owns<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_owns_is_distinct(snapshot, self.clone())
+        type_manager.get_is_distinct(snapshot, self.clone().into_owned())
     }
 
-    pub fn get_constraint_regex(
+    pub fn get_constraint_unique(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<Option<AnnotationRegex>, ConceptReadError> {
-        type_manager.get_owns_regex(snapshot, self.clone())
+    ) -> Result<Option<(CapabilityConstraint<Owns<'static>>, Owns<'static>)>, ConceptReadError> {
+        type_manager.get_unique_constraints(snapshot, self.clone().into_owned())
     }
 
-    pub fn get_constraint_range(
+    pub fn get_constraints_regex(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<Option<AnnotationRange>, ConceptReadError> {
-        type_manager.get_owns_range(snapshot, self.clone())
+    ) -> Result<HashMap<CapabilityConstraint<Owns<'static>>, HashSet<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_owns_regex_constraints(snapshot, self.clone().into_owned())
     }
 
-    pub fn get_constraint_values(
+    pub fn get_constraints_range(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<Option<AnnotationValues>, ConceptReadError> {
-        type_manager.get_owns_values(snapshot, self.clone())
+    ) -> Result<HashMap<CapabilityConstraint<Owns<'static>>, HashSet<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_owns_range_constraints(snapshot, self.clone().into_owned())
+    }
+
+    pub fn get_constraints_values(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<HashMap<CapabilityConstraint<Owns<'static>>, HashSet<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_owns_values_constraints(snapshot, self.clone().into_owned())
     }
 
     pub fn set_annotation(
@@ -281,7 +282,7 @@ impl<'a> Capability<'a> for Owns<'a> {
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashSet<Owns<'static>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'this, Vec<Owns<'static>>>, ConceptReadError> {
         type_manager.get_owns_specializing_transitive(snapshot, self.clone().into_owned())
     }
 
@@ -297,16 +298,16 @@ impl<'a> Capability<'a> for Owns<'a> {
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashMap<OwnsAnnotation, Owns<'static>>>, ConceptReadError> {
-        type_manager.get_owns_annotations(snapshot, self.clone().into_owned())
+    ) -> Result<MaybeOwns<'this, HashMap<CapabilityConstraint<Owns<'static>>, HashSet<Owns<'static>>>>, ConceptReadError> {
+        type_manager.get_owns_constraints(snapshot, self.clone().into_owned())
     }
 
-    fn get_default_cardinality<'this>(
+    fn get_cardinality_constraints<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<AnnotationCardinality, ConceptReadError> {
-        type_manager.get_owns_default_cardinality(snapshot, self.clone().into_owned())
+    ) -> Result<HashMap<CapabilityConstraint<Owns<'static>>, HashSet<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_cardinality_constraints(snapshot, self.clone().into_owned())
     }
 }
 
