@@ -205,14 +205,6 @@ impl<'a> Capability<'a> for Relates<'a> {
     ) -> Result<MaybeOwns<'m, HashMap<CapabilityConstraint<Relates<'static>>, HashSet<Relates<'static>>>>, ConceptReadError> {
         type_manager.get_relates_constraints(snapshot, self.clone().into_owned())
     }
-
-    fn get_cardinality_constraints<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-    ) -> Result<HashMap<CapabilityConstraint<Relates<'static>>, HashSet<Relates<'static>>>, ConceptReadError> {
-        type_manager.get_cardinality_constraints(snapshot, self.clone().into_owned())
-    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]

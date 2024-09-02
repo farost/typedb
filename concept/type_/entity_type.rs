@@ -288,6 +288,14 @@ impl<'a> OwnerAPI<'a> for EntityType<'a> {
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
         type_manager.get_entity_type_owns(snapshot, self.clone().into_owned())
     }
+
+    fn get_owns_with_hidden<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+    ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_entity_type_owns_with_hidden(snapshot, self.clone().into_owned())
+    }
 }
 
 impl<'a> PlayerAPI<'a> for EntityType<'a> {
@@ -325,6 +333,14 @@ impl<'a> PlayerAPI<'a> for EntityType<'a> {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError> {
         type_manager.get_entity_type_plays(snapshot, self.clone().into_owned())
+    }
+
+    fn get_plays_with_hidden<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+    ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError> {
+        type_manager.get_entity_type_plays_with_hidden(snapshot, self.clone().into_owned())
     }
 }
 

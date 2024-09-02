@@ -26,7 +26,7 @@ use crate::{
                 validation::{
                     get_label_or_concept_read_err, is_interface_hidden,
                     is_overridden_interface_object_declared_supertype_or_self, is_type_transitive_supertype_or_same,
-                    validate_capabilities_cardinality,
+                    validate_capabilities_cardinalities_narrowing,
                     validate_declared_annotation_is_compatible_with_inherited_annotations,
                     validate_declared_capability_annotation_is_compatible_with_inherited_annotations,
                     validate_edge_annotations_narrowing_of_inherited_annotations,
@@ -78,6 +78,11 @@ macro_rules! produced_errors {
     }};
 }
 
+// Some of the checks from this file can duplicate already existing operation time validations
+// and never fire up, but they are left here for better safety as the algorithms to check
+// the updated schema with the finalised snapshot is much-much-much simpler and more robust
+// than the operation time ones.
+// It is still a goal to try call as much as possible validations on operation time.
 impl CommitTimeValidation {
     pub(crate) fn validate(
         type_manager: &TypeManager,
@@ -130,10 +135,11 @@ impl CommitTimeValidation {
                 type_.clone(),
                 validation_errors,
             )?;
-            validate_capabilities_cardinality::<Relates<'static>>(
+            validate_capabilities_cardinalities_narrowing::<Relates<'static>>(
                 type_manager,
                 snapshot,
                 type_.clone(),
+                &HashMap::new(), // read everything from storage
                 &HashMap::new(), // read everything from storage
                 &HashMap::new(), // read everything from storage
                 validation_errors,
@@ -218,10 +224,11 @@ impl CommitTimeValidation {
                 type_.clone().into_owned_object_type(),
                 validation_errors,
             )?;
-            validate_capabilities_cardinality::<Owns<'static>>(
+            validate_capabilities_cardinalities_narrowing::<Owns<'static>>(
                 type_manager,
                 snapshot,
                 type_.clone().into_owned_object_type(),
+                &HashMap::new(), // read everything from storage
                 &HashMap::new(), // read everything from storage
                 &HashMap::new(), // read everything from storage
                 validation_errors,
@@ -239,10 +246,11 @@ impl CommitTimeValidation {
                 type_.clone().into_owned_object_type(),
                 validation_errors,
             )?;
-            validate_capabilities_cardinality::<Plays<'static>>(
+            validate_capabilities_cardinalities_narrowing::<Plays<'static>>(
                 type_manager,
                 snapshot,
                 type_.clone().into_owned_object_type(),
+                &HashMap::new(), // read everything from storage
                 &HashMap::new(), // read everything from storage
                 &HashMap::new(), // read everything from storage
                 validation_errors,
@@ -377,7 +385,7 @@ impl CommitTimeValidation {
             return Ok(());
         }
 
-        for capability in TypeReader::get_capabilities::<CAP>(snapshot, type_.clone())? {
+        for capability in TypeReader::get_capabilities::<CAP>(snapshot, type_.clone(), false)? {
             let interface_type = capability.interface();
             if interface_type.is_abstract(snapshot, type_manager)? {
                 validation_errors.push(SchemaValidationError::NonAbstractTypeCannotHaveAbstractInterfaceCapability(
@@ -409,7 +417,7 @@ impl CommitTimeValidation {
                     get_label_or_concept_read_err(snapshot, role_type_overridden.clone())?,
                 )),
                 Some(supertype) => {
-                    let contains = TypeReader::get_capabilities::<Relates<'static>>(snapshot, supertype.clone())?
+                    let contains = TypeReader::get_capabilities::<Relates<'static>>(snapshot, supertype.clone(), false)?
                         .into_iter()
                         .any(|relates| &relates.interface() == &role_type_overridden);
 
@@ -460,7 +468,7 @@ impl CommitTimeValidation {
                     get_label_or_concept_read_err(snapshot, attribute_type_overridden.clone())?,
                 )),
                 Some(supertype) => {
-                    let contains = TypeReader::get_capabilities::<Owns<'static>>(snapshot, supertype.clone())?
+                    let contains = TypeReader::get_capabilities::<Owns<'static>>(snapshot, supertype.clone(), false)?
                         .into_iter()
                         .any(|owns| &owns.attribute() == &attribute_type_overridden);
 
@@ -509,7 +517,7 @@ impl CommitTimeValidation {
                     get_label_or_concept_read_err(snapshot, role_type_overridden.clone())?,
                 )),
                 Some(supertype) => {
-                    let contains = TypeReader::get_capabilities::<Plays<'static>>(snapshot, supertype.clone())?
+                    let contains = TypeReader::get_capabilities::<Plays<'static>>(snapshot, supertype.clone(), false)?
                         .into_iter()
                         .any(|plays| &plays.role() == &role_type_overridden);
 
@@ -567,7 +575,7 @@ impl CommitTimeValidation {
         validation_errors: &mut Vec<SchemaValidationError>,
     ) -> Result<(), ConceptReadError> {
         if let Some(supertype) = TypeReader::get_supertype(snapshot, capability.object())? {
-            let supertype_capabilities = TypeReader::get_capabilities::<CAP>(snapshot, supertype.clone())?;
+            let supertype_capabilities = TypeReader::get_capabilities::<CAP>(snapshot, supertype.clone(), false)?;
 
             let interface_type = capability.interface();
             if let Some(supertype_capability) =
@@ -674,7 +682,7 @@ impl CommitTimeValidation {
         relation_type: RelationType<'static>,
         validation_errors: &mut Vec<SchemaValidationError>,
     ) -> Result<(), ConceptReadError> {
-        let relates = TypeReader::get_capabilities::<Relates<'static>>(snapshot, relation_type.clone())?;
+        let relates = TypeReader::get_capabilities::<Relates<'static>>(snapshot, relation_type.clone(), false)?;
 
         if relates.is_empty() {
             validation_errors.push(SchemaValidationError::RelationTypeMustRelateAtLeastOneRole(

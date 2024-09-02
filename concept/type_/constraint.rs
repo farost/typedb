@@ -72,6 +72,13 @@ impl ConstraintDescription {
             | ConstraintDescription::Values(_) => false,
         }
     }
+
+    pub fn is_unchecked(&self) -> bool {
+        match self {
+            ConstraintDescription::Cardinality(cardinality) => cardinality == &AnnotationCardinality::unchecked(),
+            _ => false,
+        }
+    }
 }
 
 pub trait Constraint: Sized + Clone + Hash + PartialEq {

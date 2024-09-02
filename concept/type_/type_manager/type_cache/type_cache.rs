@@ -307,11 +307,19 @@ impl TypeCache {
     }
 
     pub(crate) fn get_owns<'a, 'this, T, CACHE>(&'this self, type_: T) -> &HashSet<Owns<'static>>
-    where
-        T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
-        CACHE: HasObjectCache + 'this,
+        where
+            T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
+            CACHE: HasObjectCache + 'this,
     {
         &T::get_cache(self, type_).object_cache().owns
+    }
+
+    pub(crate) fn get_owns_with_hidden<'a, 'this, T, CACHE>(&'this self, type_: T) -> &HashSet<Owns<'static>>
+        where
+            T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
+            CACHE: HasObjectCache + 'this,
+    {
+        &T::get_cache(self, type_).object_cache().owns_with_hidden
     }
 
     pub(crate) fn get_role_type_ordering(&self, role_type: RoleType<'_>) -> Ordering {
@@ -335,6 +343,10 @@ impl TypeCache {
 
     pub(crate) fn get_relation_type_relates(&self, relation_type: RelationType<'_>) -> &HashSet<Relates<'static>> {
         &RelationType::get_cache(self, relation_type).relates
+    }
+
+    pub(crate) fn get_relation_type_relates_with_hidden(&self, relation_type: RelationType<'_>) -> &HashSet<Relates<'static>> {
+        &RelationType::get_cache(self, relation_type).relates_with_hidden
     }
 
     pub(crate) fn get_relates_annotations_declared<'c>(
@@ -390,11 +402,19 @@ impl TypeCache {
     }
 
     pub(crate) fn get_plays<'a, 'this, T, CACHE>(&'this self, type_: T) -> &'this HashSet<Plays<'static>>
-    where
-        T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
-        CACHE: HasObjectCache + 'this,
+        where
+            T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
+            CACHE: HasObjectCache + 'this,
     {
         &T::get_cache(self, type_).object_cache().plays
+    }
+
+    pub(crate) fn get_plays_with_hidden<'a, 'this, T, CACHE>(&'this self, type_: T) -> &'this HashSet<Plays<'static>>
+        where
+            T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
+            CACHE: HasObjectCache + 'this,
+    {
+        &T::get_cache(self, type_).object_cache().plays_with_hidden
     }
 
     pub(crate) fn get_plays_specializes<'c>(&'c self, plays: Plays<'c>) -> &'c Option<Plays<'static>> {

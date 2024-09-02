@@ -117,11 +117,11 @@ impl AnnotationCardinality {
         self.value_satisfies_start(other.start()) && self.value_satisfies_end(other.end())
     }
 
-    fn value_satisfies_start(&self, value: u64) -> bool {
+    pub fn value_satisfies_start(&self, value: u64) -> bool {
         self.start_inclusive <= value
     }
 
-    fn value_satisfies_end(&self, value: Option<u64>) -> bool {
+    pub fn value_satisfies_end(&self, value: Option<u64>) -> bool {
         self.end_inclusive.unwrap_or(u64::MAX) >= value.unwrap_or(u64::MAX)
     }
 }

@@ -117,6 +117,14 @@ impl<'a> OwnerAPI<'a> for ObjectType<'a> {
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
         with_object_type!(self, |object| { object.get_owns(snapshot, type_manager) })
     }
+
+    fn get_owns_with_hidden<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+    ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
+        with_object_type!(self, |object| { object.get_owns_with_hidden(snapshot, type_manager) })
+    }
 }
 
 impl<'a> ConceptAPI<'a> for ObjectType<'a> {}
@@ -258,6 +266,14 @@ impl<'a> PlayerAPI<'a> for ObjectType<'a> {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError> {
         with_object_type!(self, |object| { object.get_plays(snapshot, type_manager) })
+    }
+
+    fn get_plays_with_hidden<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+    ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError> {
+        with_object_type!(self, |object| { object.get_plays_with_hidden(snapshot, type_manager) })
     }
 }
 

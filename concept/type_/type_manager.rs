@@ -56,7 +56,7 @@ use crate::{
         Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI,
     },
 };
-use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, get_abstract_constraint, get_cardinality_constraints, get_distinct_constraints, get_independent_constraints, get_range_constraints, get_regex_constraints, get_unique_constraint, get_values_constraints, TypeConstraint};
+use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, get_abstract_constraint, get_cardinality_constraint, get_cardinality_constraints, get_distinct_constraints, get_independent_constraints, get_range_constraints, get_regex_constraints, get_unique_constraint, get_values_constraints, TypeConstraint};
 
 pub mod type_cache;
 pub mod type_reader;
@@ -311,6 +311,20 @@ macro_rules! get_constraint {
     }
 }
 
+macro_rules! get_annotation_declared_by_category {
+    ($(
+        fn $method_name:ident() -> $type_:ty = $annotation_type:ty;
+    )*) => {
+        $(
+            pub(crate) fn $method_name(
+                &self, snapshot: &impl ReadableSnapshot, type_: $type_, annotation_category: AnnotationCategory,
+            ) -> Result<Option<$annotation_type>, ConceptReadError> {
+                Ok(type_.get_annotations_declared(snapshot, self)?.into_iter().find(|annotation| annotation.clone().into().category() == &annotation_category))
+            }
+        )*
+    }
+}
+
 impl TypeManager {
     pub fn new(
         definition_key_generator: Arc<DefinitionKeyGenerator>,
@@ -551,7 +565,20 @@ impl TypeManager {
         if let Some(cache) = &self.type_cache {
             Ok(MaybeOwns::Borrowed(cache.get_relation_type_relates(relation_type)))
         } else {
-            let relates = TypeReader::get_capabilities::<Relates<'static>>(snapshot, relation_type.clone())?;
+            let relates = TypeReader::get_capabilities::<Relates<'static>>(snapshot, relation_type.clone(), false)?;
+            Ok(MaybeOwns::Owned(relates))
+        }
+    }
+
+    pub(crate) fn get_relation_type_relates_with_hidden(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        relation_type: RelationType<'static>,
+    ) -> Result<MaybeOwns<'_, HashSet<Relates<'static>>>, ConceptReadError> {
+        if let Some(cache) = &self.type_cache {
+            Ok(MaybeOwns::Borrowed(cache.get_relation_type_relates_with_hidden(relation_type)))
+        } else {
+            let relates = TypeReader::get_capabilities::<Relates<'static>>(snapshot, relation_type.clone(), true)?;
             Ok(MaybeOwns::Owned(relates))
         }
     }
@@ -629,7 +656,20 @@ impl TypeManager {
         if let Some(cache) = &self.type_cache {
             Ok(MaybeOwns::Borrowed(cache.get_owns(entity_type)))
         } else {
-            let owns = TypeReader::get_capabilities::<Owns<'static>>(snapshot, entity_type.into_owned_object_type())?;
+            let owns = TypeReader::get_capabilities::<Owns<'static>>(snapshot, entity_type.into_owned_object_type(), false)?;
+            Ok(MaybeOwns::Owned(owns))
+        }
+    }
+
+    pub(crate) fn get_entity_type_owns_with_hidden(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        entity_type: EntityType<'static>,
+    ) -> Result<MaybeOwns<'_, HashSet<Owns<'static>>>, ConceptReadError> {
+        if let Some(cache) = &self.type_cache {
+            Ok(MaybeOwns::Borrowed(cache.get_owns_with_hidden(entity_type)))
+        } else {
+            let owns = TypeReader::get_capabilities::<Owns<'static>>(snapshot, entity_type.into_owned_object_type(), true)?;
             Ok(MaybeOwns::Owned(owns))
         }
     }
@@ -642,7 +682,20 @@ impl TypeManager {
         if let Some(cache) = &self.type_cache {
             Ok(MaybeOwns::Borrowed(cache.get_owns(relation_type)))
         } else {
-            let owns = TypeReader::get_capabilities::<Owns<'static>>(snapshot, relation_type.into_owned_object_type())?;
+            let owns = TypeReader::get_capabilities::<Owns<'static>>(snapshot, relation_type.into_owned_object_type(), false)?;
+            Ok(MaybeOwns::Owned(owns))
+        }
+    }
+
+    pub(crate) fn get_relation_type_owns_with_hidden(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        relation_type: RelationType<'static>,
+    ) -> Result<MaybeOwns<'_, HashSet<Owns<'static>>>, ConceptReadError> {
+        if let Some(cache) = &self.type_cache {
+            Ok(MaybeOwns::Borrowed(cache.get_owns_with_hidden(relation_type)))
+        } else {
+            let owns = TypeReader::get_capabilities::<Owns<'static>>(snapshot, relation_type.into_owned_object_type(), true)?;
             Ok(MaybeOwns::Owned(owns))
         }
     }
@@ -686,7 +739,20 @@ impl TypeManager {
         if let Some(cache) = &self.type_cache {
             Ok(MaybeOwns::Borrowed(cache.get_plays(entity_type)))
         } else {
-            let plays = TypeReader::get_capabilities::<Plays<'static>>(snapshot, entity_type.into_owned_object_type())?;
+            let plays = TypeReader::get_capabilities::<Plays<'static>>(snapshot, entity_type.into_owned_object_type(), false)?;
+            Ok(MaybeOwns::Owned(plays))
+        }
+    }
+
+    pub(crate) fn get_entity_type_plays_with_hidden(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        entity_type: EntityType<'static>,
+    ) -> Result<MaybeOwns<'_, HashSet<Plays<'static>>>, ConceptReadError> {
+        if let Some(cache) = &self.type_cache {
+            Ok(MaybeOwns::Borrowed(cache.get_plays_with_hidden(entity_type)))
+        } else {
+            let plays = TypeReader::get_capabilities::<Plays<'static>>(snapshot, entity_type.into_owned_object_type(), true)?;
             Ok(MaybeOwns::Owned(plays))
         }
     }
@@ -713,7 +779,21 @@ impl TypeManager {
             Ok(MaybeOwns::Borrowed(cache.get_plays(relation_type)))
         } else {
             let plays =
-                TypeReader::get_capabilities::<Plays<'static>>(snapshot, relation_type.into_owned_object_type())?;
+                TypeReader::get_capabilities::<Plays<'static>>(snapshot, relation_type.into_owned_object_type(), false)?;
+            Ok(MaybeOwns::Owned(plays))
+        }
+    }
+
+    pub(crate) fn get_relation_type_plays_with_hidden(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        relation_type: RelationType<'static>,
+    ) -> Result<MaybeOwns<'_, HashSet<Plays<'static>>>, ConceptReadError> {
+        if let Some(cache) = &self.type_cache {
+            Ok(MaybeOwns::Borrowed(cache.get_plays_with_hidden(relation_type)))
+        } else {
+            let plays =
+                TypeReader::get_capabilities::<Plays<'static>>(snapshot, relation_type.into_owned_object_type(), true)?;
             Ok(MaybeOwns::Owned(plays))
         }
     }
@@ -1041,6 +1121,16 @@ impl TypeManager {
         Ok(get_unique_constraint(owns.get_constraints(snapshot, self)?.into_iter()))
     }
 
+    pub(crate) fn get_capability_cardinality<CAP: Capability<'static>>(
+        &self, snapshot: &impl ReadableSnapshot, capability: CAP,
+    ) -> Result<AnnotationCardinality, ConceptReadError> {
+        let constraints = capability.get_constraints(snapshot, self)?;
+        match get_cardinality_constraint(capability, constraints.into_iter()).description() {
+            ConstraintDescription::Cardinality(cardinality) => Ok(cardinality),
+            _ => unreachable!("Expected only Cardinality constraint"),
+        }
+    }
+
     pub(crate) fn get_is_key(
         &self,
         snapshot: &impl ReadableSnapshot,
@@ -1067,6 +1157,17 @@ impl TypeManager {
         fn get_attribute_type_range_constraints() -> AttributeType<'static> = TypeConstraint | get_range_constraints;
         fn get_attribute_type_values_constraints() -> AttributeType<'static> = TypeConstraint | get_values_constraints;
     }
+
+    get_annotation_declared_by_category! {
+        fn get_entity_type_annotation_declared_by_category() -> EntityType<'static> = EntityTypeAnnotation;
+        fn get_relation_type_annotation_declared_by_category() -> RelationType<'static> = RelationTypeAnnotation;
+        fn get_attribute_type_annotation_declared_by_category() -> AttributeType<'static> = AttributeTypeAnnotation;
+        fn get_role_type_annotation_declared_by_category() -> RoleType<'static> = RoleTypeAnnotation;
+        fn get_owns_annotation_declared_by_category() -> Owns<'static> = OwnsAnnotation;
+        fn get_plays_annotation_declared_by_category() -> Plays<'static> = PlaysAnnotation;
+        fn get_relates_annotation_declared_by_category() -> Relates<'static> = RelatesAnnotation;
+    }
+
 
     // todo: remove or refactor
     pub(crate) fn get_type_annotation_source<T: KindAPI<'static>>(
@@ -1248,24 +1349,24 @@ impl TypeManager {
 
         TypeWriter::storage_put_label(snapshot, role_type.clone(), &label);
         TypeWriter::storage_put_type_vertex_property(snapshot, role_type.clone(), Some(default_ordering));
-        TypeWriter::storage_put_edge(snapshot, relates.clone());
 
-        let cardinality_error: Option<ConceptWriteError> = if let Err(error) = OperationTimeValidation::validate_new_acquired_relates_compatible_with_instances(
+        let relates_error: Option<ConceptWriteError> = if let Err(error) = self.validate_set_relates(
             snapshot,
-            self,
             thing_manager,
             relates.clone().into_owned(),
-            HashSet::from([Annotation::Cardinality(self.get_relates_default_cardinality(default_ordering))]),
+            default_ordering,
         ) {
-            Some(ConceptWriteError::SchemaValidation { source: error })
+            Some(error)
         } else {
             None
         };
 
-        match cardinality_error {
-            None => Ok(role_type),
+        match relates_error {
+            None => {
+                TypeWriter::storage_put_edge(snapshot, relates.clone());
+                Ok(role_type)
+            },
             Some(error) => {
-                TypeWriter::storage_unput_edge(snapshot, relates);
                 TypeWriter::storage_unput_type_vertex_property::<Ordering>(snapshot, role_type.clone(), Some(default_ordering));
                 TypeWriter::storage_unput_label(snapshot, role_type.clone(), &label);
                 TypeWriter::storage_unput_vertex(snapshot, role_type);
@@ -1319,6 +1420,33 @@ impl TypeManager {
 
         OperationTimeValidation::validate_no_instances_to_delete(snapshot, thing_manager, type_)
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+
+        Ok(())
+    }
+
+    fn validate_set_relates(
+        &self,
+        snapshot: &mut impl WritableSnapshot,
+        thing_manager: &ThingManager,
+        relates: Relates<'static>,
+        ordering: Ordering,
+    ) -> Result<(), ConceptWriteError> {
+        OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_capabilities(
+            snapshot,
+            self,
+            relates.clone(),
+            false,
+        )
+        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+
+        OperationTimeValidation::validate_new_acquired_relates_compatible_with_instances(
+            snapshot,
+            self,
+            thing_manager,
+            relates.clone().into_owned(),
+            HashSet::from([Annotation::Cardinality(self.get_relates_default_cardinality(ordering))]),
+        )
+        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         Ok(())
     }
@@ -1380,8 +1508,16 @@ impl TypeManager {
 
         let relates = TypeReader::get_role_type_relates_declared(snapshot, role_type.clone())?;
 
-        OperationTimeValidation::validate_no_overriding_capabilities_for_capability_unset(snapshot, relates.clone())
+        OperationTimeValidation::validate_no_hiding_capabilities_for_capability_unset(snapshot, relates.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+
+        OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_capabilities(
+            snapshot,
+            self,
+            relates.clone(),
+            false,
+        )
+        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         OperationTimeValidation::validate_no_instances_to_unset_relates(
             snapshot,
@@ -1987,6 +2123,14 @@ impl TypeManager {
 
         let exists = owner.get_owns(snapshot, self)?.contains(&owns);
         if !exists {
+            OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_capabilities(
+                snapshot,
+                self,
+                owns.clone(),
+                true,
+            )
+            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+
             let initial_annotations =
                 HashSet::from([Annotation::Cardinality(self.get_owns_default_cardinality(default_ordering))]);
             OperationTimeValidation::validate_new_acquired_owns_compatible_with_instances(
@@ -2016,10 +2160,17 @@ impl TypeManager {
         OperationTimeValidation::validate_unset_owns_is_not_inherited(snapshot, owner.clone(), attribute_type.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        let owns_declared = owner.get_owns_declared(snapshot, self)?;
-        if let Some(owns) = owns_declared.iter().find(|owns| owns.attribute() == attribute_type) {
-            OperationTimeValidation::validate_no_overriding_capabilities_for_capability_unset(snapshot, owns.clone())
+        if let Some(owns) = owner.get_owns_attribute_declared(snapshot, self)? {
+            OperationTimeValidation::validate_no_hiding_capabilities_for_capability_unset(snapshot, owns.clone())
                 .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+
+            OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_capabilities(
+                snapshot,
+                self,
+                owns.clone(),
+                false,
+            )
+            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
             OperationTimeValidation::validate_no_instances_to_unset_owns(
                 snapshot,
@@ -2052,6 +2203,14 @@ impl TypeManager {
         let plays = Plays::new(ObjectType::new(player.clone().into_vertex()), role);
 
         if !player.get_plays(snapshot, self)?.contains(&plays) {
+            OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_capabilities(
+                snapshot,
+                self,
+                plays.clone(),
+                true,
+            )
+            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+
             let initial_annotations = HashSet::from([Annotation::Cardinality(self.get_plays_default_cardinality())]);
             OperationTimeValidation::validate_new_acquired_plays_compatible_with_instances(
                 snapshot,
@@ -2077,10 +2236,17 @@ impl TypeManager {
         OperationTimeValidation::validate_unset_plays_is_not_inherited(snapshot, player.clone(), role_type.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        let plays_declared = player.get_plays_declared(snapshot, self)?;
-        if let Some(plays) = plays_declared.iter().find(|plays| plays.role() == role_type) {
-            OperationTimeValidation::validate_no_overriding_capabilities_for_capability_unset(snapshot, plays.clone())
+        if let Some(plays) = player.get_plays_role_declared(snapshot, self)? {
+            OperationTimeValidation::validate_no_hiding_capabilities_for_capability_unset(snapshot, plays.clone())
                 .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+
+            OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_capabilities(
+                snapshot,
+                self,
+                plays.clone(),
+                false,
+            )
+            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
             OperationTimeValidation::validate_no_instances_to_unset_plays(
                 snapshot,
@@ -2339,11 +2505,12 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_override(
+        OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_hidden(
             snapshot,
             self,
             relates.clone(),
-            Some(overridden.clone()),
+            overridden.clone(),
+            true,
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
@@ -2389,11 +2556,15 @@ impl TypeManager {
     ) -> Result<(), ConceptWriteError> {
         let role_type = relates.role();
         if let Some(superrole_type) = role_type.get_supertype(snapshot, self)? {
-            OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_override(
+            let overridden_relates = superrole_type.get_relates(snapshot, self)?;
+            debug_assert_eq!(relates.get_specializes(snapshot, self)?, overridden_relates);
+
+            OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_hidden(
                 snapshot,
                 self,
                 relates.clone(),
-                None, // unset override
+                overridden_relates.clone(),
+                false,
             )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
@@ -2413,8 +2584,7 @@ impl TypeManager {
             )
                 .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-            let overridden = superrole_type.get_relates(snapshot, self)?;
-            let overridden_annotations = overridden
+            let overridden_annotations = overridden_relates
                 .get_constraints(snapshot, self)?
                 .keys()
                 .cloned()
@@ -2424,7 +2594,7 @@ impl TypeManager {
                 snapshot,
                 self,
                 thing_manager,
-                overridden.clone(),
+                overridden_relates.clone(),
                 overridden_annotations,
             )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
@@ -3282,7 +3452,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_cardinality_against_inheritance_line(
+        OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_cardinality(
             snapshot,
             self,
             capability.clone(),

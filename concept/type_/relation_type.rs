@@ -285,6 +285,14 @@ impl<'a> RelationType<'a> {
         type_manager.get_relation_type_relates(snapshot, self.clone().into_owned())
     }
 
+    pub fn get_relates_with_hidden<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+    ) -> Result<MaybeOwns<'m, HashSet<Relates<'static>>>, ConceptReadError> {
+        type_manager.get_relation_type_relates_with_hidden(snapshot, self.clone().into_owned())
+    }
+
     pub fn get_relates_role(
         &self,
         snapshot: &impl ReadableSnapshot,
@@ -410,6 +418,14 @@ impl<'a> OwnerAPI<'a> for RelationType<'a> {
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
         type_manager.get_relation_type_owns(snapshot, self.clone().into_owned())
     }
+
+    fn get_owns_with_hidden<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+    ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_relation_type_owns_with_hidden(snapshot, self.clone().into_owned())
+    }
 }
 
 impl<'a> PlayerAPI<'a> for RelationType<'a> {
@@ -447,6 +463,14 @@ impl<'a> PlayerAPI<'a> for RelationType<'a> {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError> {
         type_manager.get_relation_type_plays(snapshot, self.clone().into_owned())
+    }
+
+    fn get_plays_with_hidden<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+    ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError> {
+        type_manager.get_relation_type_plays_with_hidden(snapshot, self.clone().into_owned())
     }
 }
 

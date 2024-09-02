@@ -90,6 +90,7 @@ use crate::{
     },
     ConceptStatus,
 };
+use crate::type_::constraint::Constraint;
 
 pub mod validation;
 
@@ -940,8 +941,8 @@ impl ThingManager {
     ) -> Result<(), ConceptReadError> {
         let mut current_capability = Some(owns);
         while let Some(locked_capability) = current_capability {
-            let cardinality = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
-            if cardinality == AnnotationCardinality::unchecked() {
+            let cardinalities = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
+            if cardinalities.into_iter().all(|(constraint, _)| constraint.description().is_unchecked()) {
                 break;
             }
 
@@ -969,8 +970,8 @@ impl ThingManager {
     ) -> Result<(), ConceptReadError> {
         let mut current_capability = Some(plays);
         while let Some(locked_capability) = current_capability {
-            let cardinality = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
-            if cardinality == AnnotationCardinality::unchecked() {
+            let cardinalities = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
+            if cardinalities.into_iter().all(|(constraint, _)| constraint.description().is_unchecked()) {
                 break;
             }
 
@@ -998,8 +999,8 @@ impl ThingManager {
     ) -> Result<(), ConceptReadError> {
         let mut current_capability = Some(relates);
         while let Some(locked_capability) = current_capability {
-            let cardinality = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
-            if cardinality == AnnotationCardinality::unchecked() {
+            let cardinalities = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
+            if cardinalities.into_iter().all(|(constraint, _)| constraint.description().is_unchecked()) {
                 break;
             }
 

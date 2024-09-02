@@ -294,6 +294,7 @@ impl TypeReader {
     pub(crate) fn get_capabilities<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         object_type: CAP::ObjectType,
+        allow_hidden: bool,
     ) -> Result<HashSet<CAP>, ConceptReadError> {
         let mut transitive_capabilities: HashSet<CAP> = HashSet::new();
         let mut hidden_interfaces: HashSet<CAP::InterfaceType> = HashSet::new();
@@ -304,7 +305,7 @@ impl TypeReader {
             for capability in declared_capabilities.into_iter() {
                 let interface = capability.interface();
                 // TODO: Maybe need to check the whole capability, not interface. Revisit when hiding for plays and owns is implemented.
-                if !hidden_interfaces.contains(&interface) {
+                if allow_hidden || !hidden_interfaces.contains(&interface) {
                     transitive_capabilities.insert(capability.clone());
                 }
                 if let Some(hidden) = Self::get_capability_hides(snapshot, capability.clone())? {
@@ -315,8 +316,6 @@ impl TypeReader {
         }
         Ok(transitive_capabilities)
     }
-
-    // TODO: get_capabilities_without_specialized?
 
     pub(crate) fn get_object_capabilities_hides_declared<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
@@ -365,7 +364,7 @@ impl TypeReader {
         capability: CAP,
     ) -> Result<Option<CAP>, ConceptReadError> {
         let (object_type, interface_type) = (capability.object(), capability.interface());
-        let capabilities = Self::get_capabilities::<CAP>(snapshot, object_type.clone())?;
+        let capabilities = Self::get_capabilities::<CAP>(snapshot, object_type.clone(), true)?;
         let mut current_interface_type_opt = Some(interface_type.clone());
 
         while let Some(current_interface_type) = current_interface_type_opt {

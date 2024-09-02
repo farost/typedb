@@ -4,11 +4,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    hash::Hash,
-    iter::once,
-};
+use std::{collections::{HashMap, HashSet, VecDeque}, hash::Hash, iter, iter::once};
 
 use encoding::{
     graph::{
@@ -44,12 +40,12 @@ use crate::{
             type_reader::TypeReader,
             validation::{
                 validation::{
-                    capability_get_annotation_by_category, capability_get_declared_annotation_by_category,
-                    capability_get_owner_of_annotation_category, get_label_or_concept_read_err,
+                    capability_get_declared_annotation_by_category,
+                    capability_get_annotation_with_source_by_category, get_label_or_concept_read_err,
                     get_label_or_schema_err, get_opt_label_or_schema_err, is_interface_hidden,
                     is_ordering_compatible_with_distinct_annotation, is_type_transitive_supertype_or_same,
-                    type_get_annotation_by_category, type_get_declared_annotation_by_category,
-                    type_get_source_of_annotation_category, validate_capabilities_cardinality,
+                    type_get_declared_annotation_by_category,
+                    type_get_annotation_with_source_by_category, validate_capabilities_cardinalities_narrowing,
                     validate_cardinality_narrows_inherited_cardinality,
                     validate_declared_annotation_is_compatible_with_inherited_annotations,
                     validate_declared_capability_annotation_is_compatible_with_inherited_annotations,
@@ -982,7 +978,7 @@ impl OperationTimeValidation {
         }
     }
 
-    pub(crate) fn validate_no_overriding_capabilities_for_capability_unset<CAP: Capability<'static>>(
+    pub(crate) fn validate_no_hiding_capabilities_for_capability_unset<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         capability: CAP,
     ) -> Result<(), SchemaValidationError> {
@@ -1158,14 +1154,14 @@ impl OperationTimeValidation {
     ) -> Result<(), SchemaValidationError> {
         let supertype_capabilities = match &object_supertype {
             None => HashSet::new(),
-            Some(object_supertype) => TypeReader::get_capabilities::<CAP>(snapshot, object_supertype.clone())
+            Some(object_supertype) => TypeReader::get_capabilities::<CAP>(snapshot, object_supertype.clone(), false)
                 .map_err(SchemaValidationError::ConceptRead)?,
         };
 
         let subtype_capabilities_declared =
             TypeReader::get_capabilities_declared::<CAP>(snapshot, object_subtype.clone())
                 .map_err(SchemaValidationError::ConceptRead)?;
-        let subtype_capabilities = TypeReader::get_capabilities::<CAP>(snapshot, object_subtype.clone())
+        let subtype_capabilities = TypeReader::get_capabilities::<CAP>(snapshot, object_subtype.clone(), false)
             .map_err(SchemaValidationError::ConceptRead)?;
 
         for subtype_capability in &subtype_capabilities_declared {
@@ -1343,7 +1339,7 @@ impl OperationTimeValidation {
         abstract_set: Option<bool>,
     ) -> Result<(), SchemaValidationError> {
         let is_abstract = abstract_set.unwrap_or(
-            type_get_annotation_by_category(snapshot, attribute_type.clone(), AnnotationCategory::Abstract)
+            type_get_annotation_with_source_by_category(snapshot, attribute_type.clone(), AnnotationCategory::Abstract)
                 .map_err(SchemaValidationError::ConceptRead)?
                 .is_some(),
         );
@@ -1787,51 +1783,54 @@ impl OperationTimeValidation {
         )
     }
 
-    pub(crate) fn validate_updated_cardinality_against_inheritance_line<CAP: Capability<'static>>(
+    pub(crate) fn validate_cardinality_of_inheritance_line_with_updated_capabilities<CAP: Capability<'static>>(
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+        capability: CAP,
+        is_set: bool,
+    ) -> Result<(), SchemaValidationError> {
+        let mut validation_errors = vec![];
+        let updated_capabilities = HashMap::from([(capability.clone(), is_set)]);
+        let object_and_subtypes = once(capability.object()).chain(capability.object().get_subtypes_transitive(snapshot, type_manager)?.into_iter());
+
+        for object_type in object_and_subtypes {
+            validate_capabilities_cardinalities_narrowing::<CAP>(
+                type_manager,
+                snapshot,
+                object_type,
+                &updated_capabilities,
+                &HashMap::new(), // read all cardinalities from storage as it's not changed
+                &HashMap::new(), // read all hidden from storage as it's not changed
+                &mut validation_errors,
+            )
+            .map_err(SchemaValidationError::ConceptRead)?;
+
+            if let Some(error) = validation_errors.first() {
+                return Err(error.clone());
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn validate_cardinality_of_inheritance_line_with_updated_cardinality<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
         capability: CAP,
         cardinality: AnnotationCardinality,
     ) -> Result<(), SchemaValidationError> {
         let mut validation_errors = vec![];
-        let updated_cardinalities =
-            Self::get_transitively_updated_cardinalities(snapshot, type_manager, capability.clone(), cardinality)
-                .map_err(SchemaValidationError::ConceptRead)?;
-        if let Some(_) = TypeReader::get_capability_specializes(snapshot, capability.clone())
-            .map_err(SchemaValidationError::ConceptRead)?
-        {
-            validate_capabilities_cardinality::<CAP>(
+        let updated_cardinalities = HashMap::from([(capability.clone(), cardinality)]);
+        let object_and_subtypes = once(capability.object()).chain(capability.object().get_subtypes_transitive(snapshot, type_manager)?.into_iter());
+
+        for object_type in object_and_subtypes {
+            validate_capabilities_cardinalities_narrowing::<CAP>(
                 type_manager,
                 snapshot,
-                capability.object(),
+                object_type,
+                &HashMap::new(), // read all capabilities from storage as it's not changed
                 &updated_cardinalities,
-                &HashMap::new(), // read all overrides from storage as it's not changed
-                &mut validation_errors,
-            )
-            .map_err(SchemaValidationError::ConceptRead)?;
-        }
-
-        if let Some(error) = validation_errors.first() {
-            return Err(error.clone());
-        }
-
-        // Preserve inheritance ordering in validations
-        // (expect errors from inheritance levels closer to the changed capability)
-        let mut checked_object_types: HashSet<CAP::ObjectType> = HashSet::new();
-        let overriding_capabilities = TypeReader::get_specializing_capabilities_transitive(snapshot, capability.clone())
-            .map_err(SchemaValidationError::ConceptRead)?;
-        for overriding_capability in overriding_capabilities {
-            let already_checked = checked_object_types.insert(overriding_capability.object());
-            if already_checked {
-                continue;
-            }
-
-            validate_capabilities_cardinality::<CAP>(
-                type_manager,
-                snapshot,
-                overriding_capability.object(),
-                &updated_cardinalities,
-                &HashMap::new(), // read all overrides from storage as it's not changed
+                &HashMap::new(), // read all hidden from storage as it's not changed
                 &mut validation_errors,
             )
             .map_err(SchemaValidationError::ConceptRead)?;
@@ -1844,60 +1843,25 @@ impl OperationTimeValidation {
         Ok(())
     }
 
-    pub(crate) fn validate_cardinality_of_inheritance_line_with_updated_override<CAP: Capability<'static>>(
+    pub(crate) fn validate_cardinality_of_inheritance_line_with_updated_hidden<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
         capability: CAP,
-        overridden_capability: Option<CAP>,
+        hidden_capability: CAP,
+        is_hidden: bool,
     ) -> Result<(), SchemaValidationError> {
         let mut validation_errors = vec![];
+        let updated_hidden = HashMap::from([(hidden_capability.clone(), is_hidden)]);
+        let object_and_subtypes = once(capability.object()).chain(capability.object().get_subtypes_transitive(snapshot, type_manager)?.into_iter());
 
-        let cardinality_declared =
-            capability.get_cardinality_declared(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?;
-        let cardinality = if let Some(cardinality_declared) = cardinality_declared {
-            // Does not check that declared cardinality narrows updated inherited one! Should be checked in a separate validation
-            cardinality_declared
-        } else if let Some(overridden_capability) = &overridden_capability {
-            overridden_capability.get_cardinality_constraints(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?
-        } else {
-            capability.get_default_cardinality(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?
-        };
-
-        let updated_cardinalities =
-            Self::get_transitively_updated_cardinalities(snapshot, type_manager, capability.clone(), cardinality)
-                .map_err(SchemaValidationError::ConceptRead)?;
-        let updated_overrides = HashMap::from([(capability.clone(), overridden_capability.clone())]);
-        validate_capabilities_cardinality::<CAP>(
-            type_manager,
-            snapshot,
-            capability.object(),
-            &updated_cardinalities,
-            &updated_overrides,
-            &mut validation_errors,
-        )
-        .map_err(SchemaValidationError::ConceptRead)?;
-
-        if let Some(error) = validation_errors.first() {
-            return Err(error.clone());
-        }
-
-        // Preserve inheritance ordering in validations
-        // (expect errors from inheritance levels closer to the changed capability)
-        let mut checked_object_types: HashSet<CAP::ObjectType> = HashSet::new();
-        let overriding_capabilities = TypeReader::get_specializing_capabilities_transitive(snapshot, capability.clone())
-            .map_err(SchemaValidationError::ConceptRead)?;
-        for overriding_capability in overriding_capabilities {
-            let not_checked = checked_object_types.insert(overriding_capability.object());
-            if !not_checked {
-                continue;
-            }
-
-            validate_capabilities_cardinality::<CAP>(
+        for object_type in object_and_subtypes {
+            validate_capabilities_cardinalities_narrowing::<CAP>(
                 type_manager,
                 snapshot,
-                overriding_capability.object(),
-                &updated_cardinalities,
-                &updated_overrides,
+                object_type,
+                &HashMap::new(), // read all capabilities from storage as it's not changed
+                &HashMap::new(), // read all cardinalities from storage as it's not changed
+                &updated_hidden,
                 &mut validation_errors,
             )
             .map_err(SchemaValidationError::ConceptRead)?;
@@ -1908,48 +1872,6 @@ impl OperationTimeValidation {
         }
 
         Ok(())
-    }
-
-    fn get_transitively_updated_cardinalities<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-        capability: CAP,
-        capability_cardinality: AnnotationCardinality,
-    ) -> Result<HashMap<CAP, AnnotationCardinality>, ConceptReadError> {
-        let mut updated_cardinalities = HashMap::from([(capability.clone(), capability_cardinality.clone())]);
-
-        // Do not care about the capability's override
-        let mut capabilities_and_overrides = VecDeque::from([(capability.clone(), capability.clone())]);
-        while let Some((current_capability, overridden)) = capabilities_and_overrides.pop_back() {
-            if !updated_cardinalities.contains_key(&current_capability) {
-                let cardinality_declared = current_capability.get_cardinality_declared(snapshot, type_manager)?;
-                let updated_cardinality = if let Some(cardinality_declared) = cardinality_declared {
-                    // Does not check that declared cardinality narrows updated inherited one! Should be checked in a separate validation
-                    cardinality_declared
-                } else {
-                    match updated_cardinalities.get(&overridden) {
-                        Some(inherited_cardinality) => inherited_cardinality.clone(),
-                        None => {
-                            debug_assert!(
-                                false,
-                                "Should not visit this capability until the overridden is recalculated"
-                            );
-                            overridden.get_cardinality_constraints(snapshot, type_manager)?
-                        }
-                    }
-                };
-
-                updated_cardinalities.insert(current_capability.clone(), updated_cardinality);
-            }
-
-            TypeReader::get_specializing_capabilities(snapshot, current_capability.clone())?.into_iter().for_each(
-                |overriding_capability| {
-                    capabilities_and_overrides.push_front((overriding_capability, current_capability.clone()))
-                },
-            );
-        }
-
-        Ok(updated_cardinalities)
     }
 
     pub(crate) fn validate_type_supertype_abstractness_to_set_abstract_annotation<T: KindAPI<'static>>(
@@ -2056,7 +1978,7 @@ impl OperationTimeValidation {
             TypeReader::get_type_ordering(snapshot, role.clone()).map_err(SchemaValidationError::ConceptRead)?,
         );
         let distinct_set = distinct_set.unwrap_or(
-            capability_get_annotation_by_category(snapshot, relates, AnnotationCategory::Distinct)
+            type_get_annotation_with_source_by_category(snapshot, relates, AnnotationCategory::Distinct)
                 .map_err(SchemaValidationError::ConceptRead)?
                 .is_some(),
         );
@@ -2079,7 +2001,7 @@ impl OperationTimeValidation {
             TypeReader::get_capability_ordering(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?,
         );
         let distinct_set = distinct_set.unwrap_or(
-            capability_get_annotation_by_category(snapshot, owns, AnnotationCategory::Distinct)
+            type_get_annotation_with_source_by_category(snapshot, owns, AnnotationCategory::Distinct)
                 .map_err(SchemaValidationError::ConceptRead)?
                 .is_some(),
         );
@@ -2229,7 +2151,7 @@ impl OperationTimeValidation {
         let super_relation =
             TypeReader::get_supertype(snapshot, relation_type.clone()).map_err(SchemaValidationError::ConceptRead)?;
         if let Some(super_relation) = super_relation {
-            let is_inherited = TypeReader::get_capabilities::<Relates<'_>>(snapshot, super_relation)
+            let is_inherited = TypeReader::get_capabilities::<Relates<'_>>(snapshot, super_relation, false)
                 .map_err(SchemaValidationError::ConceptRead)?
                 .iter()
                 .any(|relates| &relates.role() == &role_type);
@@ -2257,6 +2179,7 @@ impl OperationTimeValidation {
             let owns_transitive = TypeReader::get_capabilities::<Owns<'static>>(
                 snapshot,
                 super_owner.unwrap().clone().into_owned_object_type(),
+                false,
             )
             .map_err(SchemaValidationError::ConceptRead)?;
             owns_transitive.iter().any(|owns| &owns.attribute() == &attribute_type)
@@ -2319,6 +2242,7 @@ impl OperationTimeValidation {
             let plays_transitive = TypeReader::get_capabilities::<Plays<'static>>(
                 snapshot,
                 super_player.unwrap().clone().into_owned_object_type(),
+                false,
             )
             .map_err(SchemaValidationError::ConceptRead)?;
             plays_transitive.iter().any(|plays| &plays.role() == &role_type)
@@ -2509,20 +2433,20 @@ impl OperationTimeValidation {
         relation_type: RelationType<'static>,
         new_supertype: RelationType<'static>,
     ) -> Result<(), SchemaValidationError> {
-        let old_annotation =
-            type_get_annotation_by_category(snapshot, relation_type.clone(), AnnotationCategory::Cascade)
+        let old_annotation_with_source =
+            type_get_annotation_with_source_by_category(snapshot, type_manager, relation_type.clone(), AnnotationCategory::Cascade)
                 .map_err(SchemaValidationError::ConceptRead)?;
-        match old_annotation {
+        match old_annotation_with_source {
             None => {
                 let new_supertype_annotation =
-                    type_get_annotation_by_category(snapshot, new_supertype.clone(), AnnotationCategory::Cascade)
+                    type_get_annotation_with_source_by_category(snapshot, type_manager, new_supertype.clone(), AnnotationCategory::Cascade)
                         .map_err(SchemaValidationError::ConceptRead)?;
                 match new_supertype_annotation {
                     None => Ok(()),
                     Some(_) => {
                         for_type_and_subtypes_transitive!(snapshot, relation_type, |type_: RelationType<'static>| {
                             let type_annotation =
-                                type_get_annotation_by_category(snapshot, type_.clone(), AnnotationCategory::Cascade)
+                                type_get_annotation_with_source_by_category(snapshot, type_manager, type_.clone(), AnnotationCategory::Cascade)
                                     .map_err(SchemaValidationError::ConceptRead)?;
                             if type_annotation.is_none() {
                                 let type_has_instances =
@@ -2553,23 +2477,24 @@ impl OperationTimeValidation {
         new_supertype: Option<AttributeType<'static>>,
     ) -> Result<(), SchemaValidationError> {
         let subtype_annotations_source =
-            type_get_source_of_annotation_category(snapshot, attribute_type.clone(), AnnotationCategory::Independent)
+            type_get_annotation_with_source_by_category(snapshot, type_manager, attribute_type.clone(), AnnotationCategory::Independent)
                 .map_err(SchemaValidationError::ConceptRead)?;
         let supertype_annotation = match &new_supertype {
             None => None,
             Some(new_supertype) => {
-                type_get_annotation_by_category(snapshot, new_supertype.clone(), AnnotationCategory::Independent)
+                type_get_annotation_with_source_by_category(snapshot, type_manager, new_supertype.clone(), AnnotationCategory::Independent)
                     .map_err(SchemaValidationError::ConceptRead)?
             }
         };
 
         match (subtype_annotations_source, supertype_annotation) {
-            (Some(annotation_source), None) => {
+            (Some((subtype_annotation, annotation_source)), None) => {
                 if annotation_source != attribute_type {
                     let lost_source = annotation_source;
                     for_type_and_subtypes_transitive!(snapshot, attribute_type, |type_: AttributeType<'static>| {
-                        let annotation_source = type_get_source_of_annotation_category(
+                        let annotation_source = type_get_annotation_with_source_by_category(
                             snapshot,
+                            type_manager,
                             type_.clone(),
                             AnnotationCategory::Independent,
                         )
@@ -2582,7 +2507,7 @@ impl OperationTimeValidation {
                                 );
                                 Ok(())
                             }
-                            Some(annotation_source) => {
+                            Some((_, annotation_source)) => {
                                 if lost_source == annotation_source {
                                     let type_has_instances =
                                         Self::has_instances_of_type(snapshot, thing_manager, type_.clone())
@@ -2611,7 +2536,7 @@ impl OperationTimeValidation {
         owner: ObjectType<'static>,
         attribute_type: AttributeType<'static>,
     ) -> Result<(), SchemaValidationError> {
-        let all_owns = TypeReader::get_capabilities::<Owns<'static>>(snapshot, owner.clone().into_owned_object_type())
+        let all_owns = TypeReader::get_capabilities::<Owns<'static>>(snapshot, owner.clone().into_owned_object_type(), false)
             .map_err(SchemaValidationError::ConceptRead)?;
         let found_owns = all_owns.iter().find(|owns| owns.attribute() == attribute_type);
 
@@ -2636,7 +2561,7 @@ impl OperationTimeValidation {
         role_type: RoleType<'static>,
     ) -> Result<(), SchemaValidationError> {
         let all_plays =
-            TypeReader::get_capabilities::<Plays<'static>>(snapshot, player.clone().into_owned_object_type())
+            TypeReader::get_capabilities::<Plays<'static>>(snapshot, player.clone().into_owned_object_type(), false)
                 .map_err(SchemaValidationError::ConceptRead)?;
         let found_plays = all_plays.iter().find(|plays| plays.role() == role_type);
 
@@ -2660,7 +2585,7 @@ impl OperationTimeValidation {
         type_: T,
         annotation_category: AnnotationCategory,
     ) -> Result<(), SchemaValidationError> {
-        let annotation_source = type_get_source_of_annotation_category(snapshot, type_.clone(), annotation_category)
+        let annotation_source = type_get_annotation_with_source_by_category(snapshot, type_.clone(), annotation_category)
             .map_err(SchemaValidationError::ConceptRead)?;
         match annotation_source {
             Some(source) => {
@@ -2682,7 +2607,7 @@ impl OperationTimeValidation {
         edge: CAP,
         annotation_category: AnnotationCategory,
     ) -> Result<(), SchemaValidationError> {
-        let annotation_owner = capability_get_owner_of_annotation_category(snapshot, edge.clone(), annotation_category)
+        let annotation_owner = capability_get_annotation_with_source_by_category(snapshot, edge.clone(), annotation_category)
             .map_err(SchemaValidationError::ConceptRead)?;
         match annotation_owner {
             Some(owner) => {
@@ -3781,12 +3706,12 @@ impl OperationTimeValidation {
     ) -> Result<HashSet<CAP>, SchemaValidationError> {
         let new_inherited_capabilities = match new_supertype {
             None => HashSet::new(),
-            Some(new_supertype) => TypeReader::get_capabilities::<CAP>(snapshot, new_supertype.clone())
+            Some(new_supertype) => TypeReader::get_capabilities::<CAP>(snapshot, new_supertype.clone(), false)
                 .map_err(SchemaValidationError::ConceptRead)?,
         };
 
         let current_capabilities =
-            TypeReader::get_capabilities::<CAP>(snapshot, type_.clone()).map_err(SchemaValidationError::ConceptRead)?;
+            TypeReader::get_capabilities::<CAP>(snapshot, type_.clone(), false).map_err(SchemaValidationError::ConceptRead)?;
         let current_inherited_capabilities =
             current_capabilities.iter().filter(|capability| capability.object() != type_);
 
@@ -3808,11 +3733,11 @@ impl OperationTimeValidation {
         // It is expected that preserved capabilities have the same overrides and, thus, the same annotations,
         // so we check only the newly inherited capabilities.
 
-        let new_inherited_capabilities = TypeReader::get_capabilities::<CAP>(snapshot, new_supertype.clone())
+        let new_inherited_capabilities = TypeReader::get_capabilities::<CAP>(snapshot, new_supertype.clone(), false)
             .map_err(SchemaValidationError::ConceptRead)?;
 
         let old_capabilities =
-            TypeReader::get_capabilities::<CAP>(snapshot, type_.clone()).map_err(SchemaValidationError::ConceptRead)?;
+            TypeReader::get_capabilities::<CAP>(snapshot, type_.clone(), false).map_err(SchemaValidationError::ConceptRead)?;
         let old_inherited_capabilities = old_capabilities.iter().filter(|capability| capability.object() != type_);
 
         let mut updated_annotations_from_inheritance = HashMap::new();

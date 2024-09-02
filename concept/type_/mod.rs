@@ -240,6 +240,12 @@ pub trait OwnerAPI<'a>: TypeAPI<'a> {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError>;
 
+    fn get_owns_with_hidden<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+    ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError>;
+
     fn get_owns_attribute_declared(
         &self,
         snapshot: &impl ReadableSnapshot,
@@ -325,6 +331,12 @@ pub trait PlayerAPI<'a>: TypeAPI<'a> {
     ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError>;
 
     fn get_plays<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+    ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError>;
+
+    fn get_plays_with_hidden<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
@@ -497,14 +509,16 @@ pub trait Capability<'a>:
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<HashMap<CapabilityConstraint<Self>, HashSet<Self>>, ConceptReadError>;
+    ) -> Result<HashMap<CapabilityConstraint<Self>, HashSet<Self>>, ConceptReadError> {
+        type_manager.get_cardinality_constraints(snapshot, self.clone())
+    }
 
-    fn get_cardinality_declared(
+    fn get_cardinality(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<Option<AnnotationCardinality>, ConceptReadError> { // Maybe should return default if not set!
-        type_manager.get_cardinality_declared(snapshot, self.clone())
+    ) -> Result<AnnotationCardinality, ConceptReadError> {
+        type_manager.get_capability_cardinality(snapshot, self.clone())
     }
 }
 
