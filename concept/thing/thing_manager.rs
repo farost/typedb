@@ -917,7 +917,7 @@ impl ThingManager {
         value: Value<'a>,
         owns: Owns<'static>,
     ) -> Result<(), ConceptReadError> {
-        if let Some(uniqueness_source) = owns.get_uniqueness_source(snapshot, self.type_manager())? {
+        if let Some((_, uniqueness_source)) = owns.get_constraint_unique(snapshot, self.type_manager())? {
             let lock_key = create_custom_lock_key(
                 [
                     &Infix::PropertyAnnotationUnique.infix_id().bytes(),
@@ -942,7 +942,7 @@ impl ThingManager {
         let mut current_capability = Some(owns);
         while let Some(locked_capability) = current_capability {
             let cardinalities = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
-            if cardinalities.into_iter().all(|(constraint, _)| constraint.description().is_unchecked()) {
+            if cardinalities.into_iter().all(|(constraint, _)| constraint.description().unchecked()) {
                 break;
             }
 
@@ -971,7 +971,7 @@ impl ThingManager {
         let mut current_capability = Some(plays);
         while let Some(locked_capability) = current_capability {
             let cardinalities = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
-            if cardinalities.into_iter().all(|(constraint, _)| constraint.description().is_unchecked()) {
+            if cardinalities.into_iter().all(|(constraint, _)| constraint.description().unchecked()) {
                 break;
             }
 
@@ -1000,7 +1000,7 @@ impl ThingManager {
         let mut current_capability = Some(relates);
         while let Some(locked_capability) = current_capability {
             let cardinalities = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
-            if cardinalities.into_iter().all(|(constraint, _)| constraint.description().is_unchecked()) {
+            if cardinalities.into_iter().all(|(constraint, _)| constraint.description().unchecked()) {
                 break;
             }
 

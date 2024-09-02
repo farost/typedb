@@ -25,6 +25,7 @@ use crate::{
     },
 };
 use crate::type_::constraint::CapabilityConstraint;
+use crate::type_::Ordering;
 use crate::type_::owns::Owns;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -77,6 +78,10 @@ impl<'a> Plays<'a> {
             }
         }
         Ok(())
+    }
+
+    pub fn get_default_cardinality() -> AnnotationCardinality {
+        Self::DEFAULT_CARDINALITY
     }
 
     pub(crate) fn into_owned(self) -> Plays<'static> {
@@ -135,6 +140,14 @@ impl<'a> Capability<'a> for Plays<'a> {
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, Vec<Plays<'static>>>, ConceptReadError> {
         type_manager.get_plays_specializes_transitive(snapshot, self.clone().into_owned())
+    }
+
+    fn get_hides<'this>(
+        &'this self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'this TypeManager,
+    ) -> Result<MaybeOwns<'this, Option<Plays<'static>>>, ConceptReadError> {
+        type_manager.get_plays_hides(snapshot, self.clone().into_owned())
     }
 
     fn get_specializing<'this>(

@@ -100,6 +100,8 @@ impl CommitTimeValidation {
     validate_types!(validate_relation_types, get_relation_types, RelationType, Self::validate_relation_type);
     validate_types!(validate_attribute_types, get_attribute_types, AttributeType, Self::validate_attribute_type);
 
+    // TODO: redundancy check that there are no constraints on capabilities that are equal to type constraints (description() == description())
+
     fn validate_entity_type(
         type_manager: &TypeManager,
         snapshot: &impl ReadableSnapshot,
@@ -694,7 +696,7 @@ impl CommitTimeValidation {
     }
 
     fn validate_role_is_unique_for_relation_type_hierarchy(
-        _type_manager: &TypeManager,
+        type_manager: &TypeManager,
         snapshot: &impl ReadableSnapshot,
         relation_type: RelationType<'static>,
         role_type: RoleType<'static>,
@@ -706,12 +708,12 @@ impl CommitTimeValidation {
         let relation_subtypes = TypeReader::get_subtypes_transitive(snapshot, relation_type.clone())?;
 
         for supertype in relation_supertypes {
-            if let Err(err) = validate_role_name_uniqueness_non_transitive(snapshot, supertype, &role_label) {
+            if let Err(err) = validate_role_name_uniqueness_non_transitive(snapshot, type_manager, supertype, &role_label) {
                 validation_errors.push(err);
             }
         }
         for subtype in relation_subtypes {
-            if let Err(err) = validate_role_name_uniqueness_non_transitive(snapshot, subtype, &role_label) {
+            if let Err(err) = validate_role_name_uniqueness_non_transitive(snapshot, type_manager, subtype, &role_label) {
                 validation_errors.push(err);
             }
         }

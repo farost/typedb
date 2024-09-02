@@ -116,6 +116,20 @@ impl<'a> Relates<'a> {
         Ok(())
     }
 
+    pub fn get_default_cardinality(role_ordering: Ordering) -> AnnotationCardinality {
+        match role_ordering {
+            Ordering::Unordered => Self::DEFAULT_UNORDERED_CARDINALITY,
+            Ordering::Ordered => Self::DEFAULT_ORDERED_CARDINALITY,
+        }
+    }
+
+    pub fn get_default_distinct(role_ordering: Ordering) -> Option<AnnotationDistinct> {
+        match role_ordering {
+            Ordering::Ordered => None,
+            Ordering::Unordered => Some(AnnotationDistinct)
+        }
+    }
+
     pub(crate) fn into_owned(self) -> Relates<'static> {
         Relates { relation: self.relation.into_owned(), role: self.role.into_owned() }
     }
@@ -172,6 +186,14 @@ impl<'a> Capability<'a> for Relates<'a> {
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, Vec<Relates<'static>>>, ConceptReadError> {
         type_manager.get_relates_specializes_transitive(snapshot, self.clone().into_owned())
+    }
+
+    fn get_hides<'this>(
+        &'this self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'this TypeManager,
+    ) -> Result<MaybeOwns<'this, Option<Relates<'static>>>, ConceptReadError> {
+        type_manager.get_relates_specializes(snapshot, self.clone().into_owned())
     }
 
     fn get_specializing<'this>(

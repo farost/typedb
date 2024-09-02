@@ -481,6 +481,12 @@ pub trait Capability<'a>:
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, Vec<Self>>, ConceptReadError>;
 
+    fn get_hides<'this>(
+        &'this self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'this TypeManager,
+    ) -> Result<MaybeOwns<'this, Option<Self>>, ConceptReadError>;
+
     fn get_specializing<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,

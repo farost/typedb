@@ -104,6 +104,7 @@ pub(crate) struct CommonCapabilityCache<CAP: Capability<'static>> {
     pub(super) capability: CAP,
     pub(super) specializes: Option<CAP>,
     pub(super) specializes_transitive: Vec<CAP>,
+    pub(super) hides: Option<CAP>,
     pub(super) specializing: HashSet<CAP>,
     pub(super) specializing_transitive: Vec<CAP>,
     pub(super) annotations_declared: HashSet<CAP::AnnotationType>,
@@ -320,6 +321,7 @@ impl<CAP: Capability<'static>> CommonCapabilityCache<CAP> {
         let constraints = TypeReader::get_capability_constraints(snapshot, capability.clone()).unwrap();
         let specializes = TypeReader::get_capability_specializes(snapshot, capability.clone()).unwrap();
         let specializes_transitive = TypeReader::get_capability_specializes_transitive(snapshot, capability.clone()).unwrap();
+        let hides = TypeReader::get_capability_hides(snapshot, capability.clone()).unwrap();
         let specializing = TypeReader::get_specializing_capabilities(snapshot, capability.clone()).unwrap();
         let specializing_transitive = TypeReader::get_specializing_capabilities_transitive(snapshot, capability.clone()).unwrap();
         CommonCapabilityCache {
@@ -328,6 +330,7 @@ impl<CAP: Capability<'static>> CommonCapabilityCache<CAP> {
             constraints,
             specializes,
             specializes_transitive,
+            hides,
             specializing,
             specializing_transitive,
         }

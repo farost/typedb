@@ -64,12 +64,13 @@ pub(crate) fn get_opt_label_or_schema_err<'a>(
 
 pub(crate) fn validate_role_name_uniqueness_non_transitive(
     snapshot: &impl ReadableSnapshot,
+    type_manager: &TypeManager,
     relation_type: RelationType<'static>,
     new_label: &Label<'static>,
 ) -> Result<(), SchemaValidationError> {
     let scoped_label = Label::build_scoped(
         new_label.name.as_str(),
-        TypeReader::get_label(snapshot, relation_type).unwrap().unwrap().name().as_str(),
+        relation_type.get_label(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?.name().as_str(),
     );
 
     if TypeReader::get_labelled_type::<RoleType<'static>>(snapshot, &scoped_label)
@@ -716,7 +717,7 @@ pub fn validate_capabilities_cardinalities_narrowing<CAP: Capability<'static>>(
         let inheriting_cardinality =
             specializing_capabilities.iter().filter_map(|capability| cardinalities.get(capability).copied()).sum();
 
-        if !root_cardinality.value_satisfies_end(Some(inheriting_cardinality.start())) {
+        if !root_cardinality.narrowed_correctly_by(&inheriting_cardinality) {
             validation_errors.push(
                 SchemaValidationError::SummarizedCardinalityOfCapabilitiesOverridingSingleCapabilityOverflowsConstraint(
                     CAP::KIND,

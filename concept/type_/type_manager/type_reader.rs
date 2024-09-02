@@ -752,17 +752,18 @@ impl TypeReader {
         match CAP::KIND {
             CapabilityKind::Relates => {
                 let relates = Relates::new(RelationType::new(capability.canonical_from().into_vertex()), RoleType::new(capability.canonical_to().into_vertex()));
+                let role_ordering = Self::get_type_ordering(snapshot, relates.role())?;
 
                 if get_cardinality_constraint_opt(capability.clone(), out_constraints)?.is_none() {
                     let cardinality_sources = out_constraints
                         .entry(CapabilityConstraint::new(ConstraintDescription::Cardinality(
-                            Self::get_relates_default_cardinality(snapshot, relates.clone())?
+                            Relates::get_default_cardinality(role_ordering)
                         )))
                         .or_insert(HashSet::new());
                     cardinality_sources.insert(capability.clone());
                 }
 
-                if let Some(default_distinct) = Self::get_relates_default_distinct(snapshot, relates)? {
+                if let Some(default_distinct) = Relates::get_default_distinct(role_ordering)? {
                     if get_distinct_constraints(out_constraints)?.is_empty() {
                         let distinct_sources = out_constraints
                             .entry(CapabilityConstraint::new(ConstraintDescription::Distinct(
@@ -778,7 +779,7 @@ impl TypeReader {
                 if get_cardinality_constraint_opt(capability.clone(), out_constraints)?.is_none() {
                     let cardinality_sources = out_constraints
                         .entry(CapabilityConstraint::new(ConstraintDescription::Cardinality(
-                            Self::get_plays_default_cardinality(snapshot, plays)?
+                            Plays::get_default_cardinality()
                         )))
                         .or_insert(HashSet::new());
                     cardinality_sources.insert(capability.clone());
@@ -786,17 +787,18 @@ impl TypeReader {
             }
             CapabilityKind::Owns => {
                 let owns = Owns::new(ObjectType::new(capability.canonical_from().into_vertex()), AttributeType::new(capability.canonical_to().into_vertex()));
+                let ordering = Self::get_capability_ordering(snapshot, owns.clone())?;
 
                 if get_cardinality_constraint_opt(capability.clone(), out_constraints)?.is_none() {
                     let cardinality_sources = out_constraints
                         .entry(CapabilityConstraint::new(ConstraintDescription::Cardinality(
-                            Self::get_owns_default_cardinality(snapshot, owns.clone())?
+                            Owns::get_default_cardinality(ordering)
                         )))
                         .or_insert(HashSet::new());
                     cardinality_sources.insert(capability.clone());
                 }
 
-                if let Some(default_distinct) = Self::get_owns_default_distinct(snapshot, owns)? {
+                if let Some(default_distinct) = Owns::get_default_distinct(ordering)? {
                     if get_distinct_constraints(out_constraints)?.is_empty() {
                         let distinct_sources = out_constraints
                             .entry(CapabilityConstraint::new(ConstraintDescription::Distinct(
@@ -809,37 +811,5 @@ impl TypeReader {
             }
         }
         Ok(())
-    }
-
-    fn get_owns_default_cardinality(snapshot: &impl ReadableSnapshot, owns: Owns<'static>) -> Result<AnnotationCardinality, ConceptReadError> {
-        Ok(match Self::get_capability_ordering(snapshot, owns)? {
-            Ordering::Unordered => Owns::DEFAULT_UNORDERED_CARDINALITY,
-            Ordering::Ordered => Owns::DEFAULT_ORDERED_CARDINALITY,
-        })
-    }
-
-    fn get_plays_default_cardinality(_snapshot: &impl ReadableSnapshot, _plays: Plays<'static>) -> Result<AnnotationCardinality, ConceptReadError> {
-        Ok(Plays::DEFAULT_CARDINALITY)
-    }
-
-    fn get_relates_default_cardinality(snapshot: &impl ReadableSnapshot, relates: Relates<'static>) -> Result<AnnotationCardinality, ConceptReadError> {
-        Ok(match Self::get_type_ordering(snapshot, relates.role())? {
-            Ordering::Unordered => Relates::DEFAULT_UNORDERED_CARDINALITY,
-            Ordering::Ordered => Relates::DEFAULT_ORDERED_CARDINALITY,
-        })
-    }
-
-    fn get_owns_default_distinct(snapshot: &impl ReadableSnapshot, owns: Owns<'static>) -> Result<Option<AnnotationDistinct>, ConceptReadError> {
-        Ok(match Self::get_capability_ordering(snapshot, owns)? {
-            Ordering::Ordered => None,
-            Ordering::Unordered => Some(AnnotationDistinct),
-        })
-    }
-
-    fn get_relates_default_distinct(snapshot: &impl ReadableSnapshot, relates: Relates<'static>) -> Result<Option<AnnotationDistinct>, ConceptReadError> {
-        Ok(match Self::get_type_ordering(snapshot, relates.role())? {
-            Ordering::Ordered => None,
-            Ordering::Unordered => Some(AnnotationDistinct),
-        })
     }
 }

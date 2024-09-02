@@ -24,6 +24,7 @@ use crate::{
         Ordering,
     },
 };
+use crate::type_::constraint::ConstraintDescription;
 
 pub(crate) mod commit_time_validation;
 pub(crate) mod operation_time_validation;
@@ -95,11 +96,12 @@ pub enum SchemaValidationError {
     ValueTypeIsNotCompatibleWithValuesAnnotation(Label<'static>, Option<ValueType>),
     ValueTypeIsNotKeyableForKeyAnnotation(Label<'static>, Label<'static>, Option<ValueType>),
     ValueTypeIsNotKeyableForUniqueAnnotation(Label<'static>, Label<'static>, Option<ValueType>),
-    CannotSetAnnotationToInterfaceBecauseItAlreadyExistsForItsCapability(Label<'static>, AnnotationCategory),
-    CannotSetAnnotationToCapabilityBecauseItAlreadyExistsForItsInterface(
+    CannotSetAnnotationToInterfaceBecauseItDoesNotNarrowItsCapabilityConstraint(Label<'static>, ConstraintDescription, ConstraintDescription),
+    CannotSetAnnotationToCapabilityBecauseItDoesNotNarrowItsInterfaceConstraint(
         Label<'static>,
         Label<'static>,
-        AnnotationCategory,
+        ConstraintDescription,
+        ConstraintDescription,
     ),
     InvalidCardinalityArguments(AnnotationCardinality),
     InvalidRegexArguments(AnnotationRegex),
@@ -308,8 +310,8 @@ impl Error for SchemaValidationError {
             Self::ValueTypeIsNotCompatibleWithValuesAnnotation(_, _) => None,
             Self::ValueTypeIsNotKeyableForKeyAnnotation(_, _, _) => None,
             Self::ValueTypeIsNotKeyableForUniqueAnnotation(_, _, _) => None,
-            Self::CannotSetAnnotationToInterfaceBecauseItAlreadyExistsForItsCapability(_, _) => None,
-            Self::CannotSetAnnotationToCapabilityBecauseItAlreadyExistsForItsInterface(_, _, _) => None,
+            Self::CannotSetAnnotationToInterfaceBecauseItDoesNotNarrowItsCapabilityConstraint(_, _, _) => None,
+            Self::CannotSetAnnotationToCapabilityBecauseItDoesNotNarrowItsInterfaceConstraint(_, _, _, _) => None,
             Self::InvalidCardinalityArguments(_) => None,
             Self::InvalidRegexArguments(_) => None,
             Self::InvalidRangeArgumentsForValueType(_, _) => None,

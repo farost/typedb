@@ -114,7 +114,9 @@ impl AnnotationCardinality {
     }
 
     pub fn narrowed_correctly_by(&self, other: &Self) -> bool {
-        self.value_satisfies_start(other.start()) && self.value_satisfies_end(other.end())
+        // We allow other.min < self.min and other.max > self.max.
+        // The only limitation is other.min <= self.max.
+        self.value_satisfies_end(Some(other.start()))
     }
 
     pub fn value_satisfies_start(&self, value: u64) -> bool {
@@ -181,6 +183,11 @@ impl AnnotationRegex {
             Some(ValueType::String) => true,
             _ => false,
         }
+    }
+
+    // Can try to implement the check, but allow everything now!
+    pub fn narrowed_correctly_by(&self, _other: &Self) -> bool {
+        true
     }
 }
 

@@ -191,10 +191,16 @@ impl<'a> AttributeType<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
+    ) -> Result<Option<(ValueType, AttributeType<'static>)>, ConceptReadError> {
+        type_manager.get_attribute_type_value_type(snapshot, self.clone().into_owned())
+    }
+
+    pub fn get_value_type_without_source(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
     ) -> Result<Option<ValueType>, ConceptReadError> {
-        type_manager
-            .get_attribute_type_value_type(snapshot, self.clone().into_owned())
-            .map(|value_type_opt| value_type_opt.map(|(value_type, _)| value_type))
+        self.get_value_type(snapshot, type_manager).map(|value_type_opt| value_type_opt.map(|(value_type, _)| value_type))
     }
 
     pub fn set_value_type(

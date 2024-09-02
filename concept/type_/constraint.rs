@@ -30,6 +30,15 @@ use crate::{
 use crate::type_::{KindAPI, TypeAPI};
 use crate::type_::annotation::AnnotationCascade;
 
+macro_rules! with_constraint_description {
+    ($constraint_description:ident, $target_enum:ident, $default:expr, |$constraint:ident| $expr:expr) => {
+        match &$constraint_description {
+            ConstraintDescription::$target_enum($constraint) => $expr,
+            _ => $default,
+        }
+    };
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum ConstraintDescription {
     Abstract(AnnotationAbstract),
@@ -59,7 +68,7 @@ impl ConstraintDescription {
         }
     }
 
-    pub fn inheritable(&self) -> bool { // TODO: find a better name. Infectious for subtypes?..
+    pub fn inheritable(&self) -> bool {
         match self {
             ConstraintDescription::Abstract(_) => true,
 
@@ -73,10 +82,36 @@ impl ConstraintDescription {
         }
     }
 
-    pub fn is_unchecked(&self) -> bool {
+    pub fn unchecked(&self) -> bool {
         match self {
             ConstraintDescription::Cardinality(cardinality) => cardinality == &AnnotationCardinality::unchecked(),
             _ => false,
+        }
+    }
+
+    pub fn narrowed_correctly_by_same_type(&self, other: &ConstraintDescription) -> bool {
+        self.narrowed_correctly_by(other, false)
+    }
+
+    pub fn narrowed_correctly_by_any_type(&self, other: &ConstraintDescription) -> bool {
+        self.narrowed_correctly_by(other, true)
+    }
+
+    fn narrowed_correctly_by(&self, other: &ConstraintDescription, allow_different_description: bool) -> bool {
+        let default = || if allow_different_description {
+            true
+        } else {
+            unreachable!("Preceding filtering by ConstraintDescription is expected before this call")
+        };
+        match self {
+            ConstraintDescription::Abstract(_) => true,
+            ConstraintDescription::Distinct(_) => true,
+            ConstraintDescription::Independent(_) => true,
+            ConstraintDescription::Unique(_) => true,
+            ConstraintDescription::Regex(regex) => with_constraint_description!(other, Regex, default(), |other_regex| regex.narrowed_correctly_by(other_regex)),
+            ConstraintDescription::Cardinality(cardinality) => with_constraint_description!(other, Cardinality, default(), |other_cardinality| cardinality.narrowed_correctly_by(other_cardinality)),
+            ConstraintDescription::Range(range) => with_constraint_description!(other, Range, default(), |other_range| range.narrowed_correctly_by(other_range)),
+            ConstraintDescription::Values(values) => with_constraint_description!(other, Values, default(), |other_values| values.narrowed_correctly_by(other_values)),
         }
     }
 }

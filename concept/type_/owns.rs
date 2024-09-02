@@ -188,32 +188,18 @@ impl<'a> Owns<'a> {
         Owns { owner: ObjectType::new(self.owner.vertex().into_owned()), attribute: self.attribute.into_owned() }
     }
 
-    pub(crate) fn get_uniqueness_source(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-    ) -> Result<Option<Owns<'static>>, ConceptReadError> {
-        debug_assert!(
-            !AnnotationCategory::Unique.declarable_below(AnnotationCategory::Key)
-                && AnnotationCategory::Key.declarable_below(AnnotationCategory::Unique),
-            "This function uses the fact that @key is always below @unique. Revalidate the logic!"
-        );
+    pub fn get_default_cardinality(ordering: Ordering) -> AnnotationCardinality {
+        match ordering {
+            Ordering::Unordered => Self::DEFAULT_UNORDERED_CARDINALITY,
+            Ordering::Ordered => Self::DEFAULT_ORDERED_CARDINALITY,
+        }
+    }
 
-        let owns_owned = self.clone().into_owned();
-
-        let unique_source = type_manager.get_capability_annotation_source(
-            snapshot,
-            owns_owned.clone(),
-            OwnsAnnotation::Unique(AnnotationUnique),
-        )?;
-        Ok(match unique_source {
-            Some(_) => unique_source,
-            None => type_manager.get_capability_annotation_source(
-                snapshot,
-                owns_owned,
-                OwnsAnnotation::Key(AnnotationKey),
-            )?,
-        })
+    pub fn get_default_distinct(ordering: Ordering) -> Option<AnnotationDistinct> {
+        match ordering {
+            Ordering::Ordered => None,
+            Ordering::Unordered => Some(AnnotationDistinct)
+        }
     }
 }
 
@@ -268,6 +254,14 @@ impl<'a> Capability<'a> for Owns<'a> {
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, Vec<Owns<'static>>>, ConceptReadError> {
         type_manager.get_owns_specializes_transitive(snapshot, self.clone().into_owned())
+    }
+
+    fn get_hides<'this>(
+        &'this self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'this TypeManager,
+    ) -> Result<MaybeOwns<'this, Option<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_owns_hides(snapshot, self.clone().into_owned())
     }
 
     fn get_specializing<'this>(
