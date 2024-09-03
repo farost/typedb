@@ -46,8 +46,9 @@ use crate::{
     },
     ConceptAPI,
 };
-use crate::type_::constraint::TypeConstraint;
+use crate::type_::constraint::{CapabilityConstraint, TypeConstraint};
 use crate::type_::entity_type::EntityType;
+use crate::type_::owns::Owns;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct RoleType<'a> {
@@ -228,6 +229,13 @@ impl<'a> RoleType<'a> {
         type_manager.set_role_ordering(snapshot, thing_manager, self.clone().into_owned(), ordering)
     }
 
+    pub fn into_owned(self) -> RoleType<'static> {
+        RoleType { vertex: self.vertex.into_owned() }
+    }
+}
+
+// --- Related API ---
+impl<'a> RoleType<'a> {
     pub fn get_relates<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
@@ -244,6 +252,18 @@ impl<'a> RoleType<'a> {
         type_manager.get_role_type_relation_types(snapshot, self.clone().into_owned())
     }
 
+    pub fn get_constraints_for_relation<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        relation_type: RelationType<'static>,
+    ) -> Result<MaybeOwns<'m, HashSet<CapabilityConstraint<Relates<'static>>>>, ConceptReadError> {
+        type_manager.get_type_relates_constraints(snapshot, relation_type, self.clone().into_owned())
+    }
+}
+
+// --- Played API ---
+impl<'a> RoleType<'a> {
     pub fn get_plays<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
@@ -252,7 +272,7 @@ impl<'a> RoleType<'a> {
         type_manager.get_role_type_plays(snapshot, self.clone().into_owned())
     }
 
-    pub fn get_players<'m>(
+    pub fn get_player_types<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
@@ -260,8 +280,13 @@ impl<'a> RoleType<'a> {
         type_manager.get_role_type_player_types(snapshot, self.clone().into_owned())
     }
 
-    pub fn into_owned(self) -> RoleType<'static> {
-        RoleType { vertex: self.vertex.into_owned() }
+    pub fn get_constraints_for_player<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        player_type: ObjectType<'static>,
+    ) -> Result<MaybeOwns<'m, HashSet<CapabilityConstraint<Plays<'static>>>>, ConceptReadError> {
+        type_manager.get_type_plays_constraints(snapshot, player_type, self.clone().into_owned())
     }
 }
 

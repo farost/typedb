@@ -327,28 +327,45 @@ macro_rules! storage_delete_annotation {
 
 macro_rules! get_has_constraint_methods {
     ($(
-        fn $method_name:ident() -> $type_:ty = $constraint_method:path;
+        fn $method_name:ident() -> $type_:ty = $filtering_method:path;
     )*) => {
         $(
             pub(crate) fn $method_name(
                 &self, snapshot: &impl ReadableSnapshot, type_: $type_
             ) -> Result<bool, ConceptReadError> {
-                let constraints = $constraint_method(type_.get_constraints(snapshot, self)?.into_iter());
+                let constraints = $filtering_method(type_.get_constraints(snapshot, self)?.into_iter());
                 Ok(!constraints.is_empty())
             }
         )*
     }
 }
 
-macro_rules! get_constraint_methods {
+macro_rules! get_filtered_constraints_methods {
     ($(
-        fn $method_name:ident() -> $type_:ty = $constraint_type:ident | $constraint_method:path;
+        fn $method_name:ident() -> $type_:ty = $constraint_type:ident | $get_constraints_method:ident | $filtering_method:path;
     )*) => {
         $(
             pub(crate) fn $method_name(
                 &self, snapshot: &impl ReadableSnapshot, type_: $type_
-            ) -> Result<HashMap<$constraint_type<$type_>, HashSet<$type_>>, ConceptReadError> {
-                Ok($constraint_method(type_.get_constraints(snapshot, self)?.into_iter()))
+            ) -> Result<HashSet<$constraint_type<$type_>>, ConceptReadError> {
+                Ok($filtering_method(type_.$get_constraints_method(snapshot, self)?))
+            }
+        )*
+    }
+}
+
+macro_rules! get_type_capability_filtered_constraints_methods {
+    ($(
+        fn $method_name:ident() -> $constrained_type:ident = $get_constraints_method:ident | $filtering_method:path;
+    )*) => {
+        $(
+            pub(crate) fn $method_name(
+                &self,
+                snapshot: &impl ReadableSnapshot,
+                object_type: $constrained_type<'static>::ObjectType,
+                interface_type: $constrained_type<'static>::InterfaceType,
+            ) -> Result<HashSet<CapabilityConstraint<$constrained_type>>, ConceptReadError> {
+                Ok($filtering_method(object_type.$get_constraints_method(snapshot, self, interface_type)?))
             }
         )*
     }
@@ -1049,19 +1066,28 @@ impl TypeManager {
         fn get_type_relates_constraints() -> Relates = get_type_capability_constraints;
     }
 
+    get_filtered_constraints_methods! {
+        fn get_cardinality_constraints() -> impl Capability<'static> = CapabilityConstraint | get_constraints | get_cardinality_constraints;
+        fn get_owns_regex_constraints() -> Owns<'static> = CapabilityConstraint | get_constraints | get_regex_constraints;
+        fn get_owns_range_constraints() -> Owns<'static> = CapabilityConstraint | get_constraints | get_range_constraints;
+        fn get_owns_values_constraints() -> Owns<'static> = CapabilityConstraint | get_constraints | get_values_constraints;
+        fn get_attribute_type_regex_constraints() -> AttributeType<'static> = TypeConstraint | get_constraints | get_regex_constraints;
+        fn get_attribute_type_range_constraints() -> AttributeType<'static> = TypeConstraint | get_constraints | get_range_constraints;
+        fn get_attribute_type_values_constraints() -> AttributeType<'static> = TypeConstraint | get_constraints | get_values_constraints;
+    }
+
+    get_type_capability_filtered_constraints_methods! {
+        fn get_type_owns_cardinality_constraints() -> Owns = get_type_owns_constraints | get_cardinality_constraints;
+        fn get_type_plays_cardinality_constraints() -> Plays = get_type_plays_constraints | get_cardinality_constraints;
+        fn get_type_relates_cardinality_constraints() -> Relates = get_type_relates_constraints | get_cardinality_constraints;
+        fn get_type_owns_regex_constraints() -> Owns = get_type_owns_constraints | get_regex_constraints;
+        fn get_type_owns_range_constraints() -> Owns = get_type_owns_constraints | get_range_constraints;
+        fn get_type_owns_values_constraints() -> Owns = get_type_owns_constraints | get_values_constraints;
+    }
+
     get_has_constraint_methods! {
         fn get_is_distinct() -> impl Capability<'static> = get_distinct_constraints;
         fn get_is_independent() -> AttributeType<'static> = get_independent_constraints;
-    }
-
-    get_constraint_methods! {
-        fn get_cardinality_constraints() -> impl Capability<'static> = CapabilityConstraint | get_cardinality_constraints;
-        fn get_owns_regex_constraints() -> Owns<'static> = CapabilityConstraint | get_regex_constraints;
-        fn get_owns_range_constraints() -> Owns<'static> = CapabilityConstraint | get_range_constraints;
-        fn get_owns_values_constraints() -> Owns<'static> = CapabilityConstraint | get_values_constraints;
-        fn get_attribute_type_regex_constraints() -> AttributeType<'static> = TypeConstraint | get_regex_constraints;
-        fn get_attribute_type_range_constraints() -> AttributeType<'static> = TypeConstraint | get_range_constraints;
-        fn get_attribute_type_values_constraints() -> AttributeType<'static> = TypeConstraint | get_values_constraints;
     }
 
     get_annotation_declared_by_category_methods! {
@@ -1088,10 +1114,16 @@ impl TypeManager {
         Ok(constraints.is_some())
     }
 
-    pub(crate) fn get_unique_constraints(
+    pub(crate) fn get_unique_constraint(
         &self, snapshot: &impl ReadableSnapshot, owns: Owns<'static>,
-    ) -> Result<Option<(CapabilityConstraint<Owns<'static>>, Owns<'static>)>, ConceptReadError> {
+    ) -> Result<Option<CapabilityConstraint<Owns<'static>>>, ConceptReadError> {
         Ok(get_unique_constraint(owns.get_constraints(snapshot, self)?.into_iter()))
+    }
+
+    pub(crate) fn get_type_owns_unique_constraint(
+        &self, snapshot: &impl ReadableSnapshot, object_type: ObjectType<'static>, attribute_type: AttributeType<'static>,
+    ) -> Result<Option<CapabilityConstraint<Owns<'static>>>, ConceptReadError> {
+        Ok(get_unique_constraint(object_type.get_type_owns_constraints(snapshot, self, attribute_type)?.into_iter()))
     }
 
     pub(crate) fn get_capability_cardinality<CAP: Capability<'static>>(

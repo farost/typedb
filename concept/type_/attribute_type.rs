@@ -288,7 +288,7 @@ impl<'a> AttributeType<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<HashMap<TypeConstraint<AttributeType<'static>>, HashSet<AttributeType<'static>>>, ConceptReadError> {
+    ) -> Result<HashSet<TypeConstraint<AttributeType<'static>>>, ConceptReadError> {
         type_manager.get_attribute_type_regex_constraints(snapshot, self.clone().into_owned())
     }
 
@@ -296,7 +296,7 @@ impl<'a> AttributeType<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<HashMap<TypeConstraint<AttributeType<'static>>, HashSet<AttributeType<'static>>>, ConceptReadError> {
+    ) -> Result<HashSet<TypeConstraint<AttributeType<'static>>>, ConceptReadError> {
         type_manager.get_attribute_type_range_constraints(snapshot, self.clone().into_owned())
     }
 
@@ -304,7 +304,7 @@ impl<'a> AttributeType<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<HashMap<TypeConstraint<AttributeType<'static>>, HashSet<AttributeType<'static>>>, ConceptReadError> {
+    ) -> Result<HashSet<TypeConstraint<AttributeType<'static>>>, ConceptReadError> {
         type_manager.get_attribute_type_values_constraints(snapshot, self.clone().into_owned())
     }
 
@@ -384,12 +384,21 @@ impl<'a> AttributeType<'a> {
         type_manager.get_attribute_type_owns(snapshot, self.clone().into_owned())
     }
 
-    pub fn get_owners<'m>(
+    pub fn get_owner_types<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashMap<ObjectType<'static>, Owns<'static>>>, ConceptReadError> {
         type_manager.get_attribute_type_owner_types(snapshot, self.clone().into_owned())
+    }
+
+    pub fn get_constraints_for_owner<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        owner_type: ObjectType<'static>,
+    ) -> Result<MaybeOwns<'m, HashSet<CapabilityConstraint<Owns<'static>>>>, ConceptReadError> {
+        type_manager.get_type_owns_constraints(snapshot, owner_type, self.clone().into_owned())
     }
 }
 

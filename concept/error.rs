@@ -20,6 +20,7 @@ use crate::{
         type_manager::validation::SchemaValidationError,
     },
 };
+use crate::type_::constraint::ConstraintError;
 
 #[derive(Debug)]
 pub struct ConceptError {
@@ -111,6 +112,7 @@ impl From<ConceptReadError> for ConceptWriteError {
             ConceptReadError::CannotGetPlaysDoesntExist(_, _) => Self::ConceptRead { source: error },
             ConceptReadError::CannotGetRelatesDoesntExist(_, _) => Self::ConceptRead { source: error },
             ConceptReadError::Annotation { .. } => Self::ConceptRead { source: error },
+            ConceptReadError::Constraint { .. } => Self::ConceptRead { source: error },
             ConceptReadError::ValueTypeMismatchWithAttributeType { .. } => Self::ConceptRead { source: error },
         }
     }
@@ -142,6 +144,9 @@ pub enum ConceptReadError {
     CannotGetRelatesDoesntExist(Label<'static>, Label<'static>),
     Annotation {
         source: AnnotationError,
+    },
+    Constraint {
+        source: ConstraintError,
     },
     ValueTypeMismatchWithAttributeType {
         attribute_type: AttributeType<'static>,
@@ -176,6 +181,7 @@ impl Error for ConceptReadError {
             Self::CannotGetPlaysDoesntExist(_, _) => None,
             Self::CannotGetRelatesDoesntExist(_, _) => None,
             Self::Annotation { .. } => None,
+            Self::Constraint { .. } => None,
             Self::ValueTypeMismatchWithAttributeType { .. } => None,
         }
     }

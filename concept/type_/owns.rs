@@ -67,15 +67,15 @@ impl<'a> Owns<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<Option<(CapabilityConstraint<Owns<'static>>, Owns<'static>)>, ConceptReadError> {
-        type_manager.get_unique_constraints(snapshot, self.clone().into_owned())
+    ) -> Result<Option<CapabilityConstraint<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_unique_constraint(snapshot, self.clone().into_owned())
     }
 
     pub fn get_constraints_regex(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<HashMap<CapabilityConstraint<Owns<'static>>, HashSet<Owns<'static>>>, ConceptReadError> {
+    ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError> {
         type_manager.get_owns_regex_constraints(snapshot, self.clone().into_owned())
     }
 
@@ -83,7 +83,7 @@ impl<'a> Owns<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<HashMap<CapabilityConstraint<Owns<'static>>, HashSet<Owns<'static>>>, ConceptReadError> {
+    ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError> {
         type_manager.get_owns_range_constraints(snapshot, self.clone().into_owned())
     }
 
@@ -91,7 +91,7 @@ impl<'a> Owns<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-    ) -> Result<HashMap<CapabilityConstraint<Owns<'static>>, HashSet<Owns<'static>>>, ConceptReadError> {
+    ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError> {
         type_manager.get_owns_values_constraints(snapshot, self.clone().into_owned())
     }
 

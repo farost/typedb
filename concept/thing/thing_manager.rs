@@ -255,7 +255,7 @@ impl ThingManager {
         attribute: &'a Attribute<'a>,
     ) -> Result<Value<'static>, ConceptReadError> {
         let attribute_type = attribute.type_();
-        let value_type = attribute_type.get_value_type(snapshot, self.type_manager())?;
+        let value_type = attribute_type.get_value_type_without_source(snapshot, self.type_manager())?;
         match value_type.as_ref().unwrap() {
             ValueType::Boolean => {
                 let attribute_id = attribute.vertex().attribute_id().unwrap_boolean();
@@ -320,7 +320,7 @@ impl ThingManager {
         value: Value<'_>,
     ) -> Result<Option<Attribute<'static>>, ConceptReadError> {
         let value_type = value.value_type();
-        let attribute_value_type = attribute_type.get_value_type(snapshot, self.type_manager())?;
+        let attribute_value_type = attribute_type.get_value_type_without_source(snapshot, self.type_manager())?;
         if attribute_value_type.is_none() || attribute_value_type.as_ref().unwrap() != &value_type {
             return Ok(None);
         }
@@ -887,23 +887,17 @@ impl ThingManager {
                 let mut attribute = Attribute::new(has.to()).into_owned();
                 let attribute_type = attribute.type_();
                 let attribute_value = attribute.get_value(snapshot, self)?;
-                let owns =
-                    object.type_().try_get_owns_attribute(snapshot, self.type_manager(), attribute_type.clone())?;
 
-                self.add_exclusive_lock_for_owns_cardinality_constraint(snapshot, &object, owns.clone())?;
-                self.add_exclusive_lock_for_unique_constraint(snapshot, &object, attribute_value, owns)?;
+                self.add_exclusive_lock_for_unique_constraint(snapshot, &object, attribute_value, attribute_type)?;
+                self.add_exclusive_lock_for_owns_cardinality_constraint(snapshot, &object, attribute_type.clone())?;
             } else if ThingEdgeLinks::is_links(key_reference) {
                 let role_player = ThingEdgeLinks::new(Bytes::Reference(key_reference.byte_ref()));
                 let relation = Relation::new(role_player.relation()).into_owned();
                 let player = Object::new(role_player.player()).into_owned();
-                let relation_type = relation.type_();
                 let role_type = RoleType::build_from_type_id(role_player.role_id()).into_owned();
 
-                let plays = player.type_().try_get_plays_role(snapshot, self.type_manager(), role_type.clone())?;
-                self.add_exclusive_lock_for_plays_cardinality_constraint(snapshot, &player, plays)?;
-
-                let relates = relation_type.try_get_relates_role(snapshot, self.type_manager(), role_type.clone())?;
-                self.add_exclusive_lock_for_relates_cardinality_constraint(snapshot, &relation, relates)?;
+                self.add_exclusive_lock_for_plays_cardinality_constraint(snapshot, &player, role_type.clone())?;
+                self.add_exclusive_lock_for_relates_cardinality_constraint(snapshot, &relation, role_type)?;
             }
         }
 
@@ -915,16 +909,17 @@ impl ThingManager {
         snapshot: &mut impl WritableSnapshot,
         owner: &Object<'a>,
         value: Value<'a>,
-        owns: Owns<'static>,
+        attribute_type: AttributeType<'static>,
     ) -> Result<(), ConceptReadError> {
-        if let Some((_, uniqueness_source)) = owns.get_constraint_unique(snapshot, self.type_manager())? {
+        let unique_constraint_opt = owner.type_().get_type_owns_unique_constraint(snapshot, self.type_manager(), attribute_type)?;
+        if let Some(unique_constraint) = unique_constraint_opt {
             let lock_key = create_custom_lock_key(
                 [
                     &Infix::PropertyAnnotationUnique.infix_id().bytes(),
-                    uniqueness_source.attribute().vertex().bytes().bytes(),
+                    unique_constraint.source().attribute().vertex().bytes().bytes(),
                     value.encode_bytes::<AD_HOC_BYTES_INLINE>().bytes(),
                     owner.vertex().bytes().bytes(),
-                    uniqueness_source.owner().vertex().bytes().bytes(),
+                    unique_constraint.source().owner().vertex().bytes().bytes(),
                 ]
                 .into_iter(),
             );
@@ -937,27 +932,24 @@ impl ThingManager {
         &self,
         snapshot: &mut impl WritableSnapshot,
         owner: &Object<'a>,
-        owns: Owns<'static>,
+        attribute_type: AttributeType<'static>,
     ) -> Result<(), ConceptReadError> {
-        let mut current_capability = Some(owns);
-        while let Some(locked_capability) = current_capability {
-            let cardinalities = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
-            if cardinalities.into_iter().all(|(constraint, _)| constraint.description().unchecked()) {
-                break;
-            }
+        let cardinality_constraints = owner.type_().get_type_owns_cardinality_constraints(snapshot, self.type_manager(), attribute_type)?;
+        if cardinality_constraints.iter().all(|constraint| constraint.description().unchecked()) {
+            return Ok(());
+        }
 
+        for constraint in cardinality_constraints {
             let lock_key = create_custom_lock_key(
                 [
                     &Infix::PropertyAnnotationCardinality.infix_id().bytes(),
                     owner.vertex().bytes().bytes(),
                     &Prefix::EdgeOwns.prefix_id().bytes(),
-                    locked_capability.interface().vertex().bytes().bytes(),
+                    constraint.source().interface().vertex().bytes().bytes(),
                 ]
-                .into_iter(),
+                    .into_iter(),
             );
             snapshot.exclusive_lock_add(lock_key);
-
-            current_capability = locked_capability.get_override(snapshot, self.type_manager())?.clone();
         }
         Ok(())
     }
@@ -966,27 +958,24 @@ impl ThingManager {
         &self,
         snapshot: &mut impl WritableSnapshot,
         player: &Object<'a>,
-        plays: Plays<'static>,
+        role_type: RoleType<'static>,
     ) -> Result<(), ConceptReadError> {
-        let mut current_capability = Some(plays);
-        while let Some(locked_capability) = current_capability {
-            let cardinalities = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
-            if cardinalities.into_iter().all(|(constraint, _)| constraint.description().unchecked()) {
-                break;
-            }
+        let cardinality_constraints = player.type_().get_type_plays_cardinality_constraints(snapshot, self.type_manager(), role_type)?;
+        if cardinality_constraints.iter().all(|constraint| constraint.description().unchecked()) {
+            return Ok(());
+        }
 
+        for constraint in cardinality_constraints {
             let lock_key = create_custom_lock_key(
                 [
                     &Infix::PropertyAnnotationCardinality.infix_id().bytes(),
                     player.vertex().bytes().bytes(),
                     &Prefix::EdgePlays.prefix_id().bytes(),
-                    locked_capability.interface().vertex().bytes().bytes(),
+                    constraint.source().interface().vertex().bytes().bytes(),
                 ]
-                .into_iter(),
+                    .into_iter(),
             );
             snapshot.exclusive_lock_add(lock_key);
-
-            current_capability = locked_capability.get_override(snapshot, self.type_manager())?.clone();
         }
         Ok(())
     }
@@ -995,30 +984,24 @@ impl ThingManager {
         &self,
         snapshot: &mut impl WritableSnapshot,
         relation: &Relation<'a>,
-        relates: Relates<'static>,
+        role_type: RoleType<'static>,
     ) -> Result<(), ConceptReadError> {
-        let mut current_capability = Some(relates);
-        while let Some(locked_capability) = current_capability {
-            let cardinalities = locked_capability.get_cardinality_constraints(snapshot, self.type_manager())?;
-            if cardinalities.into_iter().all(|(constraint, _)| constraint.description().unchecked()) {
-                break;
-            }
+        let cardinality_constraints = relation.type_().get_type_relates_cardinality_constraints(snapshot, self.type_manager(), role_type)?;
+        if cardinality_constraints.iter().all(|constraint| constraint.description().unchecked()) {
+            return Ok(());
+        }
 
+        for constraint in cardinality_constraints {
             let lock_key = create_custom_lock_key(
                 [
                     &Infix::PropertyAnnotationCardinality.infix_id().bytes(),
                     relation.vertex().bytes().bytes(),
                     &Prefix::EdgeRelates.prefix_id().bytes(),
-                    locked_capability.interface().vertex().bytes().bytes(),
+                    constraint.source().interface().vertex().bytes().bytes(),
                 ]
-                .into_iter(),
+                    .into_iter(),
             );
             snapshot.exclusive_lock_add(lock_key);
-
-            current_capability = match locked_capability.role().get_supertype(snapshot, self.type_manager())? {
-                Some(superrole_type) => Some(superrole_type.get_relates(snapshot, self.type_manager())?.clone()),
-                None => None,
-            }
         }
         Ok(())
     }
@@ -1185,28 +1168,28 @@ impl ThingManager {
     fn validate(&self, snapshot: &mut impl WritableSnapshot) -> Result<(), Vec<ConceptWriteError>> {
         let mut errors = Vec::new();
 
-        let mut modified_objects_owns = HashMap::new();
-        let mut modified_objects_plays = HashMap::new();
-        let mut modified_relations_relates = HashMap::new();
+        let mut modified_objects_attribute_types = HashMap::new();
+        let mut modified_objects_role_types = HashMap::new();
+        let mut modified_relations_role_types = HashMap::new();
 
-        let mut res = self.collect_new_objects(snapshot, &mut modified_objects_owns, &mut modified_objects_plays, &mut modified_relations_relates);
+        let mut res = self.collect_new_objects(snapshot, &mut modified_objects_attribute_types, &mut modified_objects_role_types, &mut modified_relations_role_types);
         collect_errors!(errors, res, DataValidationError::ConceptRead);
-        res = self.collect_modified_has(snapshot, &mut modified_objects_owns);
+        res = self.collect_modified_has(snapshot, &mut modified_objects_attribute_types);
         collect_errors!(errors, res, DataValidationError::ConceptRead);
-        res = self.collect_modified_links(snapshot, &mut modified_relations_relates, &mut modified_objects_plays);
+        res = self.collect_modified_links(snapshot, &mut modified_relations_role_types, &mut modified_objects_role_types);
         collect_errors!(errors, res, DataValidationError::ConceptRead);
 
-        for (object, modified_owns) in modified_objects_owns {
+        for (object, modified_owns) in modified_objects_attribute_types {
             res = CommitTimeValidation::validate_object_has(snapshot, self, object, modified_owns, &mut errors);
             collect_errors!(errors, res, DataValidationError::ConceptRead);
         }
 
-        for (object, modified_plays) in modified_objects_plays {
+        for (object, modified_plays) in modified_objects_role_types {
             res = CommitTimeValidation::validate_object_links(snapshot, self, object, modified_plays, &mut errors);
             collect_errors!(errors, res, DataValidationError::ConceptRead);
         }
 
-        for (relation, modified_relates) in modified_relations_relates {
+        for (relation, modified_relates) in modified_relations_role_types {
             res = CommitTimeValidation::validate_relation_links(snapshot, self, relation, modified_relates, &mut errors);
             collect_errors!(errors, res, DataValidationError::ConceptRead);
         }
@@ -1221,9 +1204,9 @@ impl ThingManager {
     fn collect_new_objects(
         &self,
         snapshot: &impl WritableSnapshot,
-        out_object_owns: &mut HashMap<Object<'static>, HashSet<Owns<'static>>>,
-        out_object_plays: &mut HashMap<Object<'static>, HashSet<Plays<'static>>>,
-        out_relation_relates: &mut HashMap<Relation<'static>, HashSet<Relates<'static>>>,
+        out_object_attribute_types: &mut HashMap<Object<'static>, HashSet<AttributeType<'static>>>,
+        out_object_role_types: &mut HashMap<Object<'static>, HashSet<RoleType<'static>>>,
+        out_relation_role_types: &mut HashMap<Relation<'static>, HashSet<RoleType<'static>>>,
     ) -> Result<(), ConceptReadError> {
         for key in snapshot
             .iterate_writes_range(KeyRange::new_inclusive(
@@ -1246,21 +1229,21 @@ impl ThingManager {
             match &object {
                 Object::Entity(_) => {}
                 Object::Relation(relation) => {
-                    let updated_relates = out_relation_relates.entry(relation.clone()).or_insert(HashSet::new());
+                    let updated_role_types = out_relation_role_types.entry(relation.clone()).or_insert(HashSet::new());
                     for relates in relation.type_().get_relates(snapshot, self.type_manager())?.into_iter() {
-                        updated_relates.insert(relates.clone())
+                        updated_role_types.insert(relates.role())
                     }
                 }
             }
 
-            let updated_owns = out_object_owns.entry(object.clone()).or_insert(HashSet::new());
+            let updated_attribute_types = out_object_attribute_types.entry(object.clone()).or_insert(HashSet::new());
             for owns in object.type_().get_owns(snapshot, self.type_manager())?.into_iter() {
-                updated_owns.insert(owns.clone())
+                updated_attribute_types.insert(owns.attribute())
             }
 
-            let updated_plays = out_object_plays.entry(object.clone()).or_insert(HashSet::new());
+            let updated_role_types = out_object_role_types.entry(object.clone()).or_insert(HashSet::new());
             for plays in object.type_().get_plays(snapshot, self.type_manager())?.into_iter() {
-                updated_plays.insert(plays.clone())
+                updated_role_types.insert(plays.role())
             }
         }
         Ok(())
@@ -1269,7 +1252,7 @@ impl ThingManager {
     fn collect_modified_has(
         &self,
         snapshot: &impl WritableSnapshot,
-        out_object_owns: &mut HashMap<Object<'static>, HashSet<Owns<'static>>>,
+        out_object_attribute_types: &mut HashMap<Object<'static>, HashSet<AttributeType<'static>>>,
     ) -> Result<(), ConceptReadError> {
         for (key, _) in snapshot
             .iterate_writes_range(KeyRange::new_within(ThingEdgeHas::prefix(), ThingEdgeHas::FIXED_WIDTH_ENCODING))
@@ -1278,9 +1261,8 @@ impl ThingManager {
             let owner = Object::new(edge.from());
             let attribute = Attribute::new(edge.to());
             if self.object_exists(snapshot, &owner)? {
-                let owns = owner.type_().get_owns_attribute(snapshot, self.type_manager(), attribute.type_())?.ok_or(ConceptReadError::CorruptFoundHasWithoutOwns)?;
-                let updated_owns = out_object_owns.entry(owner.as_reference()).or_insert(HashSet::new());
-                updated_owns.insert(owns);
+                let updated_attribute_types = out_object_attribute_types.entry(owner.as_reference()).or_insert(HashSet::new());
+                updated_attribute_types.insert(attribute.type_());
             }
         }
 
@@ -1290,8 +1272,8 @@ impl ThingManager {
     fn collect_modified_links(
         &self,
         snapshot: &impl WritableSnapshot,
-        out_relation_relates: &mut HashMap<Relation<'static>, HashSet<Relates<'static>>>,
-        out_object_plays: &mut HashMap<Object<'static>, HashSet<Plays<'static>>>,
+        out_relation_role_types: &mut HashMap<Relation<'static>, HashSet<RoleType<'static>>>,
+        out_object_role_types: &mut HashMap<Object<'static>, HashSet<RoleType<'static>>>,
     ) -> Result<(), ConceptReadError> {
         for (key, _) in snapshot
             .iterate_writes_range(KeyRange::new_within(ThingEdgeLinks::prefix(), ThingEdgeLinks::FIXED_WIDTH_ENCODING))
@@ -1302,15 +1284,13 @@ impl ThingManager {
             let role_type = RoleType::build_from_type_id(edge.role_id());
 
             if self.object_exists(snapshot, &relation)? {
-                let relates = relation.type_().get_relates_role(snapshot, self.type_manager(), role_type.clone())?.ok_or(ConceptReadError::CorruptFoundLinksWithoutRelates)?;
-                let updated_relates = out_relation_relates.entry(relation.as_reference()).or_insert(HashSet::new());
-                updated_relates.insert(relates);
+                let updated_role_types = out_relation_role_types.entry(relation.as_reference()).or_insert(HashSet::new());
+                updated_role_types.insert(role_type.clone());
             }
 
             if self.object_exists(snapshot, &player)? {
-                let plays = player.type_().get_plays_role(snapshot, self.type_manager(), role_type)?.ok_or(ConceptReadError::CorruptFoundLinksWithoutPlays)?;
-                let updated_plays = out_object_plays.entry(player.as_reference()).or_insert(HashSet::new());
-                updated_plays.insert(plays);
+                let updated_role_types = out_object_role_types.entry(player.as_reference()).or_insert(HashSet::new());
+                updated_role_types.insert(role_type.clone());
             }
         }
 

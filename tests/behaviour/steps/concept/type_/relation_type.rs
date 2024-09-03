@@ -918,7 +918,7 @@ pub async fn role_type_players_contain(
             .unwrap()
             .role();
         let actual_labels = role
-            .get_players(tx.snapshot.as_ref(), &tx.type_manager)
+            .get_player_types(tx.snapshot.as_ref(), &tx.type_manager)
             .unwrap()
             .iter()
             .map(|(_, plays)| match plays.player() {

@@ -39,6 +39,18 @@ macro_rules! with_constraint_description {
     };
 }
 
+macro_rules! unwrap_constraint_description_methods {
+    ($(
+        fn $method_name:ident() -> $return_type:ident = $target_enum:ident;
+    )*) => {
+        $(
+            pub fn $method_name(self) -> Result<$return_type>, ConceptReadError> {
+                with_constraint_description!(self, $target_enum, || Err(ConceptReadError::Constraint { source: ConstraintError::CannotUnwrapConstraint(stringify!($target_enum)) }), |constraint| Ok(constraint))
+            }
+        )*
+    }
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ConstraintCategory {
     Abstract,
@@ -65,6 +77,23 @@ pub enum ConstraintDescription {
 }
 
 impl ConstraintDescription {
+    pub fn from_annotation(annotation: Annotation) -> &'static [Self] {
+        match annotation {
+            Annotation::Abstract(annotation) => &[ConstraintDescription::Abstract(annotation)],
+            Annotation::Distinct(annotation) => &[ConstraintDescription::Distinct(annotation)],
+            Annotation::Independent(annotation) => &[ConstraintDescription::Independent(annotation)],
+            Annotation::Unique(annotation) => &[ConstraintDescription::Unique(annotation)],
+            Annotation::Cardinality(annotation) => &[ConstraintDescription::Cardinality(annotation)],
+            Annotation::Regex(annotation) => &[ConstraintDescription::Regex(annotation)],
+            Annotation::Range(annotation) => &[ConstraintDescription::Range(annotation)],
+            Annotation::Values(annotation) => &[ConstraintDescription::Values(annotation)],
+
+            Annotation::Key(_) => &[ConstraintDescription::Unique(AnnotationKey::UNIQUE), ConstraintDescription::Cardinality(AnnotationKey::CARDINALITY)],
+
+            Annotation::Cascade(annotation) => &[],
+        }
+    }
+
     pub fn category(&self) -> ConstraintCategory {
         match self {
             ConstraintDescription::Abstract(_) => ConstraintCategory::Abstract,
@@ -140,6 +169,17 @@ impl ConstraintDescription {
             ConstraintDescription::Values(values) => with_constraint_description!(other, Values, default(), |other_values| values.narrowed_correctly_by(other_values)),
         }
     }
+
+    unwrap_constraint_description_methods! {
+        fn unwrap_abstract() -> AnnotationAbstract = Abstract;
+        fn unwrap_distinct() -> AnnotationDistinct = Distinct;
+        fn unwrap_independent() -> AnnotationIndependent = Independent;
+        fn unwrap_unique() -> AnnotationUnique = Unique;
+        fn unwrap_regex() -> AnnotationRegex = Regex;
+        fn unwrap_cardinality() -> AnnotationCardinality = Cardinality;
+        fn unwrap_range() -> AnnotationRange = Range;
+        fn unwrap_values() -> AnnotationValues = Values;
+    }
 }
 
 pub trait Constraint<T>: Sized + Clone + Hash + PartialEq {
@@ -200,37 +240,6 @@ impl<CAP: Capability<'static>> Constraint<CAP> for CapabilityConstraint<CAP> {
     }
 }
 
-// impl CapabilityConstraint<Owns<'static>> {
-//
-//     pub fn validate_single(&self, owner: &Object<'_>, attribute: &Attribute<'_>) -> Result<(), ConstraintError> {
-//         match self.description() {
-//             ConstraintDescription::Abstract(_) => validate_cardinality_owns(),
-//             ConstraintDescription::Distinct(_) => validate_cardinality_owns(),
-//             ConstraintDescription::Independent(_) => {},
-//             ConstraintDescription::Unique(_) => validate_cardinality_owns(),
-//             ConstraintDescription::Cardinality(cardinality) => validate_cardinality_owns(),
-//             ConstraintDescription::Regex(regex) => validate_cardinality_owns(),
-//             ConstraintDescription::Range(range) => validate_cardinality_owns(),
-//             ConstraintDescription::Values(values) => validate_cardinality_owns(),
-//         }
-//         Ok(())
-//     }
-//
-//     pub fn validate_all(&self, ...) -> Result<(), ConstraintError> {
-//         match self.description() {
-//             ConstraintDescription::Abstract(_) => validate_cardinality_owns(),
-//             ConstraintDescription::Distinct(_) => validate_cardinality_owns(),
-//             ConstraintDescription::Independent(_) => {},
-//             ConstraintDescription::Unique(_) => validate_cardinality_owns(),
-//             ConstraintDescription::Cardinality(cardinality) => validate_cardinality_owns(),
-//             ConstraintDescription::Regex(regex) => validate_cardinality_owns(),
-//             ConstraintDescription::Range(range) => validate_cardinality_owns(),
-//             ConstraintDescription::Values(values) => validate_cardinality_owns(),
-//         }
-//         Ok(())
-//     }
-// }
-
 // Siblings = both interface types i1 and i2 are capabilities of the same capability type (owns/plays/relates)
 // of the same object type (e.g. they are owned by the same type, they are played by the same type)
 // with "i1 isa $x; i2 isa $x;"
@@ -244,7 +253,7 @@ pub enum ConstraintValidationMode {
 
 macro_rules! filter_by_constraint_description_match {
     ($constraints_iter:expr, $pattern:pat) => {
-        $constraints_iter.filter(|(constraint, sources)| {
+        $constraints_iter.filter(|constraint| {
             let description = constraint.description();
             matches!(description, $pattern)
         })
@@ -252,37 +261,43 @@ macro_rules! filter_by_constraint_description_match {
 }
 pub use filter_by_constraint_description_match;
 
+macro_rules! filter_by_constraint_category {
+    ($constraints_iter:expr, $constraint_category:ident) => {
+        $constraints_iter.filter(|constraint| constraint.category() == ConstraintCategory::$constraint_category)
+    };
+}
+pub use filter_by_constraint_category;
+
 pub fn get_cardinality_constraints<'a, CAP: Capability<'a>>(
-    constraints: impl IntoIterator<Item = (&CapabilityConstraint<CAP>, HashSet<CAP>)>,
-) -> HashMap<CapabilityConstraint<CAP>, HashSet<CAP>> {
-    filter_by_constraint_description_match!(constraints.into_iter(), ConstraintDescription::Cardinality(_)).collect()
+    constraints: impl IntoIterator<Item = &CapabilityConstraint<CAP>>,
+) -> HashSet<CapabilityConstraint<CAP>> {
+    filter_by_constraint_category!(constraints.into_iter(), Cardinality).collect()
 }
 
 pub(crate) fn get_cardinality_constraint_opt<'a, CAP: Capability<'a>>(
     capability: CAP,
-    constraints: impl IntoIterator<Item = (&CapabilityConstraint<CAP>, HashSet<CAP>)>,
+    constraints: impl IntoIterator<Item = &CapabilityConstraint<CAP>>,
 ) -> Option<CapabilityConstraint<CAP>> {
-    filter_by_constraint_description_match!(constraints.into_iter(), ConstraintDescription::Cardinality(_))
-        .filter_map(|(constraint, sources)| match sources.get(&capability) {
-            Some(_) => Some(constraint.clone()),
-            None => None,
+    filter_by_constraint_category!(constraints.into_iter(), Cardinality)
+        .filter_map(|constraint| match &constraint.source == &capability {
+            true => Some(constraint.clone()),
+            false => None,
         })
         .next()
 }
 
 pub fn get_cardinality_constraint<'a, CAP: Capability<'a>>(
     capability: CAP,
-    constraints: impl IntoIterator<Item = (&CapabilityConstraint<CAP>, HashSet<CAP>)>,
+    constraints: impl IntoIterator<Item = &CapabilityConstraint<CAP>>,
 ) -> CapabilityConstraint<CAP> {
     get_cardinality_constraint_opt(capability, constraints).expect("Expected a cardinality constraint for each capability")
 }
 
-pub fn get_abstract_constraint<'a, C: Constraint, T: Hash + PartialEq>(
+pub fn get_abstract_constraint<'a, C: Constraint<T>, T: Hash + PartialEq>(
     source: T,
-    constraints: impl IntoIterator<Item = (&C, HashSet<T>)>,
+    constraints: impl IntoIterator<Item = &C>,
 ) -> Option<C> {
-    let abstracts =
-        filter_by_constraint_description_match!(constraints.into_iter(), ConstraintDescription::Abstract(_));
+    let abstracts = filter_by_constraint_category!(constraints.into_iter(), Abstract);
     debug_assert!(abstracts.is_empty() || abstracts.len() == 1, "Cannot have Abstract constraints hashed in different buckets");
     abstracts
         .into_iter()
@@ -295,52 +310,50 @@ pub fn get_abstract_constraint<'a, C: Constraint, T: Hash + PartialEq>(
         .next()
 }
 
-pub fn get_unique_constraint<'a, C: Constraint, T: Hash + PartialEq>(
-    constraints: impl IntoIterator<Item = (&C, HashSet<T>)>,
-) -> Option<(C, T)> {
-    let uniques =
-        filter_by_constraint_description_match!(constraints.into_iter(), ConstraintDescription::Unique(_));
+pub fn get_unique_constraint<'a, C: Constraint<T>, T: Hash + PartialEq>(
+    constraints: impl IntoIterator<Item = &C>,
+) -> Option<C> {
+    let uniques = filter_by_constraint_category!(constraints.into_iter(), Unique);
     debug_assert_eq!(uniques.is_empty() || uniques.len() == 1, "Cannot have Unique constraints hashed in different buckets");
 
-    if let Some((constraint, sources)) = uniques.into_iter().next() {
-        debug_assert_eq!(sources.len(), 1, "Expected to have only 1 uniqueness source");
-        let source = sources.into_iter().next().unwrap();
-        Some((constraint.clone(), source))
+    if let Some(constraint) = uniques.into_iter().next() {
+        Some(constraint.clone())
     } else {
         None
     }
 }
 
 pub fn get_distinct_constraints<'a, CAP: Capability<'a>>(
-    constraints: impl IntoIterator<Item = (&CapabilityConstraint<CAP>, HashSet<CAP>)>,
-) -> HashMap<CapabilityConstraint<CAP>, HashSet<CAP>> {
-    filter_by_constraint_description_match!(constraints.into_iter(), ConstraintDescription::Distinct(_)).collect()
+    constraints: impl IntoIterator<Item = &CapabilityConstraint<CAP>>,
+) -> HashSet<CapabilityConstraint<CAP>> {
+    filter_by_constraint_category!(constraints.into_iter(), Distinct).collect()
 }
 
 pub fn get_independent_constraints<'a, T: TypeAPI<'a>>(
-    constraints: impl IntoIterator<Item = (TypeConstraint<T>, HashSet<T>)>,
-) -> HashMap<TypeConstraint<T>, HashSet<T>> {
-    filter_by_constraint_description_match!(constraints.into_iter(), ConstraintDescription::Independent(_)).collect()
+    constraints: impl IntoIterator<Item = &TypeConstraint<T>>,
+) -> HashSet<TypeConstraint<T>> {
+    filter_by_constraint_category!(constraints.into_iter(), Independent).collect()
 }
 
-pub fn get_regex_constraints<'a, C: Constraint, T: Hash + PartialEq>(
-    constraints: impl IntoIterator<Item = (&C, HashSet<T>)>,
-) -> HashMap<C, HashSet<T>> {
-    filter_by_constraint_description_match!(constraints.into_iter(), ConstraintDescription::Regex(_)).collect()
+pub fn get_regex_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
+    constraints: impl IntoIterator<Item = &C>,
+) -> HashSet<C> {
+    filter_by_constraint_category!(constraints.into_iter(), Regex).collect()
 }
 
-pub fn get_range_constraints<'a, C: Constraint, T: Hash + PartialEq>(
-    constraints: impl IntoIterator<Item = (&C, HashSet<T>)>,
-) -> HashMap<C, HashSet<T>> {
-    filter_by_constraint_description_match!(constraints.into_iter(), ConstraintDescription::Range(_)).collect()
+pub fn get_range_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
+    constraints: impl IntoIterator<Item = &C>,
+) -> HashSet<C> {
+    filter_by_constraint_category!(constraints.into_iter(), Range).collect()
 }
 
-pub fn get_values_constraints<'a, C: Constraint, T: Hash + PartialEq>(
-    constraints: impl IntoIterator<Item = (&C, HashSet<T>)>,
-) -> HashMap<C, HashSet<T>> {
-    filter_by_constraint_description_match!(constraints.into_iter(), ConstraintDescription::Values(_)).collect()
+pub fn get_values_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
+    constraints: impl IntoIterator<Item = &C>,
+) -> HashSet<C> {
+    filter_by_constraint_category!(constraints.into_iter(), Values).collect()
 }
 
+// TODO: Use constraints!
 pub(crate) fn annotations_by_validation_modes<'a, A: Into<Annotation> + Clone + 'a>(
     annotations: impl IntoIterator<Item = A>,
 ) -> Result<HashMap<&'static ConstraintValidationMode, HashSet<Annotation>>, AnnotationError> {
@@ -358,6 +371,7 @@ pub(crate) fn annotations_by_validation_modes<'a, A: Into<Annotation> + Clone + 
     Ok(map)
 }
 
+// TODO: Use constraints!
 pub(crate) fn constraint_validation_mode(
     annotation_category: AnnotationCategory,
 ) -> &'static [ConstraintValidationMode] {
@@ -381,9 +395,9 @@ pub(crate) fn constraint_validation_mode(
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConstraintError {
-    OwnsValidationError { constraint_description: ConstraintDescription, owns: Owns<'static> },
+    CannotUnwrapConstraint(String),
 }
 
 impl fmt::Display for ConstraintError {
@@ -395,7 +409,7 @@ impl fmt::Display for ConstraintError {
 impl Error for ConstraintError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            ConstraintError::OwnsValidationError { .. } => None,
+            ConstraintError::CannotUnwrapConstraint(_) => None,
         }
     }
 }

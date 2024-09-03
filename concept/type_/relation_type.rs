@@ -293,13 +293,22 @@ impl<'a> RelationType<'a> {
         type_manager.get_relation_type_relates_with_hidden(snapshot, self.clone().into_owned())
     }
 
-    fn get_type_relates_constraints<'m>(
+    pub(crate) fn get_type_relates_constraints<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
         role_type: RoleType<'static>,
     ) -> Result<MaybeOwns<'m, HashSet<CapabilityConstraint<Relates<'static>>>>, ConceptReadError> {
         type_manager.get_type_relates_constraints(snapshot, self.clone().into_owned(), role_type)
+    }
+
+    pub(crate) fn get_type_relates_cardinality_constraints<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        role_type: RoleType<'static>,
+    ) -> Result<HashSet<CapabilityConstraint<Relates<'static>>>, ConceptReadError> {
+        type_manager.get_type_relates_cardinality_constraints(snapshot, self.clone().into_owned(), role_type)
     }
 
     pub fn get_relates_role(
