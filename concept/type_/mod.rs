@@ -4,12 +4,8 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-};
+use std::{collections::{HashMap, HashSet}, hash::Hash, iter, marker::PhantomData, ops::{Deref, DerefMut}};
+use std::iter::Chain;
 
 use bytes::{byte_reference::ByteReference, Bytes};
 use encoding::{
@@ -184,6 +180,10 @@ pub trait TypeAPI<'a>: ConceptAPI<'a> + TypeVertexEncoding<'a> + Sized + Clone +
     ) -> Result<bool, ConceptReadError> {
         Ok(other.get_subtypes_transitive(snapshot, type_manager)?.contains(self))
     }
+
+    fn chain_types<C: IntoIterator<Item = &Self>>(first: Self, others: C) -> Chain<Self, C> {
+        iter::once(first).chain(others.into_iter())
+    }
 }
 
 pub trait KindAPI<'a>: TypeAPI<'a> {
@@ -200,7 +200,7 @@ pub trait KindAPI<'a>: TypeAPI<'a> {
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashMap<TypeConstraint<Self>, HashSet<Self>>>, ConceptReadError>;
+    ) -> Result<MaybeOwns<'this, HashSet<TypeConstraint<Self>>>, ConceptReadError>;
 }
 
 pub trait ObjectTypeAPI<'a>: TypeAPI<'a> + OwnerAPI<'a> + ThingTypeAPI<'a> {
@@ -245,6 +245,13 @@ pub trait OwnerAPI<'a>: TypeAPI<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError>;
+
+    fn get_type_owns_constraints<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        interface_type: AttributeType<'static>,
+    ) -> Result<MaybeOwns<'m, HashSet<CapabilityConstraint<Owns<'static>>>>, ConceptReadError>;
 
     fn get_owns_attribute_declared(
         &self,
@@ -341,6 +348,13 @@ pub trait PlayerAPI<'a>: TypeAPI<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError>;
+
+    fn get_type_plays_constraints<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        role_type: RoleType<'static>,
+    ) -> Result<MaybeOwns<'m, HashSet<CapabilityConstraint<Plays<'static>>>>, ConceptReadError>;
 
     fn get_plays_role_declared(
         &self,
@@ -469,17 +483,17 @@ pub trait Capability<'a>:
 
     fn interface(&self) -> Self::InterfaceType;
 
-    fn get_specializes<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, Option<Self>>, ConceptReadError>;
-
-    fn get_specializes_transitive<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, Vec<Self>>, ConceptReadError>;
+    // fn get_specializes<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, Option<Self>>, ConceptReadError>;
+    //
+    // fn get_specializes_transitive<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, Vec<Self>>, ConceptReadError>;
 
     fn get_hides<'this>(
         &'this self,
@@ -487,17 +501,17 @@ pub trait Capability<'a>:
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, Option<Self>>, ConceptReadError>;
 
-    fn get_specializing<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashSet<Self>>, ConceptReadError>;
-
-    fn get_specializing_transitive<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashSet<Self>>, ConceptReadError>;
+    // fn get_specializing<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, HashSet<Self>>, ConceptReadError>;
+    //
+    // fn get_specializing_transitive<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, HashSet<Self>>, ConceptReadError>;
 
     fn get_annotations_declared<'this>(
         &'this self,
@@ -509,7 +523,7 @@ pub trait Capability<'a>:
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashMap<CapabilityConstraint<Self>, HashSet<Self>>>, ConceptReadError>;
+    ) -> Result<MaybeOwns<'this, HashSet<CapabilityConstraint<Self>>>, ConceptReadError>;
 
     fn get_cardinality_constraints(
         &self,
@@ -525,6 +539,10 @@ pub trait Capability<'a>:
         type_manager: &TypeManager,
     ) -> Result<AnnotationCardinality, ConceptReadError> {
         type_manager.get_capability_cardinality(snapshot, self.clone())
+    }
+
+    fn chain_capabilities<C: IntoIterator<Item = &Self>>(first: Self, others: C) -> Chain<Self, C> {
+        iter::once(first).chain(others.into_iter())
     }
 }
 

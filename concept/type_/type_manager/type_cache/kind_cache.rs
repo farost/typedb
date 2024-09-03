@@ -91,7 +91,7 @@ pub(crate) struct CommonTypeCache<T: KindAPI<'static>> {
     pub(super) type_: T,
     pub(super) label: Label<'static>,
     pub(super) annotations_declared: HashSet<T::AnnotationType>,
-    pub(super) constraints: HashMap<TypeConstraint<T>, HashSet<T>>,
+    pub(super) constraints: HashSet<TypeConstraint<T>>,
     // TODO: Should these all be sets instead of vec?
     pub(super) supertype: Option<T>, // TODO: use smallvec if we want to have some inline - benchmark.
     pub(super) supertypes_transitive: Vec<T>,   // TODO: use smallvec if we want to have some inline - benchmark.
@@ -108,7 +108,7 @@ pub(crate) struct CommonCapabilityCache<CAP: Capability<'static>> {
     pub(super) specializing: HashSet<CAP>,
     pub(super) specializing_transitive: Vec<CAP>,
     pub(super) annotations_declared: HashSet<CAP::AnnotationType>,
-    pub(super) constraints: HashMap<CapabilityConstraint<CAP>, HashSet<CAP>>,
+    pub(super) constraints: HashSet<CapabilityConstraint<CAP>>,
 }
 
 #[derive(Debug)]
@@ -319,7 +319,7 @@ impl<CAP: Capability<'static>> CommonCapabilityCache<CAP> {
     {
         let annotations_declared = TypeReader::get_capability_annotations_declared(snapshot, capability.clone()).unwrap();
         let constraints = TypeReader::get_capability_constraints(snapshot, capability.clone()).unwrap();
-        let specializes = TypeReader::get_capability_specializes(snapshot, capability.clone()).unwrap();
+        let specializes = TypeReader::get_type_capability_specializes(snapshot, capability.clone()).unwrap();
         let specializes_transitive = TypeReader::get_capability_specializes_transitive(snapshot, capability.clone()).unwrap();
         let hides = TypeReader::get_capability_hides(snapshot, capability.clone()).unwrap();
         let specializing = TypeReader::get_specializing_capabilities(snapshot, capability.clone()).unwrap();

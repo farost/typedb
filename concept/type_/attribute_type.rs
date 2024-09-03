@@ -169,7 +169,7 @@ impl<'a> KindAPI<'a> for AttributeType<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<TypeConstraint<AttributeType<'static>>, HashSet<AttributeType<'static>>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'m, HashSet<TypeConstraint<AttributeType<'static>>>>, ConceptReadError> {
         type_manager.get_attribute_type_constraints(snapshot, self.clone().into_owned())
     }
 }

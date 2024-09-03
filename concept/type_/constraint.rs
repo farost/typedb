@@ -39,6 +39,19 @@ macro_rules! with_constraint_description {
     };
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum ConstraintCategory {
+    Abstract,
+    Distinct,
+    Independent,
+    Unique,
+    Key,
+    Cardinality,
+    Regex,
+    Range,
+    Values,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum ConstraintDescription {
     Abstract(AnnotationAbstract),
@@ -52,6 +65,19 @@ pub enum ConstraintDescription {
 }
 
 impl ConstraintDescription {
+    pub fn category(&self) -> ConstraintCategory {
+        match self {
+            ConstraintDescription::Abstract(_) => ConstraintCategory::Abstract,
+            ConstraintDescription::Distinct(_) => ConstraintCategory::Distinct,
+            ConstraintDescription::Independent(_) => ConstraintCategory::Independent,
+            ConstraintDescription::Unique(_) => ConstraintCategory::Unique,
+            ConstraintDescription::Cardinality(_) => ConstraintCategory::Cardinality,
+            ConstraintDescription::Regex(_) => ConstraintCategory::Regex,
+            ConstraintDescription::Range(_) => ConstraintCategory::Range,
+            ConstraintDescription::Values(_) => ConstraintCategory::Values,
+        }
+    }
+
     pub fn validation_mode(&self) -> ConstraintValidationMode {
         match self {
             ConstraintDescription::Abstract(_) => ConstraintValidationMode::SingleInstanceOfType,
@@ -116,43 +142,61 @@ impl ConstraintDescription {
     }
 }
 
-pub trait Constraint: Sized + Clone + Hash + PartialEq {
+pub trait Constraint<T>: Sized + Clone + Hash + PartialEq {
     fn description(&self) -> ConstraintDescription;
+
+    fn source(&self) -> T;
+
+    fn category(&self) -> ConstraintCategory {
+        self.description().category()
+    }
+
+    fn validation_mode(&self) -> ConstraintValidationMode {
+        self.description().validation_mode()
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct TypeConstraint<T: KindAPI<'static>> {
     description: ConstraintDescription,
-    _phantom: PhantomData<T>
+    source: T,
 }
 
 impl<T: KindAPI<'static>> TypeConstraint<T> {
-    pub fn new(description: ConstraintDescription) -> Self {
-        Self { description, _phantom: PhantomData }
+    pub fn new(description: ConstraintDescription, source: T) -> Self {
+        Self { description, source }
     }
 }
 
-impl<T: KindAPI<'static>> Constraint for TypeConstraint<T> {
+impl<T: KindAPI<'static>> Constraint<T> for TypeConstraint<T> {
     fn description(&self) -> ConstraintDescription {
         self.description.clone()
+    }
+
+    fn source(&self) -> T {
+        self.source.clone()
     }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct CapabilityConstraint<CAP: Capability<'static>> {
     description: ConstraintDescription,
-    _phantom: PhantomData<CAP>
+    source: CAP,
 }
 
 impl<CAP: Capability<'static>> CapabilityConstraint<CAP> {
-    pub fn new(description: ConstraintDescription) -> Self {
-        Self { description, _phantom: PhantomData }
+    pub fn new(description: ConstraintDescription, source: CAP) -> Self {
+        Self { description, source }
     }
 }
 
-impl<T: Capability<'static>> Constraint for CapabilityConstraint<T> {
+impl<CAP: Capability<'static>> Constraint<CAP> for CapabilityConstraint<CAP> {
     fn description(&self) -> ConstraintDescription {
         self.description.clone()
+    }
+
+    fn source(&self) -> CAP {
+        self.source.clone()
     }
 }
 

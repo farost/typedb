@@ -410,7 +410,7 @@ impl CommitTimeValidation {
         let relation_type = relates.relation();
         let supertype = TypeReader::get_supertype(snapshot, relation_type.clone())?;
 
-        if let Some(relates_override) = TypeReader::get_capability_specializes(snapshot, relates.clone())? {
+        if let Some(relates_override) = TypeReader::get_type_capability_specializes(snapshot, relates.clone())? {
             let role_type_overridden = relates_override.role();
 
             match &supertype {
@@ -461,7 +461,7 @@ impl CommitTimeValidation {
         let type_ = owns.owner();
         let supertype = TypeReader::get_supertype(snapshot, type_.clone())?;
 
-        if let Some(owns_override) = TypeReader::get_capability_specializes(snapshot, owns.clone())? {
+        if let Some(owns_override) = TypeReader::get_type_capability_specializes(snapshot, owns.clone())? {
             let attribute_type_overridden = owns_override.attribute();
 
             match &supertype {
@@ -510,7 +510,7 @@ impl CommitTimeValidation {
     ) -> Result<(), ConceptReadError> {
         let type_ = plays.player();
 
-        if let Some(plays_override) = TypeReader::get_capability_specializes(snapshot, plays.clone())? {
+        if let Some(plays_override) = TypeReader::get_type_capability_specializes(snapshot, plays.clone())? {
             let role_type_overridden = plays_override.role();
             let supertype = TypeReader::get_supertype(snapshot, type_.clone())?;
             match &supertype {
@@ -585,7 +585,7 @@ impl CommitTimeValidation {
             {
                 let supertype_capability_object = supertype_capability.object();
 
-                let capability_override = TypeReader::get_capability_specializes(snapshot, capability.clone())?;
+                let capability_override = TypeReader::get_type_capability_specializes(snapshot, capability.clone())?;
                 let correct_override = match capability_override {
                     None => false,
                     Some(capability_override) => &capability_override == supertype_capability,
@@ -659,7 +659,7 @@ impl CommitTimeValidation {
             return Ok(());
         }
 
-        if let Some(overridden_edge) = TypeReader::get_capability_specializes(snapshot, edge.clone())? {
+        if let Some(overridden_edge) = TypeReader::get_type_capability_specializes(snapshot, edge.clone())? {
             let overridden_edge_annotations = TypeReader::get_capability_constraints(snapshot, overridden_edge.clone())?;
 
             if overridden_edge_annotations.keys().contains(&annotation) {
@@ -783,7 +783,7 @@ impl CommitTimeValidation {
                 validation_errors.push(err);
             }
 
-            if let Some(overridden_edge) = TypeReader::get_capability_specializes(snapshot, edge.clone())? {
+            if let Some(overridden_edge) = TypeReader::get_type_capability_specializes(snapshot, edge.clone())? {
                 if let Err(err) = validate_edge_annotations_narrowing_of_inherited_annotations(
                     snapshot,
                     type_manager,
@@ -827,7 +827,7 @@ impl CommitTimeValidation {
         edge: Owns<'static>,
         validation_errors: &mut Vec<SchemaValidationError>,
     ) -> Result<(), ConceptReadError> {
-        if let Some(overridden_edge) = TypeReader::get_capability_specializes(snapshot, edge.clone())? {
+        if let Some(overridden_edge) = TypeReader::get_type_capability_specializes(snapshot, edge.clone())? {
             if let Err(err) = validate_owns_override_ordering_match(snapshot, edge, overridden_edge, None) {
                 validation_errors.push(err);
             }

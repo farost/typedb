@@ -170,7 +170,7 @@ impl<'a> KindAPI<'a> for EntityType<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<TypeConstraint<EntityType<'static>>, HashSet<EntityType<'static>>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'m, HashSet<TypeConstraint<EntityType<'static>>>>, ConceptReadError> {
         type_manager.get_entity_type_constraints(snapshot, self.clone().into_owned())
     }
 }

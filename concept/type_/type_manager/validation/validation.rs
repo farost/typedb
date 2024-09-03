@@ -26,6 +26,7 @@ use crate::{
         Capability, KindAPI, Ordering, TypeAPI,
     },
 };
+use crate::type_::constraint::{Constraint, ConstraintDescription};
 
 // TODO: Use get_label_cloned from TypeAPI instead of this function
 pub(crate) fn get_label_or_concept_read_err<'a>(
@@ -168,41 +169,48 @@ pub(crate) fn validate_declared_capability_annotation_is_compatible_with_inherit
     Ok(())
 }
 
-pub(crate) fn validate_cardinality_narrows_inherited_cardinality<CAP: Capability<'static>>(
+pub(crate) fn validate_single_cardinality_narrows_inherited_cardinalities<CAP: Capability<'static>>(
     snapshot: &impl ReadableSnapshot,
     type_manager: &TypeManager,
-    edge: CAP,
-    overridden_edge: CAP,
+    capability: CAP,
     cardinality: AnnotationCardinality,
     is_key: bool,
 ) -> Result<(), SchemaValidationError> {
-    let overridden_cardinality =
-        overridden_edge.get_cardinality_constraints(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?;
-
-    if overridden_cardinality.narrowed_correctly_by(&cardinality) {
-        Ok(())
-    } else {
-        if is_key {
-            debug_assert!(cardinality == AnnotationKey::CARDINALITY, "Invalid use of key");
-            Err(SchemaValidationError::KeyDoesNotNarrowInheritedCardinality(
-                get_label_or_schema_err(snapshot, edge.object())?,
-                get_label_or_schema_err(snapshot, edge.interface())?,
-                get_label_or_schema_err(snapshot, overridden_edge.object())?,
-                get_label_or_schema_err(snapshot, overridden_edge.interface())?,
-                overridden_cardinality,
-            ))
+    let constraint_description = ConstraintDescription::Cardinality(cardinality);
+    let inherited_cardinalities = capability.get_cardinality_constraints(snapshot, type_manager)?.into_iter().filter_map(|(constraint, sources)| {
+        if sources.len() == 1 && sources.iter().next().unwrap() == &capability {
+            None
         } else {
-            Err(SchemaValidationError::CardinalityDoesNotNarrowInheritedCardinality(
-                CAP::KIND,
-                get_label_or_schema_err(snapshot, edge.object())?,
-                get_label_or_schema_err(snapshot, edge.interface())?,
-                get_label_or_schema_err(snapshot, overridden_edge.object())?,
-                get_label_or_schema_err(snapshot, overridden_edge.interface())?,
-                cardinality,
-                overridden_cardinality,
-            ))
+            Some((constraint, sources.iter().next().unwrap()))
+        }
+    });
+
+    for (inherited_cardinality, source) in inherited_cardinalities {
+        if !inherited_cardinality.description().narrowed_correctly_by_same_type(&constraint_description) {
+            if is_key {
+                debug_assert_eq!(cardinality, AnnotationKey::CARDINALITY, "Invalid use of key");
+                return Err(SchemaValidationError::KeyDoesNotNarrowInheritedCardinality(
+                    get_label_or_schema_err(snapshot, capability.object())?,
+                    get_label_or_schema_err(snapshot, capability.interface())?,
+                    get_label_or_schema_err(snapshot, source.object())?,
+                    get_label_or_schema_err(snapshot, source.interface())?,
+                    inherited_cardinality.description(),
+                ));
+            } else {
+                return Err(SchemaValidationError::CardinalityDoesNotNarrowInheritedCardinality(
+                    CAP::KIND,
+                    get_label_or_schema_err(snapshot, capability.object())?,
+                    get_label_or_schema_err(snapshot, capability.interface())?,
+                    get_label_or_schema_err(snapshot, source.object())?,
+                    get_label_or_schema_err(snapshot, source.interface())?,
+                    constraint_description,
+                    inherited_cardinality.description(),
+                ));
+            }
         }
     }
+
+    Ok(())
 }
 
 pub(crate) fn validate_type_regex_narrows_inherited_regex<T: KindAPI<'static>>(
@@ -228,7 +236,7 @@ pub(crate) fn validate_type_regex_narrows_inherited_regex<T: KindAPI<'static>>(
                     return if supertype_regex.regex() == regex.regex() {
                         Ok(())
                     } else {
-                        Err(SchemaValidationError::OnlyOneRegexCanBeSetForTypeHierarchy(
+                        Err(SchemaValidationError::RegexShouldNarrowInheritedRegex(
                             get_label_or_schema_err(snapshot, attribute_type)?,
                             get_label_or_schema_err(snapshot, supertype)?,
                             regex.clone(),
@@ -252,7 +260,7 @@ pub(crate) fn validate_edge_regex_narrows_inherited_regex<CAP: Capability<'stati
 ) -> Result<(), SchemaValidationError> {
     let overridden_owns = match overridden_owns {
         None => {
-            TypeReader::get_capability_specializes(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
+            TypeReader::get_type_capability_specializes(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
         }
         Some(_) => overridden_owns,
     };
@@ -267,7 +275,7 @@ pub(crate) fn validate_edge_regex_narrows_inherited_regex<CAP: Capability<'stati
                     return if supertype_regex.regex() == regex.regex() {
                         Ok(())
                     } else {
-                        Err(SchemaValidationError::OnlyOneRegexCanBeSetForCapabilitiesHierarchy(
+                        Err(SchemaValidationError::RegexShouldNarrowInheritedCapabilityRegex(
                             get_label_or_schema_err(snapshot, owns.object())?,
                             get_label_or_schema_err(snapshot, owns.interface())?,
                             get_label_or_schema_err(snapshot, override_owns.object())?,
@@ -333,7 +341,7 @@ pub(crate) fn validate_edge_range_narrows_inherited_range<CAP: Capability<'stati
 ) -> Result<(), SchemaValidationError> {
     let overridden_owns = match overridden_owns {
         None => {
-            TypeReader::get_capability_specializes(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
+            TypeReader::get_type_capability_specializes(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
         }
         Some(_) => overridden_owns,
     };
@@ -413,7 +421,7 @@ pub(crate) fn validate_edge_values_narrows_inherited_values<CAP: Capability<'sta
 ) -> Result<(), SchemaValidationError> {
     let overridden_owns = match overridden_owns {
         None => {
-            TypeReader::get_capability_specializes(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
+            TypeReader::get_type_capability_specializes(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
         }
         Some(_) => overridden_owns,
     };
@@ -489,7 +497,7 @@ pub(crate) fn validate_edge_annotations_narrowing_of_inherited_annotations<CAP: 
     edge_annotation: Annotation,
 ) -> Result<(), SchemaValidationError> {
     match edge_annotation {
-        Annotation::Cardinality(cardinality) => validate_cardinality_narrows_inherited_cardinality(
+        Annotation::Cardinality(cardinality) => validate_single_cardinality_narrows_inherited_cardinalities(
             snapshot,
             type_manager,
             edge.clone(),
@@ -497,7 +505,7 @@ pub(crate) fn validate_edge_annotations_narrowing_of_inherited_annotations<CAP: 
             cardinality,
             false, // is_key
         )?,
-        Annotation::Key(_) => validate_cardinality_narrows_inherited_cardinality(
+        Annotation::Key(_) => validate_single_cardinality_narrows_inherited_cardinalities(
             snapshot,
             type_manager,
             edge.clone(),

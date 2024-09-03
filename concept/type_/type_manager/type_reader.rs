@@ -359,85 +359,91 @@ impl TypeReader {
             .map_err(|error| ConceptReadError::SnapshotGet { source: error })
     }
 
-    pub(crate) fn get_capability_specializes<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        capability: CAP,
-    ) -> Result<Option<CAP>, ConceptReadError> {
-        let (object_type, interface_type) = (capability.object(), capability.interface());
-        let capabilities = Self::get_capabilities::<CAP>(snapshot, object_type.clone(), true)?;
-        let mut current_interface_type_opt = Some(interface_type.clone());
+    // TODO: Looks like specializes are not needed! Try to work without them!
+    // pub(crate) fn get_type_capability_specializes<CAP: Capability<'static>>(
+    //     snapshot: &impl ReadableSnapshot,
+    //     object_type: CAP::ObjectType,
+    //     capability: CAP,
+    // ) -> Result<Option<CAP>, ConceptReadError> {
+    //     let owned_capabilities: HashSet<CAP> = Self::get_capabilities(snapshot, object_type.clone(), false)?;
+    //     if !owned_capabilities.contains(&capability) {
+    //         return Ok(None);
+    //     }
+    //
+    //     let all_capabilities: HashSet<CAP> = Self::get_capabilities(snapshot, object_type.clone(), true)?;
+    //     let mut current_interface_type_opt = Some(capability.interface());
+    //
+    //     while let Some(current_interface_type) = current_interface_type_opt {
+    //         let specialized = all_capabilities.iter().filter(|potential_specialized| {
+    //             potential_specialized != capability
+    //                 && &potential_specialized.interface() == &current_interface_type
+    //         }).sorted_by(|lhs, rhs| lhs.interface().is_subtype_transitive_of(rhs.interface())).next();
+    //         if specialized.is_some() {
+    //             return Ok(specialized);
+    //         }
+    //         current_interface_type_opt = Self::get_supertype(snapshot, current_interface_type)?;
+    //     }
+    //
+    //     Ok(None)
+    // }
 
-        while let Some(current_interface_type) = current_interface_type_opt {
-            let specialized = capabilities.iter().filter(|potential_specialized| {
-                potential_specialized != capability
-                    && &potential_specialized.interface() == &current_interface_type
-            }).sorted_by(|lhs, rhs| lhs.interface().is_subtype_transitive_of(rhs.interface())).next();
-            if specialized.is_some() {
-                return Ok(specialized);
-            }
-            current_interface_type_opt = Self::get_supertype(snapshot, current_interface_type)?;
-        }
+    // pub(crate) fn get_capability_specializes_transitive<CAP: Capability<'static>>(
+    //     snapshot: &impl ReadableSnapshot,
+    //     capability: CAP,
+    // ) -> Result<Vec<CAP>, ConceptReadError> {
+    //     let mut capability_specializes: Vec<CAP> = Vec::new();
+    //
+    //     let mut specializes_opt = TypeReader::get_type_capability_specializes(snapshot, capability)?;
+    //     while let Some(specializes) = specializes_opt {
+    //         capability_specializes.push(specializes.clone());
+    //         specializes_opt = TypeReader::get_supertype(snapshot, specializes)?;
+    //     }
+    //
+    //     Ok(capability_specializes)
+    // }
+    //
+    // pub(crate) fn get_specializing_capabilities<CAP: Capability<'static>>(
+    //     snapshot: &impl ReadableSnapshot,
+    //     capability: CAP,
+    // ) -> Result<HashSet<CAP>, ConceptReadError> {
+    //     let mut specializing_capabilities: HashSet<CAP> = HashSet::new();
+    //     let mut object_types_to_check: Vec<CAP::ObjectType> = Vec::from([capability.object()]);
+    //
+    //     while let Some(current_object_type) = object_types_to_check.pop() {
+    //         let object_type_capabilities = Self::get_capabilities_declared::<CAP>(snapshot, current_object_type.clone())?;
+    //         let is_hidden = object_type_capabilities.get(&capability).is_none();
+    //         for potential_specializing in object_type_capabilities.into_iter() {
+    //             let specializes = Self::get_type_capability_specializes(snapshot, potential_specializing.clone())?;
+    //             if specializes == capability {
+    //                 specializing_capabilities.insert(potential_specializing);
+    //             }
+    //         }
+    //
+    //         if !is_hidden {
+    //             Self::get_subtypes(snapshot, current_object_type)?
+    //                 .into_iter()
+    //                 .for_each(|object_type| object_types_to_check.push(object_type));
+    //         }
+    //     }
+    //
+    //     Ok(specializing_capabilities)
+    // }
 
-        Ok(None)
-    }
-
-    pub(crate) fn get_capability_specializes_transitive<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        capability: CAP,
-    ) -> Result<Vec<CAP>, ConceptReadError> {
-        let mut capability_specializes: Vec<CAP> = Vec::new();
-
-        let mut specializes_opt = TypeReader::get_capability_specializes(snapshot, capability)?;
-        while let Some(specializes) = specializes_opt {
-            capability_specializes.push(specializes.clone());
-            specializes_opt = TypeReader::get_supertype(snapshot, specializes)?;
-        }
-
-        Ok(capability_specializes)
-    }
-
-    pub(crate) fn get_specializing_capabilities<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        capability: CAP,
-    ) -> Result<HashSet<CAP>, ConceptReadError> {
-        let mut specializing_capabilities: HashSet<CAP> = HashSet::new();
-        let mut object_types_to_check: Vec<CAP::ObjectType> = Vec::from([capability.object()]);
-
-        while let Some(current_object_type) = object_types_to_check.pop() {
-            let object_type_capabilities = Self::get_capabilities_declared::<CAP>(snapshot, current_object_type.clone())?;
-            let is_hidden = object_type_capabilities.get(&capability).is_none();
-            for potential_specializing in object_type_capabilities.into_iter() {
-                let specializes = Self::get_capability_specializes(snapshot, potential_specializing.clone())?;
-                if specializes == capability {
-                    specializing_capabilities.insert(potential_specializing);
-                }
-            }
-
-            if !is_hidden {
-                Self::get_subtypes(snapshot, current_object_type)?
-                    .into_iter()
-                    .for_each(|object_type| object_types_to_check.push(object_type));
-            }
-        }
-
-        Ok(specializing_capabilities)
-    }
-
-    pub(crate) fn get_specializing_capabilities_transitive<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        capability: CAP,
-    ) -> Result<Vec<CAP>, ConceptReadError> {
-        let mut specializing_capabilities: Vec<CAP> = Vec::new();
-        let mut capabilities_to_check: Vec<CAP> = Vec::from([capability]);
-
-        while let Some(capability) = capabilities_to_check.pop() {
-            let specializings = Self::get_specializing_capabilities(snapshot, capability)?;
-            capabilities_to_check.extend(specializings.iter());
-            specializing_capabilities.extend(specializings.into_iter());
-        }
-
-        Ok(specializing_capabilities)
-    }
+    // pub(crate) fn get_specializing_capabilities_transitive<CAP: Capability<'static>>(
+    //     snapshot: &impl ReadableSnapshot,
+    //     capability: CAP,
+    // ) -> Result<Vec<CAP>, ConceptReadError> {
+    //     let mut specializing_capabilities: Vec<CAP> = Vec::new();
+    //     let mut capabilities_to_check: Vec<CAP> = Vec::from([capability]);
+    //
+    //     while let Some(capability) = capabilities_to_check.pop() {
+    //         let specializings = Self::get_specializing_capabilities(snapshot, capability)?;
+    //         capabilities_to_check.extend(specializings.iter());
+    //         specializing_capabilities.extend(specializings.into_iter());
+    //     }
+    //
+    //     Ok(specializing_capabilities)
+    // }
 
     pub(crate) fn get_capabilities_for_interface<CAP>(
         snapshot: &impl ReadableSnapshot,
@@ -630,35 +636,32 @@ impl TypeReader {
     pub(crate) fn get_type_constraints<T: KindAPI<'static>>(
         snapshot: &impl ReadableSnapshot,
         type_: T,
-    ) -> Result<HashMap<TypeConstraint<T>, HashSet<T>>, ConceptReadError> {
-        let mut constraints: HashMap<TypeConstraint<T>, HashSet<T>> = HashMap::new();
+    ) -> Result<HashSet<TypeConstraint<T>>, ConceptReadError> {
+        let mut all_constraints: HashSet<TypeConstraint<T>> = HashSet::new();
         let mut type_opt = Some(type_);
         while let Some(curr_type) = type_opt {
             let declared_annotations = Self::get_type_annotations_declared(snapshot, curr_type.clone())?;
             for annotation in declared_annotations {
-                for constraint in annotation.clone().into().into_type_constraints::<T>() {
-                    let sources_of_duplicate_opt = constraints.get_mut(&constraint);
-                    if let Some(sources_of_duplicate) = sources_of_duplicate_opt {
-                        match constraint.description().validation_mode() {
-                            ConstraintValidationMode::SingleInstanceOfTypeOrSubtype
-                            | ConstraintValidationMode::AllInstancesOfTypeOrSubtypes => {
-                                debug_assert!(sources_of_duplicate.len() == 1);
-                                sources_of_duplicate.clear();
-                            },
+                for constraint in annotation.clone().into().into_type_constraints(curr_type.clone()) {
+                    match constraint.validation_mode() {
+                        ConstraintValidationMode::SingleInstanceOfTypeOrSubtype => continue,
 
-                            ConstraintValidationMode::SingleInstanceOfType
-                            | ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes => {}
-                        }
+                        ConstraintValidationMode::AllInstancesOfTypeOrSubtypes => {
+                            if let Some(duplicate) = all_constraints.iter().find(|saved_constraint| saved_constraint.category() == constraint.category()) {
+                                all_constraints.remove(duplicate);
+                            }
+                        },
+
+                        ConstraintValidationMode::SingleInstanceOfType
+                        | ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes => {}
                     }
-                    let constraint_sources = constraints.entry(constraint).or_insert(HashSet::new());
-                    constraint_sources.insert(curr_type.clone());
+                    all_constraints.insert(constraint);
                 }
             }
             type_opt = Self::get_supertype(snapshot, curr_type.clone())?;
         }
 
-        debug_assert!(constraints.iter().find(|(_, sources)| sources.is_empty()).is_none());
-        Ok(constraints)
+        Ok(all_constraints)
     }
 
     pub(crate) fn get_capability_annotations_declared<CAP: Capability<'static>>(
@@ -707,40 +710,58 @@ impl TypeReader {
             .map_err(|err| ConceptReadError::SnapshotIterate { source: err.clone() })
     }
 
+    pub(crate) fn get_type_capability_constraints<CAP: Capability<'static>>(
+        snapshot: &impl ReadableSnapshot,
+        object_type: CAP::ObjectType,
+        interface_type: CAP::InterfaceType,
+    ) -> Result<HashSet<CapabilityConstraint<CAP>>, ConceptReadError> {
+        let mut all_constraints: HashSet<CapabilityConstraint<CAP>> = HashSet::new();
+        let affecting_interface_types = CAP::InterfaceType::chain_types(interface_type.clone(), TypeReader::get_supertypes_transitive(snapshot, interface_type)?.into_iter());
+        let capabilities: HashSet<CAP> = TypeReader::get_capabilities(snapshot, object_type.clone(), true)?;
+        let capabilities_for_interface_type: HashSet<CAP> = capabilities.into_iter().filter(|capability| affecting_interface_types.clone().contains(&capability.interface())).collect();
+
+        for current_capability in capabilities_for_interface_type {
+            for constraint in TypeReader::get_capability_constraints(snapshot, current_capability)? {
+                match constraint.validation_mode() {
+                    ConstraintValidationMode::SingleInstanceOfTypeOrSubtype => continue,
+
+                    ConstraintValidationMode::AllInstancesOfTypeOrSubtypes => {
+                        if let Some(duplicate) = all_constraints.iter().find(|saved_constraint| saved_constraint.category() == constraint.category()) {
+                            let duplicate_source_supertypes = TypeReader::get_supertypes_transitive(snapshot, duplicate.source().interface())?;
+                            if duplicate_source_supertypes.contains(&constraint.source().interface()) {
+                                all_constraints.remove(duplicate);
+                            } else {
+                                continue;
+                            }
+                        }
+                    },
+
+                    ConstraintValidationMode::SingleInstanceOfType
+                    | ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes => {}
+                }
+                all_constraints.insert(constraint);
+            }
+        }
+
+        Ok(all_constraints)
+    }
+
     pub(crate) fn get_capability_constraints<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         capability: CAP,
-    ) -> Result<HashMap<CapabilityConstraint<CAP>, HashSet<CAP>>, ConceptReadError> {
-        let mut constraints: HashMap<CapabilityConstraint<CAP>, HashSet<CAP>> = HashMap::new();
-        let mut capability_opt = Some(capability);
-        while let Some(curr_capability) = capability_opt {
-            let declared_annotations = Self::get_capability_annotations_declared(snapshot, curr_capability.clone())?;
+    ) -> Result<HashSet<CapabilityConstraint<CAP>>, ConceptReadError> {
+        let mut constraints: HashSet<CapabilityConstraint<CAP>> = HashSet::new();
+        let declared_annotations = Self::get_capability_annotations_declared(snapshot, capability.clone())?;
 
-            for annotation in declared_annotations {
-                for constraint in annotation.clone().into().into_capability_constraints::<CAP>() {
-                    let sources_of_duplicate_opt = constraints.get_mut(&constraint);
-                    if let Some(sources_of_duplicate) = sources_of_duplicate_opt {
-                        match constraint.description().validation_mode() {
-                            ConstraintValidationMode::SingleInstanceOfTypeOrSubtype
-                            | ConstraintValidationMode::AllInstancesOfTypeOrSubtypes => {
-                                debug_assert!(sources_of_duplicate.len() == 1);
-                                sources_of_duplicate.clear();
-                            },
-
-                            ConstraintValidationMode::SingleInstanceOfType
-                            | ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes => {}
-                        }
-                    }
-                    let constraint_sources = constraints.entry(constraint).or_insert(HashSet::new());
-                    constraint_sources.insert(curr_capability.clone());
-                }
+        for annotation in declared_annotations {
+            for constraint in annotation.clone().into().into_capability_constraints(capability.clone()) {
+                debug_assert!(!constraints.contains(&constraint));
+                debug_assert!(constraints.iter().find(|existing_constraint| existing_constraint.category() == constraint.category()).is_none());
+                constraints.insert(constraint);
             }
-
-            Self::add_capability_default_constraints_if_not_declared(snapshot, curr_capability.clone(), &mut constraints)?;
-            capability_opt = Self::get_capability_specializes(snapshot, curr_capability.clone())?;
         }
 
-        debug_assert!(constraints.iter().find(|(_, sources)| sources.is_empty()).is_none());
+        Self::add_capability_default_constraints_if_not_declared(snapshot, capability, &mut constraints)?;
         Ok(constraints)
     }
 
@@ -756,9 +777,9 @@ impl TypeReader {
 
                 if get_cardinality_constraint_opt(capability.clone(), out_constraints)?.is_none() {
                     let cardinality_sources = out_constraints
-                        .entry(CapabilityConstraint::new(ConstraintDescription::Cardinality(
-                            Relates::get_default_cardinality(role_ordering)
-                        )))
+                        .entry(CapabilityConstraint::new(
+                            ConstraintDescription::Cardinality(Relates::get_default_cardinality(role_ordering)), capability.clone()
+                        ))
                         .or_insert(HashSet::new());
                     cardinality_sources.insert(capability.clone());
                 }
@@ -766,21 +787,20 @@ impl TypeReader {
                 if let Some(default_distinct) = Relates::get_default_distinct(role_ordering)? {
                     if get_distinct_constraints(out_constraints)?.is_empty() {
                         let distinct_sources = out_constraints
-                            .entry(CapabilityConstraint::new(ConstraintDescription::Distinct(
-                                default_distinct
-                            )))
+                            .entry(CapabilityConstraint::new(
+                                ConstraintDescription::Distinct(default_distinct), capability.clone()
+                            ))
                             .or_insert(HashSet::new());
                         distinct_sources.insert(capability.clone());
                     }
                 }
             }
             CapabilityKind::Plays => {
-                let plays = Plays::new(ObjectType::new(capability.canonical_from().into_vertex()), RoleType::new(capability.canonical_to().into_vertex()));
                 if get_cardinality_constraint_opt(capability.clone(), out_constraints)?.is_none() {
                     let cardinality_sources = out_constraints
-                        .entry(CapabilityConstraint::new(ConstraintDescription::Cardinality(
-                            Plays::get_default_cardinality()
-                        )))
+                        .entry(CapabilityConstraint::new(
+                            ConstraintDescription::Cardinality(Plays::get_default_cardinality()), capability.clone()
+                        ))
                         .or_insert(HashSet::new());
                     cardinality_sources.insert(capability.clone());
                 }
@@ -791,9 +811,9 @@ impl TypeReader {
 
                 if get_cardinality_constraint_opt(capability.clone(), out_constraints)?.is_none() {
                     let cardinality_sources = out_constraints
-                        .entry(CapabilityConstraint::new(ConstraintDescription::Cardinality(
-                            Owns::get_default_cardinality(ordering)
-                        )))
+                        .entry(CapabilityConstraint::new(
+                            ConstraintDescription::Cardinality(Owns::get_default_cardinality(ordering)), capability.clone()
+                        ))
                         .or_insert(HashSet::new());
                     cardinality_sources.insert(capability.clone());
                 }
@@ -801,9 +821,9 @@ impl TypeReader {
                 if let Some(default_distinct) = Owns::get_default_distinct(ordering)? {
                     if get_distinct_constraints(out_constraints)?.is_empty() {
                         let distinct_sources = out_constraints
-                            .entry(CapabilityConstraint::new(ConstraintDescription::Distinct(
-                                default_distinct
-                            )))
+                            .entry(CapabilityConstraint::new(
+                                ConstraintDescription::Distinct(default_distinct), capability.clone()
+                            ))
                             .or_insert(HashSet::new());
                         distinct_sources.insert(capability.clone());
                     }

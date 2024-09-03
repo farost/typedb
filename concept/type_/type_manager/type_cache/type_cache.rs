@@ -276,7 +276,7 @@ impl TypeCache {
     pub(crate) fn get_constraints<'a, 'this, T, CACHE>(
         &'this self,
         type_: T,
-    ) -> &HashMap<TypeConstraint<T>, HashSet<T>>
+    ) -> &HashSet<TypeConstraint<T>>
     where
         T: KindAPI<'static> + CacheGetter<CacheType = CACHE>,
         CACHE: HasCommonTypeCache<T::SelfStatic> + 'this,
@@ -359,7 +359,7 @@ impl TypeCache {
     pub(crate) fn get_relates_constraints<'c>(
         &'c self,
         relates: Relates<'c>,
-    ) -> &'c HashMap<CapabilityConstraint<Relates<'static>>, HashSet<Relates<'static>>> {
+    ) -> &'c HashSet<CapabilityConstraint<Relates<'static>>> {
         &self.relates.get(&relates).unwrap().common_capability_cache.constraints
     }
 
@@ -448,7 +448,7 @@ impl TypeCache {
     pub(crate) fn get_plays_constraints<'c>(
         &'c self,
         plays: Plays<'c>,
-    ) -> &'c HashMap<CapabilityConstraint<Plays<'static>>, HashSet<Plays<'static>>> {
+    ) -> &'c HashSet<CapabilityConstraint<Plays<'static>>> {
         &self.plays.get(&plays).unwrap().common_capability_cache.constraints
     }
 
@@ -470,7 +470,7 @@ impl TypeCache {
         &self.owns.get(&owns).unwrap().common_capability_cache.annotations_declared
     }
 
-    pub(crate) fn get_owns_constraints<'c>(&'c self, owns: Owns<'c>) -> &'c HashMap<CapabilityConstraint<Owns<'static>>, HashSet<Owns<'static>>> {
+    pub(crate) fn get_owns_constraints<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<CapabilityConstraint<Owns<'static>>> {
         &self.owns.get(&owns).unwrap().common_capability_cache.constraints
     }
 

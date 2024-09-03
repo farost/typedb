@@ -41,6 +41,7 @@ use crate::{
     thing::{object::Object, thing_manager::ThingManager},
     type_::ThingTypeAPI,
 };
+use crate::type_::constraint::CapabilityConstraint;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub enum ObjectType<'a> {
@@ -124,6 +125,15 @@ impl<'a> OwnerAPI<'a> for ObjectType<'a> {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
         with_object_type!(self, |object| { object.get_owns_with_hidden(snapshot, type_manager) })
+    }
+
+    fn get_type_owns_constraints<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        attribute_type: AttributeType<'static>,
+    ) -> Result<MaybeOwns<'m, HashSet<CapabilityConstraint<Owns<'static>>>>, ConceptReadError> {
+        type_manager.get_type_owns_constraints(snapshot, self.clone().into_owned_object_type(), attribute_type)
     }
 }
 
@@ -274,6 +284,15 @@ impl<'a> PlayerAPI<'a> for ObjectType<'a> {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError> {
         with_object_type!(self, |object| { object.get_plays_with_hidden(snapshot, type_manager) })
+    }
+
+    fn get_type_plays_constraints<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        role_type: RoleType<'static>,
+    ) -> Result<MaybeOwns<'m, HashSet<CapabilityConstraint<Plays<'static>>>>, ConceptReadError> {
+        type_manager.get_type_plays_constraints(snapshot, self.clone().into_owned_object_type(), role_type)
     }
 }
 

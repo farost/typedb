@@ -164,7 +164,7 @@ impl<'a> KindAPI<'a> for RoleType<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<TypeConstraint<RoleType<'static>>, HashSet<RoleType<'static>>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'m, HashSet<TypeConstraint<RoleType<'static>>>>, ConceptReadError> {
         type_manager.get_role_type_constraints(snapshot, self.clone().into_owned())
     }
 }

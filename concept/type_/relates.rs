@@ -172,45 +172,45 @@ impl<'a> Capability<'a> for Relates<'a> {
         self.role.clone()
     }
 
-    fn get_specializes<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, Option<Relates<'static>>>, ConceptReadError> {
-        type_manager.get_relates_specializes(snapshot, self.clone().into_owned())
-    }
-
-    fn get_specializes_transitive<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, Vec<Relates<'static>>>, ConceptReadError> {
-        type_manager.get_relates_specializes_transitive(snapshot, self.clone().into_owned())
-    }
+    // fn get_specializes<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, Option<Relates<'static>>>, ConceptReadError> {
+    //     type_manager.get_relates_specializes(snapshot, self.clone().into_owned())
+    // }
+    //
+    // fn get_specializes_transitive<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, Vec<Relates<'static>>>, ConceptReadError> {
+    //     type_manager.get_relates_specializes_transitive(snapshot, self.clone().into_owned())
+    // }
 
     fn get_hides<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, Option<Relates<'static>>>, ConceptReadError> {
-        type_manager.get_relates_specializes(snapshot, self.clone().into_owned())
+        type_manager.get_relates_hides(snapshot, self.clone().into_owned())
     }
 
-    fn get_specializing<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashSet<Relates<'static>>>, ConceptReadError> {
-        type_manager.get_relates_specializing(snapshot, self.clone().into_owned())
-    }
-
-    fn get_specializing_transitive<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, Vec<Relates<'static>>>, ConceptReadError> {
-        type_manager.get_relates_specializing_transitive(snapshot, self.clone().into_owned())
-    }
+    // fn get_specializing<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, HashSet<Relates<'static>>>, ConceptReadError> {
+    //     type_manager.get_relates_specializing(snapshot, self.clone().into_owned())
+    // }
+    //
+    // fn get_specializing_transitive<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, Vec<Relates<'static>>>, ConceptReadError> {
+    //     type_manager.get_relates_specializing_transitive(snapshot, self.clone().into_owned())
+    // }
 
     fn get_annotations_declared<'m>(
         &self,
@@ -224,7 +224,7 @@ impl<'a> Capability<'a> for Relates<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<CapabilityConstraint<Relates<'static>>, HashSet<Relates<'static>>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'m, HashSet<CapabilityConstraint<Relates<'static>>>>, ConceptReadError> {
         type_manager.get_relates_constraints(snapshot, self.clone().into_owned())
     }
 }

@@ -448,41 +448,41 @@ impl Annotation {
         }
     }
 
-    pub fn to_type_constraints<T: KindAPI<'static>>(&self) -> HashSet<TypeConstraint<T>> {
-        self.clone().into_type_constraints()
+    pub fn to_type_constraints<T: KindAPI<'static>>(&self, source: T) -> HashSet<TypeConstraint<T>> {
+        self.clone().into_type_constraints(source)
     }
 
-    pub fn to_capability_constraints<CAP: Capability<'static>>(&self) -> HashSet<CapabilityConstraint<CAP>> {
-        self.clone().into_capability_constraints()
+    pub fn to_capability_constraints<CAP: Capability<'static>>(&self, source: CAP) -> HashSet<CapabilityConstraint<CAP>> {
+        self.clone().into_capability_constraints(source)
     }
 
-    pub fn into_type_constraints<T: KindAPI<'static>>(self) -> HashSet<TypeConstraint<T>> {
+    pub fn into_type_constraints<T: KindAPI<'static>>(self, source: T) -> HashSet<TypeConstraint<T>> {
         match self {
-            Annotation::Abstract(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Abstract(annotation)) ]),
-            Annotation::Distinct(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Distinct(annotation)) ]),
-            Annotation::Independent(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Independent(annotation)) ]), // TODO: Is not really useful, can be removed
-            Annotation::Unique(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Unique(annotation)) ]),
-            Annotation::Key(_) => HashSet::from([TypeConstraint::new(ConstraintDescription::Unique(AnnotationKey::UNIQUE)), TypeConstraint::new(ConstraintDescription::Cardinality(AnnotationKey::CARDINALITY)) ]),
-            Annotation::Cardinality(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Cardinality(annotation)) ]),
-            Annotation::Regex(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Regex(annotation)) ]),
-            Annotation::Range(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Range(annotation)) ]),
-            Annotation::Values(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Values(annotation)) ]),
+            Annotation::Abstract(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Abstract(annotation), source) ]),
+            Annotation::Distinct(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Distinct(annotation), source) ]),
+            Annotation::Independent(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Independent(annotation), source) ]), // TODO: Is not really useful, can be removed
+            Annotation::Unique(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Unique(annotation), source) ]),
+            Annotation::Key(_) => HashSet::from([TypeConstraint::new(ConstraintDescription::Unique(AnnotationKey::UNIQUE), source), TypeConstraint::new(ConstraintDescription::Cardinality(AnnotationKey::CARDINALITY), source) ]),
+            Annotation::Cardinality(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Cardinality(annotation), source) ]),
+            Annotation::Regex(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Regex(annotation), source) ]),
+            Annotation::Range(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Range(annotation), source) ]),
+            Annotation::Values(annotation) => HashSet::from([TypeConstraint::new(ConstraintDescription::Values(annotation), source) ]),
 
             Annotation::Cascade(_) => HashSet::new(),
         }
     }
 
-    pub fn into_capability_constraints<CAP: Capability<'static>>(self) -> HashSet<CapabilityConstraint<CAP>> {
+    pub fn into_capability_constraints<CAP: Capability<'static>>(self, source: CAP) -> HashSet<CapabilityConstraint<CAP>> {
         match self {
-            Annotation::Abstract(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Abstract(annotation)) ]),
-            Annotation::Distinct(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Distinct(annotation)) ]),
-            Annotation::Independent(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Independent(annotation)) ]), // TODO: Is not really useful, can be removed
-            Annotation::Unique(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Unique(annotation)) ]),
-            Annotation::Key(_) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Unique(AnnotationKey::UNIQUE)), CapabilityConstraint::new(ConstraintDescription::Cardinality(AnnotationKey::CARDINALITY)) ]),
-            Annotation::Cardinality(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Cardinality(annotation)) ]),
-            Annotation::Regex(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Regex(annotation)) ]),
-            Annotation::Range(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Range(annotation)) ]),
-            Annotation::Values(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Values(annotation)) ]),
+            Annotation::Abstract(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Abstract(annotation), source) ]),
+            Annotation::Distinct(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Distinct(annotation), source) ]),
+            Annotation::Independent(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Independent(annotation), source) ]), // TODO: Is not really useful, can be removed
+            Annotation::Unique(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Unique(annotation), source) ]),
+            Annotation::Key(_) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Unique(AnnotationKey::UNIQUE), source.clone()), CapabilityConstraint::new(ConstraintDescription::Cardinality(AnnotationKey::CARDINALITY), source) ]),
+            Annotation::Cardinality(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Cardinality(annotation), source) ]),
+            Annotation::Regex(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Regex(annotation), source) ]),
+            Annotation::Range(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Range(annotation), source) ]),
+            Annotation::Values(annotation) => HashSet::from([CapabilityConstraint::new(ConstraintDescription::Values(annotation), source) ]),
 
             Annotation::Cascade(_) => HashSet::new(),
         }

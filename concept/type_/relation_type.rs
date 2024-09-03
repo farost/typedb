@@ -51,7 +51,7 @@ use crate::{
     },
     ConceptAPI,
 };
-use crate::type_::constraint::TypeConstraint;
+use crate::type_::constraint::{CapabilityConstraint, TypeConstraint};
 use crate::type_::entity_type::EntityType;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
@@ -171,7 +171,7 @@ impl<'a> KindAPI<'a> for RelationType<'a> {
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
-    ) -> Result<MaybeOwns<'m, HashMap<TypeConstraint<RelationType<'static>>, HashSet<RelationType<'static>>>>, ConceptReadError> {
+    ) -> Result<MaybeOwns<'m, HashSet<TypeConstraint<RelationType<'static>>>>, ConceptReadError> {
         type_manager.get_relation_type_constraints(snapshot, self.clone().into_owned())
     }
 }
@@ -291,6 +291,15 @@ impl<'a> RelationType<'a> {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Relates<'static>>>, ConceptReadError> {
         type_manager.get_relation_type_relates_with_hidden(snapshot, self.clone().into_owned())
+    }
+
+    fn get_type_relates_constraints<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        role_type: RoleType<'static>,
+    ) -> Result<MaybeOwns<'m, HashSet<CapabilityConstraint<Relates<'static>>>>, ConceptReadError> {
+        type_manager.get_type_relates_constraints(snapshot, self.clone().into_owned(), role_type)
     }
 
     pub fn get_relates_role(
