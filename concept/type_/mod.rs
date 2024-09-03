@@ -253,7 +253,7 @@ pub trait OwnerAPI<'a>: TypeAPI<'a> {
         interface_type: AttributeType<'static>,
     ) -> Result<MaybeOwns<'m, HashSet<CapabilityConstraint<Owns<'static>>>>, ConceptReadError>;
 
-    fn get_type_owns_cardinality_constraints<'m>(
+    fn get_type_owns_constraints_cardinality<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
@@ -267,28 +267,28 @@ pub trait OwnerAPI<'a>: TypeAPI<'a> {
         interface_type: AttributeType<'static>,
     ) -> Result<bool, ConceptReadError>;
 
-    fn get_type_owns_regex_constraints<'m>(
+    fn get_type_owns_constraints_regex<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
         interface_type: AttributeType<'static>,
     ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError>;
 
-    fn get_type_owns_range_constraints<'m>(
+    fn get_type_owns_constraints_range<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
         interface_type: AttributeType<'static>,
     ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError>;
 
-    fn get_type_owns_values_constraints<'m>(
+    fn get_type_owns_constraints_values<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
         interface_type: AttributeType<'static>,
     ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError>;
 
-    fn get_type_owns_unique_constraint<'m>(
+    fn get_type_owns_constraint_unique<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
@@ -398,7 +398,7 @@ pub trait PlayerAPI<'a>: TypeAPI<'a> {
         role_type: RoleType<'static>,
     ) -> Result<MaybeOwns<'m, HashSet<CapabilityConstraint<Plays<'static>>>>, ConceptReadError>;
 
-    fn get_type_plays_cardinality_constraints<'m>(
+    fn get_type_plays_constraints_cardinality<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,

@@ -136,7 +136,7 @@ impl<'a> OwnerAPI<'a> for ObjectType<'a> {
         type_manager.get_type_owns_constraints(snapshot, self.clone().into_owned_object_type(), attribute_type)
     }
 
-    fn get_type_owns_cardinality_constraints<'m>(
+    fn get_type_owns_constraints_cardinality<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
@@ -154,7 +154,7 @@ impl<'a> OwnerAPI<'a> for ObjectType<'a> {
         type_manager.get_is_type_owns_distinct(snapshot, self.clone().into_owned_object_type(), attribute_type)
     }
 
-    fn get_type_owns_regex_constraints<'m>(
+    fn get_type_owns_constraints_regex<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
@@ -163,7 +163,7 @@ impl<'a> OwnerAPI<'a> for ObjectType<'a> {
         type_manager.get_type_owns_regex_constraints(snapshot, self.clone().into_owned_object_type(), attribute_type)
     }
 
-    fn get_type_owns_range_constraints<'m>(
+    fn get_type_owns_constraints_range<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
@@ -172,7 +172,7 @@ impl<'a> OwnerAPI<'a> for ObjectType<'a> {
         type_manager.get_type_owns_range_constraints(snapshot, self.clone().into_owned_object_type(), attribute_type)
     }
 
-    fn get_type_owns_values_constraints<'m>(
+    fn get_type_owns_constraints_values<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
@@ -181,7 +181,7 @@ impl<'a> OwnerAPI<'a> for ObjectType<'a> {
         type_manager.get_type_owns_values_constraints(snapshot, self.clone().into_owned_object_type(), attribute_type)
     }
 
-    fn get_type_owns_unique_constraint<'m>(
+    fn get_type_owns_constraint_unique<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
@@ -349,7 +349,7 @@ impl<'a> PlayerAPI<'a> for ObjectType<'a> {
         type_manager.get_type_plays_constraints(snapshot, self.clone().into_owned_object_type(), role_type)
     }
 
-    fn get_type_plays_cardinality_constraints<'m>(
+    fn get_type_plays_constraints_cardinality<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,

@@ -4,9 +4,8 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-use itertools::Itertools;
 use storage::snapshot::{ReadableSnapshot, WritableSnapshot};
 
 use crate::{
@@ -47,7 +46,7 @@ macro_rules! validate_capability_cardinality_constraint {
 
                 let source_interface_type = constraint.source().interface();
                 let sub_interface_types = source_interface_type.get_subtypes_transitive(snapshot, thing_manager.type_manager())?;
-                let count = chain_types(source_interface_type, sub_interface_types)
+                let count = TypeAPI::chain_types(source_interface_type, sub_interface_types)
                     .filter_map(|interface_type| counts.get(&interface_type))
                     .sum();
                 $check_func(snapshot, thing_manager, &object, constraint.source(), cardinality, count)?;
@@ -187,7 +186,7 @@ impl CommitTimeValidation {
         validate_owns_cardinality_constraint,
         Owns,
         Object,
-        get_type_owns_cardinality_constraints,
+        get_type_owns_constraints_cardinality,
         get_has_counts,
         Self::check_owns_cardinality
     );
@@ -195,7 +194,7 @@ impl CommitTimeValidation {
         validate_plays_cardinality_constraint,
         Plays,
         Object,
-        get_type_plays_cardinality_constraints,
+        get_type_plays_constraints_cardinality,
         get_played_roles_counts,
         Self::check_plays_cardinality
     );
@@ -203,7 +202,7 @@ impl CommitTimeValidation {
         validate_relates_cardinality_constraint,
         Relates,
         Relation,
-        get_type_relates_cardinality_constraints,
+        get_type_relates_constraints_cardinality,
         get_player_counts,
         Self::check_relates_cardinality
     );

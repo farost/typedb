@@ -20,7 +20,7 @@ use crate::{
         type_manager::validation::SchemaValidationError,
     },
 };
-use crate::type_::constraint::ConstraintError;
+use crate::type_::constraint::{ConstraintDescription, ConstraintError};
 
 #[derive(Debug)]
 pub struct ConceptError {
@@ -138,7 +138,7 @@ pub enum ConceptReadError {
     CorruptFoundHasWithoutOwns,
     CorruptFoundLinksWithoutPlays,
     CorruptFoundLinksWithoutRelates,
-    CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(Label<'static>, ValueType, Annotation),
+    CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(Label<'static>, ValueType, ConstraintDescription),
     CannotGetOwnsDoesntExist(Label<'static>, Label<'static>),
     CannotGetPlaysDoesntExist(Label<'static>, Label<'static>),
     CannotGetRelatesDoesntExist(Label<'static>, Label<'static>),
