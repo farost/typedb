@@ -128,9 +128,7 @@ fn entity_usage() {
         assert_eq!(supertypes.len(), 1);
 
         // --- child owns age ---
-        let owns_age =
-            child_type.set_owns(&mut snapshot, &type_manager, &thing_manager, age_type.clone().into_owned()).unwrap();
-        owns_age.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Unordered).unwrap();
+        child_type.set_owns(&mut snapshot, &type_manager, &thing_manager, age_type.clone().into_owned(), Ordering::Unordered).unwrap();
         let owns =
             child_type.get_owns_attribute(&snapshot, &type_manager, age_type.clone().into_owned()).unwrap().unwrap();
         // TODO: test 'owns' structure directly
@@ -150,9 +148,7 @@ fn entity_usage() {
         // --- owns inheritance ---
         let height_label = Label::new_static("height");
         let height_type = type_manager.create_attribute_type(&mut snapshot, &height_label).unwrap();
-        let owns_height =
-            person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, height_type.clone()).unwrap();
-        owns_height.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Unordered).unwrap();
+        person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, height_type.clone(), Ordering::Unordered).unwrap();
 
         match child_type.get_owns_attribute(&snapshot, &type_manager, height_type.clone()).unwrap() {
             None => panic!("child should inherit ownership of height"),
@@ -249,7 +245,7 @@ fn role_usage() {
         // --- friendship sub relation, relates friend ---
         let friendship_type = type_manager.create_relation_type(&mut snapshot, &friendship_label).unwrap();
         let friendship_friend_relates = friendship_type
-            .create_relates(&mut snapshot, &type_manager, &thing_manager, friend_name)
+            .create_relates(&mut snapshot, &type_manager, &thing_manager, friend_name, Ordering::Ordered)
             .unwrap();
         friendship_friend_relates.role().set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Unordered).unwrap();
         let relates = friendship_type.get_relates_role_name(&snapshot, &type_manager, friend_name).unwrap().unwrap();
@@ -346,41 +342,36 @@ fn annotations_with_range_arguments() {
         let empty_type = type_manager.create_attribute_type(&mut snapshot, &empty_label).unwrap();
         empty_type.set_value_type(&mut snapshot, &type_manager, &thing_manager, ValueType::Boolean).unwrap();
 
-        assert_eq!(age_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::Long));
-        assert_eq!(name_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::String));
-        assert_eq!(empty_name_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::String));
-        assert_eq!(balance_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::Decimal));
-        assert_eq!(measurement_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::Double));
-        assert_eq!(empty_measurement_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::Double));
-        assert_eq!(schedule_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::DateTimeTZ));
-        assert_eq!(valid_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::Boolean));
-        assert_eq!(empty_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::Boolean));
+        assert_eq!(age_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::Long));
+        assert_eq!(name_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::String));
+        assert_eq!(empty_name_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::String));
+        assert_eq!(balance_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::Decimal));
+        assert_eq!(measurement_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::Double));
+        assert_eq!(empty_measurement_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::Double));
+        assert_eq!(schedule_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::DateTimeTZ));
+        assert_eq!(valid_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::Boolean));
+        assert_eq!(empty_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::Boolean));
 
         let person_label = Label::build("person");
         let person_type = type_manager.create_entity_type(&mut snapshot, &person_label).unwrap();
 
-        person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, age_type.clone().into_owned()).unwrap();
-        let owns_name =
-            person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, name_type.clone().into_owned()).unwrap();
-        owns_name.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Ordered).unwrap();
+        person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, age_type.clone().into_owned(), Ordering::Unordered).unwrap();
+        person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, name_type.clone().into_owned(), Ordering::Ordered).unwrap();
         person_type
-            .set_owns(&mut snapshot, &type_manager, &thing_manager, empty_name_type.clone().into_owned())
+            .set_owns(&mut snapshot, &type_manager, &thing_manager, empty_name_type.clone().into_owned(), Ordering::Unordered)
             .unwrap();
-        person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, balance_type.clone().into_owned()).unwrap();
-        let owns_measurement = person_type
-            .set_owns(&mut snapshot, &type_manager, &thing_manager, measurement_type.clone().into_owned())
+        person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, balance_type.clone().into_owned(), Ordering::Unordered).unwrap();
+        person_type
+            .set_owns(&mut snapshot, &type_manager, &thing_manager, measurement_type.clone().into_owned(), Ordering::Ordered)
             .unwrap();
-        owns_measurement.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Ordered).unwrap();
-        let owns_empty_measurement = person_type
-            .set_owns(&mut snapshot, &type_manager, &thing_manager, empty_measurement_type.clone().into_owned())
+        person_type
+            .set_owns(&mut snapshot, &type_manager, &thing_manager, empty_measurement_type.clone().into_owned(), Ordering::Ordered)
             .unwrap();
-        owns_empty_measurement.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Ordered).unwrap();
-        person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, schedule_type.clone().into_owned()).unwrap();
-        let owns_valid = person_type
-            .set_owns(&mut snapshot, &type_manager, &thing_manager, valid_type.clone().into_owned())
+        person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, schedule_type.clone().into_owned(), Ordering::Unordered).unwrap();
+        person_type
+            .set_owns(&mut snapshot, &type_manager, &thing_manager, valid_type.clone().into_owned(), Ordering::Ordered)
             .unwrap();
-        owns_valid.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Ordered).unwrap();
-        person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, empty_type.clone().into_owned()).unwrap();
+        person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, empty_type.clone().into_owned(), Ordering::Unordered).unwrap();
 
         let name_owns =
             person_type.get_owns_attribute(&snapshot, &type_manager, name_type.clone().into_owned()).unwrap().unwrap();
@@ -718,53 +709,42 @@ fn annotations_with_value_arguments() {
         let empty_type = type_manager.create_attribute_type(&mut snapshot, &empty_label).unwrap();
         empty_type.set_value_type(&mut snapshot, &type_manager, &thing_manager, ValueType::Boolean).unwrap();
 
-        assert_eq!(age_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::Long));
-        assert_eq!(name_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::String));
-        assert_eq!(empty_name_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::String));
-        assert_eq!(balance_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::Decimal));
-        assert_eq!(measurement_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::Double));
-        assert_eq!(empty_measurement_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::Double));
-        assert_eq!(schedule_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::DateTimeTZ));
-        assert_eq!(valid_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::Boolean));
-        assert_eq!(empty_type.get_value_type(&snapshot, &type_manager).unwrap(), Some(ValueType::Boolean));
+        assert_eq!(age_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::Long));
+        assert_eq!(name_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::String));
+        assert_eq!(empty_name_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::String));
+        assert_eq!(balance_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::Decimal));
+        assert_eq!(measurement_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::Double));
+        assert_eq!(empty_measurement_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::Double));
+        assert_eq!(schedule_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::DateTimeTZ));
+        assert_eq!(valid_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::Boolean));
+        assert_eq!(empty_type.get_value_type_without_source(&snapshot, &type_manager).unwrap(), Some(ValueType::Boolean));
 
         let person_label = Label::build("person");
         let person_type = type_manager.create_entity_type(&mut snapshot, &person_label).unwrap();
 
-        let owns_age =
-            person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, age_type.clone().into_owned()).unwrap();
-        owns_age.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Unordered).unwrap();
-        let owns_name =
-            person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, name_type.clone().into_owned()).unwrap();
-        owns_name.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Ordered).unwrap();
-        let owns_empty_name = person_type
-            .set_owns(&mut snapshot, &type_manager, &thing_manager, empty_name_type.clone().into_owned())
+        person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, age_type.clone().into_owned(), Ordering::Unordered).unwrap();
+        person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, name_type.clone().into_owned(), Ordering::Ordered).unwrap();
+        person_type
+            .set_owns(&mut snapshot, &type_manager, &thing_manager, empty_name_type.clone().into_owned(), Ordering::Unordered)
             .unwrap();
-        owns_empty_name.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Unordered).unwrap();
-        let owns_balance = person_type
-            .set_owns(&mut snapshot, &type_manager, &thing_manager, balance_type.clone().into_owned())
+        person_type
+            .set_owns(&mut snapshot, &type_manager, &thing_manager, balance_type.clone().into_owned(), Ordering::Unordered)
             .unwrap();
-        owns_balance.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Unordered).unwrap();
-        let owns_measurement = person_type
-            .set_owns(&mut snapshot, &type_manager, &thing_manager, measurement_type.clone().into_owned())
+        person_type
+            .set_owns(&mut snapshot, &type_manager, &thing_manager, measurement_type.clone().into_owned(), Ordering::Ordered)
             .unwrap();
-        owns_measurement.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Ordered).unwrap();
-        let owns_empty_measurement = person_type
-            .set_owns(&mut snapshot, &type_manager, &thing_manager, empty_measurement_type.clone().into_owned())
+        person_type
+            .set_owns(&mut snapshot, &type_manager, &thing_manager, empty_measurement_type.clone().into_owned(), Ordering::Ordered)
             .unwrap();
-        owns_empty_measurement.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Ordered).unwrap();
-        let owns_schedule = person_type
-            .set_owns(&mut snapshot, &type_manager, &thing_manager, schedule_type.clone().into_owned())
+        person_type
+            .set_owns(&mut snapshot, &type_manager, &thing_manager, schedule_type.clone().into_owned(), Ordering::Unordered)
             .unwrap();
-        owns_schedule.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Unordered).unwrap();
-        let owns_valid = person_type
-            .set_owns(&mut snapshot, &type_manager, &thing_manager, valid_type.clone().into_owned())
+        person_type
+            .set_owns(&mut snapshot, &type_manager, &thing_manager, valid_type.clone().into_owned(), Ordering::Ordered)
             .unwrap();
-        owns_valid.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Ordered).unwrap();
-        let owns_empty = person_type
-            .set_owns(&mut snapshot, &type_manager, &thing_manager, empty_type.clone().into_owned())
+        person_type
+            .set_owns(&mut snapshot, &type_manager, &thing_manager, empty_type.clone().into_owned(), Ordering::Unordered)
             .unwrap();
-        owns_empty.set_ordering(&mut snapshot, &type_manager, &thing_manager, Ordering::Unordered).unwrap();
 
         let name_owns =
             person_type.get_owns_attribute(&snapshot, &type_manager, name_type.clone().into_owned()).unwrap().unwrap();

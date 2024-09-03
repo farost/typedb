@@ -64,6 +64,7 @@ fn setup_schema(storage: Arc<MVCCStorage<WALClient>>) {
             &type_manager,
             &thing_manager,
             MEMBERSHIP_MEMBER_LABEL.get().unwrap().name().as_str(),
+            Ordering::Unordered,
         )
         .unwrap();
     let membership_member_type = relates_member.role();
@@ -73,6 +74,7 @@ fn setup_schema(storage: Arc<MVCCStorage<WALClient>>) {
             &type_manager,
             &thing_manager,
             MEMBERSHIP_GROUP_LABEL.get().unwrap().name().as_str(),
+            Ordering::Unordered,
         )
         .unwrap();
     let membership_group_type = relates_group.role();
@@ -82,8 +84,8 @@ fn setup_schema(storage: Arc<MVCCStorage<WALClient>>) {
     let name_type = type_manager.create_attribute_type(&mut snapshot, NAME_LABEL.get().unwrap()).unwrap();
     name_type.set_value_type(&mut snapshot, &type_manager, &thing_manager, ValueType::String).unwrap();
 
-    person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, age_type.clone()).unwrap();
-    person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, name_type.clone()).unwrap();
+    person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, age_type.clone(), Ordering::Unordered).unwrap();
+    person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, name_type.clone(), Ordering::Unordered).unwrap();
     person_type.set_plays(&mut snapshot, &type_manager, &thing_manager, membership_member_type.clone()).unwrap();
     group_type.set_plays(&mut snapshot, &type_manager, &thing_manager, membership_group_type.clone()).unwrap();
 

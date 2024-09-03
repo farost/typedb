@@ -8,7 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::iter;
 
 use encoding::value::label::Label;
-use itertools::Itertools;
+use itertools::{chain, Itertools};
 use storage::snapshot::ReadableSnapshot;
 
 use crate::{
@@ -26,7 +26,10 @@ use crate::{
         Capability, KindAPI, Ordering, TypeAPI,
     },
 };
+use crate::type_::attribute_type::AttributeType;
 use crate::type_::constraint::{Constraint, ConstraintDescription};
+use crate::type_::object_type::ObjectType;
+use crate::type_::OwnerAPI;
 
 // TODO: Use get_label_cloned from TypeAPI instead of this function
 pub(crate) fn get_label_or_concept_read_err<'a>(
@@ -557,6 +560,54 @@ pub(crate) fn validate_role_type_supertype_ordering_match(
     }
 }
 
+// TODO: For tomorrow. Use it in type_manager in operation time!
+pub(crate) fn validate_sibling_owns_ordering_match_for_type(
+    snapshot: &impl ReadableSnapshot,
+    type_manager: &TypeManager,
+    object_type: ObjectType<'static>,
+    new_set_owns_orderings: HashMap<Owns<'static>, Ordering>,
+) -> Result<(), SchemaValidationError> {
+    let mut attribute_types_ordering: HashMap<AttributeType<'static>, (AttributeType<'static>, Ordering)> = HashMap::new();
+    let existing_owns = object_type
+        .get_owns_with_hidden(snapshot, type_manager)
+        .map_err(SchemaValidationError::ConceptRead)?
+        .into_iter()
+        .filter(|owns| !new_set_owns_orderings.contains_key(*owns))
+        .map(|owns| (owns, None::<Ordering>));
+
+    let all_updated_owns = new_set_owns_orderings
+        .iter()
+        .map(|(new_owns, new_ordering)| (new_owns, Some(new_ordering.clone())))
+        .chain(existing_owns);
+
+    for (owns, ordering_opt) in all_updated_owns {
+        let ordering = ordering_opt.unwrap_or(owns.get_ordering(snapshot, type_manager)?);
+        let attribute_type = owns.attribute();
+        let root_attribute_type = if let Some(root) = attribute_type.get_supertypes_transitive(snapshot, type_manager)?.last() {
+            root.clone()
+        } else {
+            attribute_type.clone()
+        };
+
+        if let Some((first_subtype, first_ordering)) = attribute_types_ordering.get(&root_attribute_type) {
+            if first_ordering != &ordering {
+                return Err(SchemaValidationError::OrderingDoesNotMatchWithCapabilityOfSubtypeInterface(
+                    get_label_or_schema_err(snapshot, object_type)?,
+                    get_label_or_schema_err(snapshot, first_subtype)?,
+                    get_label_or_schema_err(snapshot, attribute_type)?,
+                    first_ordering.clone(),
+                    ordering,
+                ));
+            }
+        } else {
+            attribute_types_ordering.insert(root_attribute_type, (attribute_type, ordering));
+        }
+    }
+
+    Ok(())
+}
+
+// TODO: Remove!
 pub(crate) fn validate_owns_override_ordering_match(
     snapshot: &impl ReadableSnapshot,
     owns: Owns<'static>,
@@ -572,10 +623,11 @@ pub(crate) fn validate_owns_override_ordering_match(
     if edge_ordering == overridden_edge_ordering {
         Ok(())
     } else {
-        Err(SchemaValidationError::OrderingDoesNotMatchWithOverride(
+        Err(SchemaValidationError::OrderingDoesNotMatchWithCapabilityOfSubtypeInterface(
             get_label_or_schema_err(snapshot, owns.owner())?,
             get_label_or_schema_err(snapshot, overridden_owns.owner())?,
             get_label_or_schema_err(snapshot, owns.attribute())?,
+            get_label_or_schema_err(snapshot, overridden_owns.attribute())?,
             edge_ordering,
             overridden_edge_ordering,
         ))
@@ -684,8 +736,8 @@ pub(crate) fn capability_get_annotation_with_source_by_category<CAP: Capability<
 }
 
 pub fn validate_capabilities_cardinalities_narrowing<CAP: Capability<'static>>(
-    type_manager: &TypeManager,
     snapshot: &impl ReadableSnapshot,
+    type_manager: &TypeManager,
     type_: CAP::ObjectType,
     not_stored_set_capabilities: &HashMap<CAP, bool>,
     not_stored_set_cardinalities: &HashMap<CAP, AnnotationCardinality>,

@@ -530,9 +530,9 @@ fn define_relates_with_annotations(
                         type_manager,
                         thing_manager,
                         role_label.name.as_str(),
+                        ordering,
                     )
                     .map_err(|source| DefineError::CreateRelates { source, relates: relates.to_owned() })?;
-                relates.role().set_ordering(snapshot, type_manager, thing_manager, ordering)?;
                 relates
             }
             DefinitionStatus::ExistsSame(Some((existing_relates, _))) => existing_relates,
@@ -692,14 +692,14 @@ fn define_owns_with_annotations(
         let definition_status =
             get_owns_status(snapshot, type_manager, object_type.clone(), attribute_type.clone(), ordering)
                 .map_err(|source| DefineError::UnexpectedConceptRead { source })?;
-        let (defined, is_new) = match definition_status {
+        let defined = match definition_status {
             DefinitionStatus::DoesNotExist => {
                 let owns = object_type
-                    .set_owns(snapshot, type_manager, thing_manager, attribute_type)
+                    .set_owns(snapshot, type_manager, thing_manager, attribute_type, ordering)
                     .map_err(|source| DefineError::CreateOwns { owns: owns.clone(), source })?;
-                (owns, true)
+                owns
             }
-            DefinitionStatus::ExistsSame(Some((existing_owns, _))) => (existing_owns, false),
+            DefinitionStatus::ExistsSame(Some((existing_owns, _))) => existing_owns,
             DefinitionStatus::ExistsSame(None) => unreachable!("Existing owns concept expected"),
             DefinitionStatus::ExistsDifferent((existing_owns, existing_ordering)) => {
                 return Err(DefineError::OwnsAlreadyDefinedButDifferent {
@@ -712,13 +712,7 @@ fn define_owns_with_annotations(
             }
         };
 
-        if is_new {
-            defined
-                .set_ordering(snapshot, type_manager, thing_manager, ordering)
-                .map_err(|source| DefineError::SetOwnsOrdering { owns: owns.clone(), source })?;
-        }
-
-        define_owns_annotations(snapshot, type_manager, thing_manager, &label, defined.clone(), &capability)?;
+        define_owns_annotations(snapshot, type_manager, thing_manager, &label, defined, &capability)?;
     }
     Ok(())
 }

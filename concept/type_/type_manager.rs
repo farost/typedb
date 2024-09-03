@@ -1305,6 +1305,7 @@ impl TypeManager {
         thing_manager: &ThingManager,
         label: &Label<'_>,
         relation_type: RelationType<'static>,
+        ordering: Ordering,
     ) -> Result<RoleType<'static>, ConceptWriteError> {
         OperationTimeValidation::validate_new_role_name_uniqueness(
             snapshot,
@@ -1324,16 +1325,15 @@ impl TypeManager {
             .map_err(|err| ConceptWriteError::Encoding { source: err })?;
         let role_type = RoleType::new(type_vertex);
         let relates = Relates::new(relation_type, role_type.clone());
-        let default_ordering = Ordering::default();
 
         TypeWriter::storage_put_label(snapshot, role_type.clone(), &label);
-        TypeWriter::storage_put_type_vertex_property(snapshot, role_type.clone(), Some(default_ordering));
+        TypeWriter::storage_put_type_vertex_property(snapshot, role_type.clone(), Some(ordering));
 
         let relates_error: Option<ConceptWriteError> = if let Err(error) = self.validate_set_relates(
             snapshot,
             thing_manager,
             relates.clone().into_owned(),
-            default_ordering,
+            ordering,
         ) {
             Some(error)
         } else {
@@ -1346,7 +1346,7 @@ impl TypeManager {
                 Ok(role_type)
             },
             Some(error) => {
-                TypeWriter::storage_unput_type_vertex_property::<Ordering>(snapshot, role_type.clone(), Some(default_ordering));
+                TypeWriter::storage_unput_type_vertex_property(snapshot, role_type.clone(), Some(ordering));
                 TypeWriter::storage_unput_label(snapshot, role_type.clone(), &label);
                 TypeWriter::storage_unput_vertex(snapshot, role_type);
                 Err(error)
@@ -2094,6 +2094,7 @@ impl TypeManager {
         thing_manager: &ThingManager,
         owner: ObjectType<'static>,
         attribute: AttributeType<'static>,
+        ordering: Ordering,
     ) -> Result<(), ConceptWriteError> {
         OperationTimeValidation::validate_interface_not_overridden::<Owns<'static>>(
             snapshot,
@@ -2103,10 +2104,19 @@ impl TypeManager {
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         let owns = Owns::new(ObjectType::new(owner.clone().into_vertex()), attribute.clone());
-        let default_ordering = Ordering::default();
-
         let exists = owner.get_owns(snapshot, self)?.contains(&owns);
-        if !exists {
+
+        if exists {
+            OperationTimeValidation::validate_set_owns_does_not_conflict_with_existing_owns_ordering(
+                snapshot,
+                self,
+                owns.clone(),
+                ordering,
+            )
+            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+        } else {
+            // TODO: Validate ordering!
+
             OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_capabilities(
                 snapshot,
                 self,
@@ -2116,7 +2126,7 @@ impl TypeManager {
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
             let initial_annotations =
-                HashSet::from([Annotation::Cardinality(Owns::get_default_cardinality(default_ordering))]);
+                HashSet::from([Annotation::Cardinality(Owns::get_default_cardinality(ordering))]);
             OperationTimeValidation::validate_new_acquired_owns_compatible_with_instances(
                 snapshot,
                 self,
@@ -2128,9 +2138,7 @@ impl TypeManager {
         }
 
         TypeWriter::storage_put_edge(snapshot, owns.clone());
-        if !exists {
-            TypeWriter::storage_put_type_edge_property(snapshot, owns, Some(default_ordering));
-        }
+        TypeWriter::storage_put_type_edge_property(snapshot, owns, Some(ordering));
         Ok(())
     }
 

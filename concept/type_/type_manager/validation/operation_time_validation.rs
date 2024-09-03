@@ -1879,8 +1879,8 @@ impl OperationTimeValidation {
 
         for object_type in object_and_subtypes {
             validate_capabilities_cardinalities_narrowing::<CAP>(
-                type_manager,
                 snapshot,
+                type_manager,
                 object_type,
                 &updated_capabilities,
                 &HashMap::new(), // read all cardinalities from storage as it's not changed
@@ -1909,8 +1909,8 @@ impl OperationTimeValidation {
 
         for object_type in object_and_subtypes {
             validate_capabilities_cardinalities_narrowing::<CAP>(
-                type_manager,
                 snapshot,
+                type_manager,
                 object_type,
                 &HashMap::new(), // read all capabilities from storage as it's not changed
                 &updated_cardinalities,
@@ -1940,8 +1940,8 @@ impl OperationTimeValidation {
 
         for object_type in object_and_subtypes {
             validate_capabilities_cardinalities_narrowing::<CAP>(
-                type_manager,
                 snapshot,
+                type_manager,
                 object_type,
                 &HashMap::new(), // read all capabilities from storage as it's not changed
                 &HashMap::new(), // read all cardinalities from storage as it's not changed
@@ -2049,6 +2049,24 @@ impl OperationTimeValidation {
         values: AnnotationValues,
     ) -> Result<(), SchemaValidationError> {
         validate_edge_values_narrows_inherited_values(snapshot, owns, overridden_owns, values)
+    }
+
+    pub(crate) fn validate_set_owns_does_not_conflict_with_existing_owns_ordering(
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+        existing_owns: Owns<'static>,
+        new_owns_ordering: Ordering,
+    ) -> Result<(), SchemaValidationError> {
+        let existing_ordering = existing_owns.get_ordering(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?;
+        if existing_ordering == new_owns_ordering {
+            Ok(())
+        } else {
+            Err(SchemaValidationError::CannotSetOwnsBecauseItIsAlreadySetWithDifferentOrdering(
+                get_label_or_schema_err(snapshot, existing_owns.owner())?,
+                get_label_or_schema_err(snapshot, existing_owns.attribute())?,
+                existing_ordering,
+            ))
+        }
     }
 
     pub(crate) fn validate_relates_distinct_annotation_ordering(
@@ -2301,7 +2319,7 @@ impl OperationTimeValidation {
         {
             Ok(())
         } else {
-            Err(SchemaValidationError::OverriddenCapabilityInterfaceIsNotSupertype(
+            Err(SchemaValidationError::HiddenCapabilityInterfaceIsNotSupertype(
                 CAP::KIND,
                 get_label_or_schema_err(snapshot, capability.object())?,
                 get_label_or_schema_err(snapshot, capability.interface())?,
@@ -2514,7 +2532,7 @@ impl OperationTimeValidation {
                                 continue;
                             }
                         }
-                        return Err(SchemaValidationError::OverriddenCapabilityInterfaceIsNotSupertype(
+                        return Err(SchemaValidationError::HiddenCapabilityInterfaceIsNotSupertype(
                             CAP::KIND,
                             get_label_or_schema_err(snapshot, capability.object())?,
                             get_label_or_schema_err(snapshot, interface_type)?,

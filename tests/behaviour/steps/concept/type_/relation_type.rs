@@ -30,7 +30,7 @@ use crate::{
 
 #[apply(generic_step)]
 #[step(expr = r"relation\({type_label}\) create role: {type_label}{may_error}")]
-pub async fn relation_type_create_role(
+pub async fn relation_type_create_role_unordered(
     context: &mut Context,
     type_label: Label,
     role_label: Label,
@@ -44,6 +44,29 @@ pub async fn relation_type_create_role(
             &tx.type_manager,
             &tx.thing_manager,
             role_label.into_typedb().name().as_str(),
+            Ordering::Unordered,
+        )
+    });
+    may_error.check_concept_write_without_read_errors(&res);
+}
+
+#[apply(generic_step)]
+#[step(expr = r"relation\({type_label}\) create role: {type_label}[]{may_error}")]
+pub async fn relation_type_create_role_ordered(
+    context: &mut Context,
+    type_label: Label,
+    role_label: Label,
+    may_error: MayError,
+) {
+    let res = with_schema_tx!(context, |tx| {
+        let relation_type =
+            tx.type_manager.get_relation_type(tx.snapshot.as_ref(), &type_label.into_typedb()).unwrap().unwrap();
+        relation_type.create_relates(
+            Arc::get_mut(&mut tx.snapshot).unwrap(),
+            &tx.type_manager,
+            &tx.thing_manager,
+            role_label.into_typedb().name().as_str(),
+            Ordering::Ordered,
         )
     });
     may_error.check_concept_write_without_read_errors(&res);
