@@ -301,10 +301,11 @@ pub fn get_abstract_constraint<'a, C: Constraint<T>, T: Hash + PartialEq>(
     debug_assert!(abstracts.is_empty() || abstracts.len() == 1, "Cannot have Abstract constraints hashed in different buckets");
     abstracts
         .into_iter()
-        .filter_map(|(constraint, sources)| {
-            match sources.get(&source) {
-                Some(_) => Some(constraint.clone()),
-                None => None,
+        .filter(|constraint| {
+            debug_assert_eq!(constraint.source(), source, "Expected not to inherit Abstract constraints");
+            match &constraint.source() == &source {
+                true => Some(constraint.clone()),
+                false => None,
             }
         })
         .next()

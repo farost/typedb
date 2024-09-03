@@ -116,19 +116,17 @@ impl OperationTimeValidation {
     pub(crate) fn validate_relates_distinct_constraint(
         snapshot: &impl ReadableSnapshot,
         thing_manager: &ThingManager,
+        relation_type: RelationType<'static>,
         role_type: RoleType<'static>,
         players_counts: &HashMap<&Object<'_>, u64>,
     ) -> Result<(), DataValidationError> {
-        let relates =
-            role_type.get_relates(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)?;
-        let distinct =
-            relates.is_distinct(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)?;
-
+        let distinct = relation_type.is_type_relates_distinct(snapshot, thing_manager.type_manager(), role_type.clone()).map_err(DataValidationError::ConceptRead)?;
         match distinct {
             true => {
                 let duplicated = players_counts.iter().find(|(_, count)| **count > 1);
                 match duplicated {
                     Some((player, count)) => Err(DataValidationError::PlayerViolatesDistinctRelatesConstraint {
+                        relation_type,
                         role_type,
                         player: player.clone().clone().into_owned(),
                         count: count.clone(),
@@ -143,18 +141,19 @@ impl OperationTimeValidation {
     pub(crate) fn validate_owns_distinct_constraint(
         snapshot: &impl ReadableSnapshot,
         thing_manager: &ThingManager,
-        owns: Owns<'static>,
+        object_type: ObjectType<'static>,
+        attribute_type: AttributeType<'static>,
         attributes_counts: &BTreeMap<&Attribute<'_>, u64>,
     ) -> Result<(), DataValidationError> {
-        let distinct =
-            owns.is_distinct(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)?;
+        let distinct = object_type.is_type_owns_distinct(snapshot, thing_manager.type_manager(), attribute_type.clone()).map_err(DataValidationError::ConceptRead)?;
 
         match distinct {
             true => {
                 let duplicated = attributes_counts.iter().find(|(_, count)| **count > 1);
                 match duplicated {
                     Some((attribute, count)) => Err(DataValidationError::AttributeViolatesDistinctOwnsConstraint {
-                        owns,
+                        object_type,
+                        attribute_type,
                         attribute: attribute.clone().clone().into_owned(),
                         count: count.clone(),
                     }),

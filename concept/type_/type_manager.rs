@@ -204,7 +204,7 @@ macro_rules! get_type_label_methods {
 
 macro_rules! get_annotations_declared_methods {
     ($(
-        fn $method_name:ident() -> $type_:ident = $reader_method:ident | $cache_method:ident | $annotation_type:ident;
+        fn $method_name:ident($type_:ident) -> $annotation_type:ident = $reader_method:ident | $cache_method:ident;
     )*) => {
         $(
             pub(crate) fn $method_name(
@@ -221,9 +221,23 @@ macro_rules! get_annotations_declared_methods {
     }
 }
 
+macro_rules! get_annotation_declared_by_category_methods {
+    ($(
+        fn $method_name:ident($type_:ident) -> $annotation_type:ty;
+    )*) => {
+        $(
+            pub(crate) fn $method_name(
+                &self, snapshot: &impl ReadableSnapshot, type_: $type_<'static>, annotation_category: AnnotationCategory,
+            ) -> Result<Option<$annotation_type>, ConceptReadError> {
+                Ok(type_.get_annotations_declared(snapshot, self)?.into_iter().find(|annotation| annotation.clone().into().category() == &annotation_category))
+            }
+        )*
+    }
+}
+
 macro_rules! get_constraints_methods {
     ($(
-        fn $method_name:ident() -> $type_:ident = $constraint_type:ident | $reader_method:ident | $cache_method:ident;
+        fn $method_name:ident() -> $constraint_type:ident<$type_:ident> = $reader_method:ident | $cache_method:ident;
     )*) => {
         $(
             pub(crate) fn $method_name(
@@ -340,15 +354,33 @@ macro_rules! get_has_constraint_methods {
     }
 }
 
+macro_rules! get_type_capability_has_constraint_methods {
+    ($(
+        fn $method_name:ident() -> $constrained_type:ident = $get_constraints_method:ident + $filtering_method:path;
+    )*) => {
+        $(
+            pub(crate) fn $method_name(
+                &self,
+                snapshot: &impl ReadableSnapshot,
+                object_type: $constrained_type<'static>::ObjectType,
+                interface_type: $constrained_type<'static>::InterfaceType,
+            ) -> Result<bool, ConceptReadError> {
+                let constraints = $filtering_method(object_type.$get_constraints_method(snapshot, self, interface_type)?.into_iter());
+                Ok(!constraints.is_empty())
+            }
+        )*
+    }
+}
+
 macro_rules! get_filtered_constraints_methods {
     ($(
-        fn $method_name:ident() -> $type_:ty = $constraint_type:ident | $get_constraints_method:ident | $filtering_method:path;
+        fn $method_name:ident() -> $constraint_type:ident<$type_:ty> = $get_constraints_method:ident + $filtering_method:path;
     )*) => {
         $(
             pub(crate) fn $method_name(
                 &self, snapshot: &impl ReadableSnapshot, type_: $type_
             ) -> Result<HashSet<$constraint_type<$type_>>, ConceptReadError> {
-                Ok($filtering_method(type_.$get_constraints_method(snapshot, self)?))
+                Ok($filtering_method(type_.$get_constraints_method(snapshot, self)?.into_iter()))
             }
         )*
     }
@@ -356,7 +388,7 @@ macro_rules! get_filtered_constraints_methods {
 
 macro_rules! get_type_capability_filtered_constraints_methods {
     ($(
-        fn $method_name:ident() -> $constrained_type:ident = $get_constraints_method:ident | $filtering_method:path;
+        fn $method_name:ident() -> $constrained_type:ident = $get_constraints_method:ident + $filtering_method:path;
     )*) => {
         $(
             pub(crate) fn $method_name(
@@ -365,21 +397,7 @@ macro_rules! get_type_capability_filtered_constraints_methods {
                 object_type: $constrained_type<'static>::ObjectType,
                 interface_type: $constrained_type<'static>::InterfaceType,
             ) -> Result<HashSet<CapabilityConstraint<$constrained_type>>, ConceptReadError> {
-                Ok($filtering_method(object_type.$get_constraints_method(snapshot, self, interface_type)?))
-            }
-        )*
-    }
-}
-
-macro_rules! get_annotation_declared_by_category_methods {
-    ($(
-        fn $method_name:ident() -> $type_:ty = $annotation_type:ty;
-    )*) => {
-        $(
-            pub(crate) fn $method_name(
-                &self, snapshot: &impl ReadableSnapshot, type_: $type_, annotation_category: AnnotationCategory,
-            ) -> Result<Option<$annotation_type>, ConceptReadError> {
-                Ok(type_.get_annotations_declared(snapshot, self)?.into_iter().find(|annotation| annotation.clone().into().category() == &annotation_category))
+                Ok($filtering_method(object_type.$get_constraints_method(snapshot, self, interface_type)?.into_iter()))
             }
         )*
     }
@@ -1041,23 +1059,33 @@ impl TypeManager {
     }
 
     get_annotations_declared_methods! {
-        fn get_entity_type_annotations_declared() -> EntityType = get_type_annotations_declared | get_annotations_declared | EntityTypeAnnotation;
-        fn get_relation_type_annotations_declared() -> RelationType = get_type_annotations_declared | get_annotations_declared | RelationTypeAnnotation;
-        fn get_role_type_annotations_declared() -> RoleType = get_type_annotations_declared | get_annotations_declared | RoleTypeAnnotation;
-        fn get_attribute_type_annotations_declared() -> AttributeType = get_type_annotations_declared | get_annotations_declared | AttributeTypeAnnotation;
-        fn get_owns_annotations_declared() -> Owns = get_capability_annotations_declared | get_owns_annotations_declared | OwnsAnnotation;
-        fn get_plays_annotations_declared() -> Plays = get_capability_annotations_declared | get_plays_annotations_declared | PlaysAnnotation;
-        fn get_relates_annotations_declared() -> Relates = get_capability_annotations_declared | get_relates_annotations_declared | RelatesAnnotation;
+        fn get_entity_type_annotations_declared(EntityType) -> EntityTypeAnnotation = get_type_annotations_declared | get_annotations_declared;
+        fn get_relation_type_annotations_declared(RelationType) -> RelationTypeAnnotation = get_type_annotations_declared | get_annotations_declared;
+        fn get_role_type_annotations_declared(RoleType) -> RoleTypeAnnotation = get_type_annotations_declared | get_annotations_declared;
+        fn get_attribute_type_annotations_declared(AttributeType) -> AttributeTypeAnnotation = get_type_annotations_declared | get_annotations_declared;
+        fn get_owns_annotations_declared(Owns) -> OwnsAnnotation = get_capability_annotations_declared | get_owns_annotations_declared;
+        fn get_plays_annotations_declared(Plays) -> PlaysAnnotation = get_capability_annotations_declared | get_plays_annotations_declared;
+        fn get_relates_annotations_declared(Relates) -> RelatesAnnotation = get_capability_annotations_declared | get_relates_annotations_declared;
+    }
+
+    get_annotation_declared_by_category_methods! {
+        fn get_entity_type_annotation_declared_by_category(EntityType) -> EntityTypeAnnotation;
+        fn get_relation_type_annotation_declared_by_category(RelationType) -> RelationTypeAnnotation;
+        fn get_attribute_type_annotation_declared_by_category(AttributeType) -> AttributeTypeAnnotation;
+        fn get_role_type_annotation_declared_by_category(RoleType) -> RoleTypeAnnotation;
+        fn get_owns_annotation_declared_by_category(Owns) -> OwnsAnnotation;
+        fn get_plays_annotation_declared_by_category(Plays) -> PlaysAnnotation;
+        fn get_relates_annotation_declared_by_category(Relates) -> RelatesAnnotation;
     }
 
     get_constraints_methods! {
-        fn get_entity_type_constraints() -> EntityType = TypeConstraint | get_type_constraints | get_constraints;
-        fn get_relation_type_constraints() -> RelationType = TypeConstraint | get_type_constraints | get_constraints;
-        fn get_role_type_constraints() -> RoleType = TypeConstraint | get_type_constraints | get_constraints;
-        fn get_attribute_type_constraints() -> AttributeType = TypeConstraint | get_type_constraints | get_constraints;
-        fn get_owns_constraints() -> Owns = CapabilityConstraint | get_capability_constraints | get_owns_constraints;
-        fn get_plays_constraints() -> Plays = CapabilityConstraint | get_capability_constraints | get_plays_constraints;
-        fn get_relates_constraints() -> Relates = CapabilityConstraint | get_capability_constraints | get_relates_constraints;
+        fn get_entity_type_constraints() -> TypeConstraint<EntityType> = get_type_constraints | get_constraints;
+        fn get_relation_type_constraints() -> TypeConstraint<RelationType> = get_type_constraints | get_constraints;
+        fn get_role_type_constraints() -> TypeConstraint<RoleType> = get_type_constraints | get_constraints;
+        fn get_attribute_type_constraints() -> TypeConstraint<AttributeType> = get_type_constraints | get_constraints;
+        fn get_owns_constraints() -> CapabilityConstraint<Owns> = get_capability_constraints | get_owns_constraints;
+        fn get_plays_constraints() -> CapabilityConstraint<Plays> = get_capability_constraints | get_plays_constraints;
+        fn get_relates_constraints() -> CapabilityConstraint<Relates> = get_capability_constraints | get_relates_constraints;
     }
 
     get_type_capability_constraints_methods! {
@@ -1067,22 +1095,22 @@ impl TypeManager {
     }
 
     get_filtered_constraints_methods! {
-        fn get_cardinality_constraints() -> impl Capability<'static> = CapabilityConstraint | get_constraints | get_cardinality_constraints;
-        fn get_owns_regex_constraints() -> Owns<'static> = CapabilityConstraint | get_constraints | get_regex_constraints;
-        fn get_owns_range_constraints() -> Owns<'static> = CapabilityConstraint | get_constraints | get_range_constraints;
-        fn get_owns_values_constraints() -> Owns<'static> = CapabilityConstraint | get_constraints | get_values_constraints;
-        fn get_attribute_type_regex_constraints() -> AttributeType<'static> = TypeConstraint | get_constraints | get_regex_constraints;
-        fn get_attribute_type_range_constraints() -> AttributeType<'static> = TypeConstraint | get_constraints | get_range_constraints;
-        fn get_attribute_type_values_constraints() -> AttributeType<'static> = TypeConstraint | get_constraints | get_values_constraints;
+        fn get_cardinality_constraints() -> CapabilityConstraint<impl Capability<'static>> = get_constraints + get_cardinality_constraints;
+        fn get_owns_regex_constraints() -> CapabilityConstraint<Owns<'static>> = get_constraints + get_regex_constraints;
+        fn get_owns_range_constraints() -> CapabilityConstraint<Owns<'static>> = get_constraints + get_range_constraints;
+        fn get_owns_values_constraints() -> CapabilityConstraint<Owns<'static>> = get_constraints + get_values_constraints;
+        fn get_attribute_type_regex_constraints() -> TypeConstraint<AttributeType<'static>> = get_constraints + get_regex_constraints;
+        fn get_attribute_type_range_constraints() -> TypeConstraint<AttributeType<'static>> = get_constraints + get_range_constraints;
+        fn get_attribute_type_values_constraints() -> TypeConstraint<AttributeType<'static>> = get_constraints + get_values_constraints;
     }
 
     get_type_capability_filtered_constraints_methods! {
-        fn get_type_owns_cardinality_constraints() -> Owns = get_type_owns_constraints | get_cardinality_constraints;
-        fn get_type_plays_cardinality_constraints() -> Plays = get_type_plays_constraints | get_cardinality_constraints;
-        fn get_type_relates_cardinality_constraints() -> Relates = get_type_relates_constraints | get_cardinality_constraints;
-        fn get_type_owns_regex_constraints() -> Owns = get_type_owns_constraints | get_regex_constraints;
-        fn get_type_owns_range_constraints() -> Owns = get_type_owns_constraints | get_range_constraints;
-        fn get_type_owns_values_constraints() -> Owns = get_type_owns_constraints | get_values_constraints;
+        fn get_type_owns_cardinality_constraints() -> Owns = get_type_owns_constraints + get_cardinality_constraints;
+        fn get_type_plays_cardinality_constraints() -> Plays = get_type_plays_constraints + get_cardinality_constraints;
+        fn get_type_relates_cardinality_constraints() -> Relates = get_type_relates_constraints + get_cardinality_constraints;
+        fn get_type_owns_regex_constraints() -> Owns = get_type_owns_constraints + get_regex_constraints;
+        fn get_type_owns_range_constraints() -> Owns = get_type_owns_constraints + get_range_constraints;
+        fn get_type_owns_values_constraints() -> Owns = get_type_owns_constraints + get_values_constraints;
     }
 
     get_has_constraint_methods! {
@@ -1090,14 +1118,9 @@ impl TypeManager {
         fn get_is_independent() -> AttributeType<'static> = get_independent_constraints;
     }
 
-    get_annotation_declared_by_category_methods! {
-        fn get_entity_type_annotation_declared_by_category() -> EntityType<'static> = EntityTypeAnnotation;
-        fn get_relation_type_annotation_declared_by_category() -> RelationType<'static> = RelationTypeAnnotation;
-        fn get_attribute_type_annotation_declared_by_category() -> AttributeType<'static> = AttributeTypeAnnotation;
-        fn get_role_type_annotation_declared_by_category() -> RoleType<'static> = RoleTypeAnnotation;
-        fn get_owns_annotation_declared_by_category() -> Owns<'static> = OwnsAnnotation;
-        fn get_plays_annotation_declared_by_category() -> Plays<'static> = PlaysAnnotation;
-        fn get_relates_annotation_declared_by_category() -> Relates<'static> = RelatesAnnotation;
+    get_type_capability_has_constraint_methods! {
+        fn get_is_type_owns_distinct() -> Owns = get_type_owns_constraints + get_distinct_constraints;
+        fn get_is_type_relates_distinct() -> Relates = get_type_relates_constraints + get_distinct_constraints;
     }
 
     get_hides_methods! {
@@ -1110,8 +1133,7 @@ impl TypeManager {
         &self, snapshot: &impl ReadableSnapshot, type_: T,
     ) -> Result<bool, ConceptReadError> {
         let constraints = type_.get_constraints(snapshot, self)?;
-        let constraints = get_abstract_constraint(type_, constraints.into_iter());
-        Ok(constraints.is_some())
+        Ok(get_abstract_constraint(type_, constraints.into_iter()).is_some())
     }
 
     pub(crate) fn get_unique_constraint(
@@ -1130,10 +1152,7 @@ impl TypeManager {
         &self, snapshot: &impl ReadableSnapshot, capability: CAP,
     ) -> Result<AnnotationCardinality, ConceptReadError> {
         let constraints = capability.get_constraints(snapshot, self)?;
-        match get_cardinality_constraint(capability, constraints.into_iter()).description() {
-            ConstraintDescription::Cardinality(cardinality) => Ok(cardinality),
-            _ => unreachable!("Expected only Cardinality constraint"),
-        }
+        Ok(get_cardinality_constraint(capability, constraints.into_iter()).description().unwrap_cardinality()?)
     }
 
     pub(crate) fn get_is_key(
@@ -1141,8 +1160,8 @@ impl TypeManager {
         snapshot: &impl ReadableSnapshot,
         owns: Owns<'static>,
     ) -> Result<bool, ConceptReadError> {
-        Ok(if let Some((_, source)) = get_unique_constraint::<CapabilityConstraint<Owns<'static>>, Owns<'static>>(owns.get_constraints(snapshot, self)?.into_iter())? {
-            source.get_annotations_declared(snapshot, self)?.contains(&OwnsAnnotation::Key(AnnotationKey {}))
+        Ok(if let Some(constraint) = get_unique_constraint(owns.get_constraints(snapshot, self)?.into_iter()) {
+            constraint.source().get_annotations_declared(snapshot, self)?.contains(&OwnsAnnotation::Key(AnnotationKey))
         } else {
             false
         })

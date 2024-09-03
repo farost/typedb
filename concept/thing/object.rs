@@ -315,7 +315,8 @@ pub trait ObjectAPI<'a>: for<'b> ThingAPI<'a, Vertex<'b> = ObjectVertex<'b>> + C
         OperationTimeValidation::validate_owns_distinct_constraint(
             snapshot,
             thing_manager,
-            owns.clone().into_owned(),
+            self.type_(),
+            attribute_type.clone(),
             &new_counts,
         )
         .map_err(|error| ConceptWriteError::DataValidation { source: error })?;

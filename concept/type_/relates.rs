@@ -48,6 +48,7 @@ impl<'a> Relates<'a> {
         self.role.clone()
     }
 
+    // TODO: It may be risky to use methods purely on constraints, so maybe we need to remove them and use only is_type_relates_distinct instead!
     pub fn is_distinct(
         &self,
         snapshot: &impl ReadableSnapshot,

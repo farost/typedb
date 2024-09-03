@@ -683,7 +683,7 @@ impl BinaryConstraint for Has<Variable> {
             } // It can't be another type => Do nothing and let type-inference clean it up
         };
         attribute
-            .get_owners(seeder.snapshot, seeder.type_manager)?
+            .get_owner_types(seeder.snapshot, seeder.type_manager)?
             .iter()
             .map(|(owner, _)| match owner {
                 ObjectType::Entity(entity) => TypeAnnotation::Entity(entity.clone()),
@@ -741,7 +741,7 @@ impl BinaryConstraint for Owns<Variable> {
             } // It can't be another type => Do nothing and let type-inference clean it up
         };
         attribute
-            .get_owners(seeder.snapshot, seeder.type_manager)?
+            .get_owner_types(seeder.snapshot, seeder.type_manager)?
             .iter()
             .map(|(owner, _)| match owner {
                 ObjectType::Entity(entity) => TypeAnnotation::Entity(entity.clone()),
@@ -1083,7 +1083,7 @@ impl<'graph> BinaryConstraint for PlayerRoleEdge<'graph> {
             } // It can't be another type => Do nothing and let type-inference clean it up
         };
         role_type
-            .get_players(seeder.snapshot, seeder.type_manager)?
+            .get_player_types(seeder.snapshot, seeder.type_manager)?
             .keys()
             .map(|player| match player {
                 ObjectType::Entity(entity) => TypeAnnotation::Entity(entity.clone()),
@@ -1141,7 +1141,7 @@ impl BinaryConstraint for Plays<Variable> {
             } // It can't be another type => Do nothing and let type-inference clean it up
         };
         role_type
-            .get_players(seeder.snapshot, seeder.type_manager)?
+            .get_player_types(seeder.snapshot, seeder.type_manager)?
             .keys()
             .map(|player| match player {
                 ObjectType::Entity(entity) => TypeAnnotation::Entity(entity.clone()),

@@ -311,6 +311,15 @@ impl<'a> RelationType<'a> {
         type_manager.get_type_relates_cardinality_constraints(snapshot, self.clone().into_owned(), role_type)
     }
 
+    pub(crate) fn is_type_relates_distinct<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        role_type: RoleType<'static>,
+    ) -> Result<bool, ConceptReadError> {
+        type_manager.get_is_type_relates_distinct(snapshot, self.clone().into_owned(), role_type)
+    }
+
     pub fn get_relates_role(
         &self,
         snapshot: &impl ReadableSnapshot,

@@ -22,6 +22,7 @@ use crate::{
         Ordering,
     },
 };
+use crate::type_::relation_type::RelationType;
 
 pub(crate) mod commit_time_validation;
 pub(crate) mod operation_time_validation;
@@ -35,12 +36,14 @@ pub enum DataValidationError {
     CannotAddPlayerInstanceForNotPlayedRoleType(Label<'static>, Label<'static>),
     CannotAddPlayerInstanceForNotRelatedRoleType(Label<'static>, Label<'static>),
     PlayerViolatesDistinctRelatesConstraint {
+        relation_type: RelationType<'static>,
         role_type: RoleType<'static>,
         player: Object<'static>,
         count: u64,
     },
     AttributeViolatesDistinctOwnsConstraint {
-        owns: Owns<'static>,
+        object_type: ObjectType<'static>,
+        attribute_type: AttributeType<'static>,
         attribute: Attribute<'static>,
         count: u64,
     },

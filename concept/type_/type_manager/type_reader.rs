@@ -644,7 +644,11 @@ impl TypeReader {
             for annotation in declared_annotations {
                 for constraint in annotation.clone().into().into_type_constraints(curr_type.clone()) {
                     match constraint.validation_mode() {
-                        ConstraintValidationMode::SingleInstanceOfTypeOrSubtype => continue,
+                        ConstraintValidationMode::SingleInstanceOfType => {
+                            if &constraint.source() != &type_ {
+                                continue
+                            }
+                        },
 
                         ConstraintValidationMode::AllInstancesOfTypeOrSubtypes => {
                             if let Some(duplicate) = all_constraints.iter().find(|saved_constraint| saved_constraint.category() == constraint.category()) {
@@ -652,7 +656,7 @@ impl TypeReader {
                             }
                         },
 
-                        ConstraintValidationMode::SingleInstanceOfType
+                        ConstraintValidationMode::SingleInstanceOfTypeOrSubtype
                         | ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes => {}
                     }
                     all_constraints.insert(constraint);
@@ -723,7 +727,11 @@ impl TypeReader {
         for current_capability in capabilities_for_interface_type {
             for constraint in TypeReader::get_capability_constraints(snapshot, current_capability)? {
                 match constraint.validation_mode() {
-                    ConstraintValidationMode::SingleInstanceOfTypeOrSubtype => continue,
+                    ConstraintValidationMode::SingleInstanceOfType => {
+                        if &constraint.source().interface() != &interface_type {
+                            continue
+                        }
+                    },
 
                     ConstraintValidationMode::AllInstancesOfTypeOrSubtypes => {
                         if let Some(duplicate) = all_constraints.iter().find(|saved_constraint| saved_constraint.category() == constraint.category()) {
@@ -736,7 +744,7 @@ impl TypeReader {
                         }
                     },
 
-                    ConstraintValidationMode::SingleInstanceOfType
+                    ConstraintValidationMode::SingleInstanceOfTypeOrSubtype
                     | ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes => {}
                 }
                 all_constraints.insert(constraint);

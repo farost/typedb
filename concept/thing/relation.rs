@@ -209,6 +209,7 @@ impl<'a> Relation<'a> {
         OperationTimeValidation::validate_relates_distinct_constraint(
             snapshot,
             thing_manager,
+            self.type_(),
             role_type.clone(),
             &new_counts,
         )

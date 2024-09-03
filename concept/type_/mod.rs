@@ -260,6 +260,13 @@ pub trait OwnerAPI<'a>: TypeAPI<'a> {
         interface_type: AttributeType<'static>,
     ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError>;
 
+    fn is_type_owns_distinct<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        interface_type: AttributeType<'static>,
+    ) -> Result<bool, ConceptReadError>;
+
     fn get_type_owns_regex_constraints<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
@@ -567,6 +574,7 @@ pub trait Capability<'a>:
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, HashSet<CapabilityConstraint<Self>>>, ConceptReadError>;
 
+    // TODO: It may be risky to use methods purely on constraints, so maybe we need to remove them and use only get_type_***_cardinality_constraints instead!
     fn get_cardinality_constraints(
         &self,
         snapshot: &impl ReadableSnapshot,
