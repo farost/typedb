@@ -30,7 +30,7 @@ use storage::{
     snapshot::{ReadableSnapshot, WritableSnapshot},
 };
 
-use super::Ordering;
+use super::{Capability, Ordering};
 use crate::{
     concept_iterator,
     error::{ConceptReadError, ConceptWriteError},
@@ -96,7 +96,7 @@ impl<'a> TypeAPI<'a> for RoleType<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_is_abstract(snapshot, self.clone().into_owned())
+        self.get_relates(snapshot, type_manager)?.is_abstract(snapshot, type_manager)
     }
 
     fn delete(
@@ -178,37 +178,6 @@ impl<'a> RoleType<'a> {
         name: &str,
     ) -> Result<(), ConceptWriteError> {
         type_manager.set_role_type_name(snapshot, self.clone().into_owned(), name)
-    }
-
-    pub fn set_annotation(
-        &self,
-        snapshot: &mut impl WritableSnapshot,
-        type_manager: &TypeManager,
-        thing_manager: &ThingManager,
-        annotation: RoleTypeAnnotation,
-    ) -> Result<(), ConceptWriteError> {
-        match annotation {
-            RoleTypeAnnotation::Abstract(_) => {
-                type_manager.set_annotation_abstract(snapshot, thing_manager, self.clone().into_owned())?
-            }
-        };
-        Ok(())
-    }
-
-    pub fn unset_annotation(
-        &self,
-        snapshot: &mut impl WritableSnapshot,
-        type_manager: &TypeManager,
-        annotation_category: AnnotationCategory,
-    ) -> Result<(), ConceptWriteError> {
-        let role_type_annotation = RoleTypeAnnotation::try_getting_default(annotation_category)
-            .map_err(|source| ConceptWriteError::Annotation { source })?;
-        match role_type_annotation {
-            RoleTypeAnnotation::Abstract(_) => {
-                type_manager.unset_annotation_abstract(snapshot, self.clone().into_owned())?
-            }
-        }
-        Ok(())
     }
 
     pub fn get_ordering(
@@ -298,15 +267,13 @@ impl<'a> Display for RoleType<'a> {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RoleTypeAnnotation {
-    Abstract(AnnotationAbstract),
 }
 
 impl TryFrom<Annotation> for RoleTypeAnnotation {
     type Error = AnnotationError;
     fn try_from(annotation: Annotation) -> Result<RoleTypeAnnotation, AnnotationError> {
         match annotation {
-            Annotation::Abstract(annotation) => Ok(RoleTypeAnnotation::Abstract(annotation)),
-
+            | Annotation::Abstract(_)
             | Annotation::Independent(_)
             | Annotation::Distinct(_)
             | Annotation::Cardinality(_)
@@ -322,17 +289,9 @@ impl TryFrom<Annotation> for RoleTypeAnnotation {
 
 impl Into<Annotation> for RoleTypeAnnotation {
     fn into(self) -> Annotation {
-        match self {
-            RoleTypeAnnotation::Abstract(annotation) => Annotation::Abstract(annotation),
-        }
+        unreachable!("RoleTypes do not have annotations!")
     }
 }
-
-// impl<'a> IIDAPI<'a> for RoleType<'a> {
-//     fn iid(&'a self) -> ByteReference<'a> {
-//         self.vertex.bytes()
-//     }
-// }
 
 // TODO: can we inline this into the macro invocation?
 fn storage_key_to_role_type(storage_key: StorageKey<'_, BUFFER_KEY_INLINE>) -> RoleType<'_> {

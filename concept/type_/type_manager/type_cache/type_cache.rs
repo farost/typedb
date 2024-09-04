@@ -371,10 +371,6 @@ impl TypeCache {
         &self.relates.get(&relates).unwrap().common_capability_cache.specializes_transitive
     }
 
-    pub(crate) fn get_relates_hides<'c>(&'c self, relates: Relates<'c>) -> &'c Option<Relates<'static>> {
-        &self.relates.get(&relates).unwrap().common_capability_cache.hides
-    }
-
     pub(crate) fn get_relates_specializing<'c>(&'c self, relates: Relates<'c>) -> &'c HashSet<Relates<'static>> {
         &self.relates.get(&relates).unwrap().common_capability_cache.specializing
     }
@@ -429,10 +425,6 @@ impl TypeCache {
         &self.plays.get(&plays).unwrap().common_capability_cache.specializes_transitive
     }
 
-    pub(crate) fn get_plays_hides<'c>(&'c self, plays: Plays<'c>) -> &'c Option<Plays<'static>> {
-        &self.plays.get(&plays).unwrap().common_capability_cache.hides
-    }
-
     pub(crate) fn get_plays_specializing<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<Plays<'static>> {
         &self.plays.get(&plays).unwrap().common_capability_cache.specializing
     }
@@ -484,10 +476,6 @@ impl TypeCache {
 
     pub(crate) fn get_owns_specializes_transitive<'c>(&'c self, owns: Owns<'c>) -> &'c Vec<Owns<'static>> {
         &self.owns.get(&owns).unwrap().common_capability_cache.specializes_transitive
-    }
-
-    pub(crate) fn get_owns_hides<'c>(&'c self, owns: Owns<'c>) -> &'c Option<Owns<'static>> {
-        &self.owns.get(&owns).unwrap().common_capability_cache.hides
     }
 
     pub(crate) fn get_owns_specializing<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<Owns<'static>> {

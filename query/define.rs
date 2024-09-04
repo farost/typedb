@@ -661,7 +661,7 @@ fn define_relates_override<'a>(
         )?;
         if need_define {
             relates
-                .set_override(snapshot, type_manager, thing_manager, overridden_relates)
+                .set_specialize(snapshot, type_manager, thing_manager, overridden_relates)
                 .map_err(|source| DefineError::SetOverride { label: relation_label.clone().into_owned(), source })?;
         }
     }

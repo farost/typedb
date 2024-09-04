@@ -27,7 +27,7 @@ use crate::{
     error::ConceptWriteError,
     type_::{
         attribute_type::AttributeType, owns::Owns, relates::Relates, relation_type::RelationType, role_type::RoleType,
-        sub::Sub, type_manager::type_reader::TypeReader, EdgeHidden, Ordering, TypeAPI,
+        sub::Sub, type_manager::type_reader::TypeReader, EdgeAbstract, Ordering, TypeAPI,
     },
 };
 
@@ -213,21 +213,6 @@ impl<Snapshot: WritableSnapshot> TypeWriter<Snapshot> {
         } else {
             snapshot.unput(key.into_owned_array())
         }
-    }
-
-    pub(crate) fn storage_set_type_edge_hidden<E>(snapshot: &mut Snapshot, edge: E, hidden: E)
-    where
-        E: TypeEdgeEncoding<'static>,
-    {
-        let hidden_edge = EdgeHidden::<E> { hidden };
-        Self::storage_put_type_edge_property(snapshot, edge, Some(hidden_edge))
-    }
-
-    pub(crate) fn storage_delete_type_edge_hidden<T, E>(snapshot: &mut Snapshot, edge: E)
-    where
-        E: TypeEdgeEncoding<'static>,
-    {
-        Self::storage_delete_type_edge_property::<EdgeHidden<E>>(snapshot, edge)
     }
 
     pub(crate) fn storage_set_owns_ordering(snapshot: &mut Snapshot, owns: Owns<'_>, ordering: Ordering) {

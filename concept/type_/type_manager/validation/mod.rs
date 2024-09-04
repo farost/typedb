@@ -25,6 +25,7 @@ use crate::{
     },
 };
 use crate::type_::constraint::ConstraintDescription;
+use crate::type_::relates::Relates;
 
 pub(crate) mod commit_time_validation;
 pub(crate) mod operation_time_validation;
@@ -67,6 +68,7 @@ pub enum SchemaValidationError {
         Label<'static>,
         Label<'static>,
     ),
+    CannotUnsetRelatesAbstractnessAsItHasSpecializingRelates(Relates<'static>),
     OrderingDoesNotMatchWithSupertype(Label<'static>, Label<'static>, Ordering, Ordering),
     OrderingDoesNotMatchWithCapabilityOfSubtypeInterface(Label<'static>, Label<'static>, Label<'static>, Ordering, Ordering),
     CannotChangeSupertypeAsCapabilityOverrideIsImplicitlyLost(
@@ -90,7 +92,7 @@ pub enum SchemaValidationError {
     HiddenOwnsIsNotInheritedByObjectType(Label<'static>, Label<'static>),
     HiddenPlaysIsNotInheritedByObjectType(Label<'static>, Label<'static>),
     CannotSetOwnsBecauseItIsAlreadySetWithDifferentOrdering(Label<'static>, Label<'static>, Ordering),
-    InvalidOrderingForDistinctAnnotation(Label<'static>),
+    InvalidOrderingForDistinctConstraint(Label<'static>),
     AttributeTypeWithoutValueTypeShouldBeAbstract(Label<'static>),
     ValueTypeIsNotCompatibleWithRegexAnnotation(Label<'static>, Option<ValueType>),
     ValueTypeIsNotCompatibleWithRangeAnnotation(Label<'static>, Option<ValueType>),
@@ -206,16 +208,7 @@ pub enum SchemaValidationError {
     CannotChangeValueTypeWithExistingInstances(Label<'static>),
     CannotSetAbstractToTypeWithExistingInstances(Label<'static>),
     CannotUnsetCapabilityWithExistingInstances(CapabilityKind, Label<'static>, Label<'static>, Label<'static>),
-    CannotHideCapabilityWithExistingInstances(CapabilityKind, Label<'static>, Label<'static>, Label<'static>),
-    CannotOverrideCapabilityAsItIsOverriddenForSubtype(
-        CapabilityKind,
-        Label<'static>,
-        Label<'static>,
-        Label<'static>,
-        Label<'static>,
-        Label<'static>,
-        Label<'static>,
-    ),
+    CannotSetAbstractToCapabilityWithExistingInstances(CapabilityKind, Label<'static>, Label<'static>, Label<'static>),
     CannotChangeSupertypeAsCapabilityIsLostWhileHavingHasInstances(
         CapabilityKind,
         Label<'static>,
@@ -300,12 +293,13 @@ impl Error for SchemaValidationError {
             Self::HiddenOwnsIsNotInheritedByObjectType(_, _) => None,
             Self::HiddenPlaysIsNotInheritedByObjectType(_, _) => None,
             Self::CannotSetOwnsBecauseItIsAlreadySetWithDifferentOrdering(_, _, _) => None,
-            Self::InvalidOrderingForDistinctAnnotation(_) => None,
+            Self::InvalidOrderingForDistinctConstraint(_) => None,
             Self::NonAbstractTypeCannotHaveAbstractInterfaceCapability(_, _, _) => None,
             Self::AttributeTypeSupertypeIsNotAbstract(_) => None,
             Self::AbstractTypesSupertypeHasToBeAbstract(_, _) => None,
             Self::CannotUnsetAbstractnessAsItHasDeclaredCapabilityOfAbstractInterface(_, _, _) => None,
             Self::CannotUnsetAbstractnessAsItHasInheritedCapabilityOfAbstractInterface(_, _, _) => None,
+            Self::CannotUnsetRelatesAbstractnessAsItHasSpecializingRelates(_) => None,
             Self::AttributeTypeWithoutValueTypeShouldBeAbstract(_) => None,
             Self::ValueTypeIsNotCompatibleWithRegexAnnotation(_, _) => None,
             Self::ValueTypeIsNotCompatibleWithRangeAnnotation(_, _) => None,
@@ -363,7 +357,7 @@ impl Error for SchemaValidationError {
             Self::CannotChangeValueTypeWithExistingInstances(_) => None,
             Self::CannotSetAbstractToTypeWithExistingInstances(_) => None,
             Self::CannotUnsetCapabilityWithExistingInstances(_, _, _, _) => None,
-            Self::CannotHideCapabilityWithExistingInstances(_, _, _, _) => None,
+            Self::CannotSetAbstractToCapabilityWithExistingInstances(_, _, _, _) => None,
             Self::CannotOverrideCapabilityAsItIsOverriddenForSubtype(_, _, _, _, _, _, _) => None,
             Self::CannotChangeSupertypeAsCapabilityIsLostWhileHavingHasInstances(_, _, _, _, _) => None,
             Self::CannotAcquireCapabilityAsExistingInstancesViolateItsConstraint(_, _, _, _, _) => None,

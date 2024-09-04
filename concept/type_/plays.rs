@@ -126,6 +126,14 @@ impl<'a> Capability<'a> for Plays<'a> {
         self.role.clone()
     }
 
+    fn is_abstract(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<bool, ConceptReadError> {
+        type_manager.get_capability_is_abstract(snapshot, self.clone().into_owned())
+    }
+
     // fn get_specializes<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
@@ -142,29 +150,21 @@ impl<'a> Capability<'a> for Plays<'a> {
     //     type_manager.get_plays_specializes_transitive(snapshot, self.clone().into_owned())
     // }
 
-    fn get_hides<'this>(
+    fn get_specializing<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, Option<Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_hides(snapshot, self.clone().into_owned())
+    ) -> Result<MaybeOwns<'this, HashSet<Plays<'static>>>, ConceptReadError> {
+        type_manager.get_plays_specializing(snapshot, self.clone().into_owned())
     }
 
-    // fn get_specializing<'this>(
-    //     &'this self,
-    //     snapshot: &impl ReadableSnapshot,
-    //     type_manager: &'this TypeManager,
-    // ) -> Result<MaybeOwns<'this, HashSet<Plays<'static>>>, ConceptReadError> {
-    //     type_manager.get_plays_specializing(snapshot, self.clone().into_owned())
-    // }
-    //
-    // fn get_specializing_transitive<'this>(
-    //     &'this self,
-    //     snapshot: &impl ReadableSnapshot,
-    //     type_manager: &'this TypeManager,
-    // ) -> Result<MaybeOwns<'this, Vec<Plays<'static>>>, ConceptReadError> {
-    //     type_manager.get_plays_specializing_transitive(snapshot, self.clone().into_owned())
-    // }
+    fn get_specializing_transitive<'this>(
+        &'this self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'this TypeManager,
+    ) -> Result<MaybeOwns<'this, Vec<Plays<'static>>>, ConceptReadError> {
+        type_manager.get_plays_specializing_transitive(snapshot, self.clone().into_owned())
+    }
 
     fn get_annotations_declared<'this>(
         &'this self,

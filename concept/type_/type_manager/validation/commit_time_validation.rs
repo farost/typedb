@@ -780,7 +780,7 @@ impl CommitTimeValidation {
         object_type: ObjectType<'static>,
         validation_errors: &mut Vec<SchemaValidationError>,
     ) -> Result<(), ConceptReadError> {
-        if let Err(err) = validate_sibling_owns_ordering_match_for_type(snapshot, type_manager, object_type, HashMap::new()) {
+        if let Err(err) = validate_sibling_owns_ordering_match_for_type(snapshot, type_manager, object_type, &HashMap::new()) {
             validation_errors.push(err);
         }
         Ok(())

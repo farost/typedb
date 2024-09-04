@@ -86,7 +86,7 @@ use crate::{
         relation_type::RelationType,
         role_type::RoleType,
         type_manager::TypeManager,
-        Capability, EdgeHidden, ObjectTypeAPI, OwnerAPI, PlayerAPI, TypeAPI,
+        Capability, EdgeAbstract, ObjectTypeAPI, OwnerAPI, PlayerAPI, TypeAPI,
     },
     ConceptStatus,
 };

@@ -27,6 +27,7 @@ use crate::{
         Capability, Ordering, TypeAPI,
     },
 };
+use crate::type_::annotation::AnnotationAbstract;
 use crate::type_::constraint::CapabilityConstraint;
 use crate::type_::owns::Owns;
 
@@ -57,23 +58,23 @@ impl<'a> Relates<'a> {
         type_manager.get_is_distinct(snapshot, self.clone().into_owned())
     }
 
-    pub fn set_override(
+    pub fn set_specialize(
         &self,
         snapshot: &mut impl WritableSnapshot,
         type_manager: &TypeManager,
         thing_manager: &ThingManager,
-        overridden: Relates<'static>,
+        specialized: Relates<'static>,
     ) -> Result<(), ConceptWriteError> {
-        type_manager.set_relates_override(snapshot, thing_manager, self.clone().into_owned(), overridden)
+        type_manager.set_relates_specialize(snapshot, thing_manager, self.clone().into_owned(), specialized)
     }
 
-    pub fn unset_override(
+    pub fn unset_specialize(
         &self,
         snapshot: &mut impl WritableSnapshot,
         type_manager: &TypeManager,
         thing_manager: &ThingManager,
     ) -> Result<(), ConceptWriteError> {
-        type_manager.unset_relates_override(snapshot, thing_manager, self.clone().into_owned())
+        type_manager.unset_relates_specialize(snapshot, thing_manager, self.clone().into_owned())
     }
 
     pub fn set_annotation(
@@ -84,6 +85,9 @@ impl<'a> Relates<'a> {
         annotation: RelatesAnnotation,
     ) -> Result<(), ConceptWriteError> {
         match annotation {
+            RelatesAnnotation::Abstract(_) => {
+                type_manager.set_relates_annotation_abstract(snapshot, thing_manager, self.clone().into_owned())?
+            }
             RelatesAnnotation::Distinct(_) => {
                 type_manager.set_relates_annotation_distinct(snapshot, thing_manager, self.clone().into_owned())?
             }
@@ -107,6 +111,9 @@ impl<'a> Relates<'a> {
         let relates_annotation = RelatesAnnotation::try_getting_default(annotation_category)
             .map_err(|source| ConceptWriteError::Annotation { source })?;
         match relates_annotation {
+            RelatesAnnotation::Abstract(_) => {
+                type_manager.unset_relates_annotation_abstract(snapshot, self.clone().into_owned(), true)?
+            }
             RelatesAnnotation::Distinct(_) => {
                 type_manager.unset_capability_annotation_distinct(snapshot, self.clone().into_owned())?
             }
@@ -173,6 +180,14 @@ impl<'a> Capability<'a> for Relates<'a> {
         self.role.clone()
     }
 
+    fn is_abstract(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<bool, ConceptReadError> {
+        type_manager.get_capability_is_abstract(snapshot, self.clone().into_owned())
+    }
+
     // fn get_specializes<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
@@ -188,15 +203,6 @@ impl<'a> Capability<'a> for Relates<'a> {
     // ) -> Result<MaybeOwns<'this, Vec<Relates<'static>>>, ConceptReadError> {
     //     type_manager.get_relates_specializes_transitive(snapshot, self.clone().into_owned())
     // }
-
-    fn get_hides<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, Option<Relates<'static>>>, ConceptReadError> {
-        type_manager.get_relates_hides(snapshot, self.clone().into_owned())
-    }
-
     // fn get_specializing<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
@@ -232,6 +238,7 @@ impl<'a> Capability<'a> for Relates<'a> {
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum RelatesAnnotation {
+    Abstract(AnnotationAbstract),
     Distinct(AnnotationDistinct),
     Cardinality(AnnotationCardinality),
 }
@@ -241,10 +248,10 @@ impl TryFrom<Annotation> for RelatesAnnotation {
 
     fn try_from(annotation: Annotation) -> Result<RelatesAnnotation, AnnotationError> {
         match annotation {
+            Annotation::Abstract(annotation) => Ok(RelatesAnnotation::Abstract(annotation)),
             Annotation::Distinct(annotation) => Ok(RelatesAnnotation::Distinct(annotation)),
             Annotation::Cardinality(annotation) => Ok(RelatesAnnotation::Cardinality(annotation)),
 
-            | Annotation::Abstract(_)
             | Annotation::Independent(_)
             | Annotation::Unique(_)
             | Annotation::Key(_)
@@ -259,6 +266,7 @@ impl TryFrom<Annotation> for RelatesAnnotation {
 impl Into<Annotation> for RelatesAnnotation {
     fn into(self) -> Annotation {
         match self {
+            RelatesAnnotation::Abstract(annotation) => Annotation::Abstract(annotation),
             RelatesAnnotation::Distinct(annotation) => Annotation::Distinct(annotation),
             RelatesAnnotation::Cardinality(annotation) => Annotation::Cardinality(annotation),
         }

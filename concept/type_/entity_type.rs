@@ -95,7 +95,7 @@ impl<'a> TypeAPI<'a> for EntityType<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_is_abstract(snapshot, self.clone().into_owned())
+        type_manager.get_type_is_abstract(snapshot, self.clone().into_owned())
     }
 
     fn delete(
@@ -217,7 +217,7 @@ impl<'a> EntityType<'a> {
     ) -> Result<(), ConceptWriteError> {
         match annotation {
             EntityTypeAnnotation::Abstract(_) => {
-                type_manager.set_annotation_abstract(snapshot, thing_manager, self.clone().into_owned())?
+                type_manager.set_entity_type_annotation_abstract(snapshot, thing_manager, self.clone().into_owned())?
             }
         };
         Ok(())
@@ -233,7 +233,7 @@ impl<'a> EntityType<'a> {
             .map_err(|source| ConceptWriteError::Annotation { source })?;
         match entity_annotation {
             EntityTypeAnnotation::Abstract(_) => {
-                type_manager.unset_annotation_abstract(snapshot, self.clone().into_owned())?
+                type_manager.unset_entity_type_annotation_abstract(snapshot, self.clone().into_owned())?
             }
         }
 
@@ -464,12 +464,6 @@ impl Into<Annotation> for EntityTypeAnnotation {
         }
     }
 }
-
-// impl<'a> IIDAPI<'a> for EntityType<'a> {
-//     fn iid(&'a self) -> ByteReference<'a> {
-//         self.vertex.bytes()
-//     }
-// }
 
 // TODO: can we inline this into the macro invocation?
 fn storage_key_to_entity_type(storage_key: StorageKey<'_, BUFFER_KEY_INLINE>) -> EntityType<'_> {

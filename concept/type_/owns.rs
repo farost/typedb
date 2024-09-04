@@ -241,6 +241,14 @@ impl<'a> Capability<'a> for Owns<'a> {
         self.attribute.clone()
     }
 
+    fn is_abstract(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<bool, ConceptReadError> {
+        type_manager.get_capability_is_abstract(snapshot, self.clone().into_owned())
+    }
+
     // fn get_specializes<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
@@ -256,15 +264,6 @@ impl<'a> Capability<'a> for Owns<'a> {
     // ) -> Result<MaybeOwns<'this, Vec<Owns<'static>>>, ConceptReadError> {
     //     type_manager.get_owns_specializes_transitive(snapshot, self.clone().into_owned())
     // }
-
-    fn get_hides<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, Option<Owns<'static>>>, ConceptReadError> {
-        type_manager.get_owns_hides(snapshot, self.clone().into_owned())
-    }
-
     // fn get_specializing<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,

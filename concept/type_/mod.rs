@@ -22,6 +22,9 @@ use encoding::{
 use primitive::maybe_owns::MaybeOwns;
 use resource::constants::snapshot::{BUFFER_KEY_INLINE, BUFFER_VALUE_INLINE};
 use serde::{Deserialize, Serialize};
+use bytes::byte_array::ByteArray;
+use encoding::value::boolean_bytes::BooleanBytes;
+use encoding::value::value_type::ValueTypeBytes;
 use storage::snapshot::{ReadableSnapshot, WritableSnapshot};
 
 use crate::{
@@ -533,6 +536,12 @@ pub trait Capability<'a>:
 
     fn interface(&self) -> Self::InterfaceType;
 
+    fn is_abstract(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<bool, ConceptReadError>;
+
     // fn get_specializes<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
@@ -544,13 +553,6 @@ pub trait Capability<'a>:
     //     snapshot: &impl ReadableSnapshot,
     //     type_manager: &'this TypeManager,
     // ) -> Result<MaybeOwns<'this, Vec<Self>>, ConceptReadError>;
-
-    fn get_hides<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, Option<Self>>, ConceptReadError>;
-
     // fn get_specializing<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
@@ -594,21 +596,5 @@ pub trait Capability<'a>:
 
     fn chain_capabilities<C: IntoIterator<Item = &Self>>(first: Self, others: C) -> Chain<Self, C> {
         iter::once(first).chain(others.into_iter())
-    }
-}
-
-pub struct EdgeHidden<EDGE: TypeEdgeEncoding<'static>> {
-    hidden: EDGE,
-}
-
-impl<'a, EDGE: TypeEdgeEncoding<'static>> TypeEdgePropertyEncoding<'a> for EdgeHidden<EDGE> {
-    const INFIX: Infix = Infix::PropertyHide;
-
-    fn from_value_bytes(value: ByteReference<'_>) -> Self {
-        Self { hidden: EDGE::decode_canonical_edge(Bytes::Reference(value).into_owned()) }
-    }
-
-    fn to_value_bytes(self) -> Option<Bytes<'a, BUFFER_VALUE_INLINE>> {
-        Some(Bytes::Reference(self.hidden.to_canonical_type_edge().bytes()).into_owned())
     }
 }

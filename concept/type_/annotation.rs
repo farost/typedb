@@ -194,7 +194,7 @@ impl AnnotationRegex {
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct AnnotationCascade;
 
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
 pub struct AnnotationRange {
     // ##########################################################################
     // ###### WARNING: any changes here may break backwards compatibility! ######
@@ -331,14 +331,7 @@ impl AnnotationRange {
     }
 }
 
-impl Hash for AnnotationRange {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        hash_value::hash_value_opt(&self.start_inclusive, state);
-        hash_value::hash_value_opt(&self.end_inclusive, state);
-    }
-}
-
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
 pub struct AnnotationValues {
     // ##########################################################################
     // ###### WARNING: any changes here may break backwards compatibility! ######
@@ -423,12 +416,6 @@ impl AnnotationValues {
 
     fn contains(&self, value: &Value<'_>) -> bool {
         self.values.contains(value)
-    }
-}
-
-impl Hash for AnnotationValues {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        hash_value::hash_value_vec(&self.values, state);
     }
 }
 
@@ -805,43 +792,6 @@ impl Error for AnnotationError {
             Self::UnsupportedAnnotationForSub(_) => None,
             Self::UnsupportedAnnotationForValueType(_) => None,
         }
-    }
-}
-
-// TODO: Use ValueType's hash instead of this hack once it is merged with 3.0 branch!
-mod hash_value {
-    use std::hash::{Hash, Hasher};
-
-    use encoding::value::value::Value;
-
-    // WARN: Use this function only for Annotations containing Values to allow its hashing,
-    // not while precisely working with real values.
-    fn hash_value<H: Hasher>(value: &Value<'static>, state: &mut H) {
-        match value {
-            Value::Boolean(value) => value.hash(state),
-            Value::Long(value) => value.hash(state),
-            Value::Double(value) => value.to_bits().hash(state),
-            Value::Decimal(value) => value.hash(state),
-            Value::Date(value) => value.hash(state),
-            Value::DateTime(value) => value.hash(state),
-            Value::DateTimeTZ(value) => value.hash(state),
-            Value::String(value) => value.hash(state),
-            Value::Duration(value) => value.hash(state),
-            Value::Struct(_value) => unreachable!("Cannot hash a struct"),
-        }
-    }
-
-    pub(crate) fn hash_value_opt<H: Hasher>(value_opt: &Option<Value<'static>>, state: &mut H) {
-        const NONE_HASH_MARKER: u64 = 0xDEADBEEFDEADBEEF;
-
-        match value_opt {
-            None => NONE_HASH_MARKER.hash(state),
-            Some(value) => hash_value(value, state),
-        }
-    }
-
-    pub(crate) fn hash_value_vec<H: Hasher>(value_vec: &Vec<Value<'static>>, state: &mut H) {
-        value_vec.iter().for_each(|value| hash_value(value, state))
     }
 }
 

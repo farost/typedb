@@ -104,7 +104,6 @@ pub(crate) struct CommonCapabilityCache<CAP: Capability<'static>> {
     pub(super) capability: CAP,
     pub(super) specializes: Option<CAP>,
     pub(super) specializes_transitive: Vec<CAP>,
-    pub(super) hides: Option<CAP>,
     pub(super) specializing: HashSet<CAP>,
     pub(super) specializing_transitive: Vec<CAP>,
     pub(super) annotations_declared: HashSet<CAP::AnnotationType>,
@@ -185,7 +184,7 @@ impl AttributeTypeCache {
                     attribute.clone(),
                 )
                 .unwrap(),
-                owner_types: TypeReader::get_objects_with_capabilities_for_interface::<Owns<'static>>(snapshot, attribute.clone()).unwrap(),
+                owner_types: TypeReader::get_object_types_with_capabilities_for_interface::<Owns<'static>>(snapshot, attribute.clone()).unwrap(),
             };
             caches[attribute.vertex().type_id_().as_u16() as usize] = Some(cache);
         }
@@ -207,13 +206,13 @@ impl RoleTypeCache {
                 common_type_cache: CommonTypeCache::create(snapshot, role.clone()),
                 ordering,
                 relates: TypeReader::get_role_type_relates_declared(snapshot, role.clone()).unwrap(),
-                relation_types: TypeReader::get_objects_with_capabilities_for_interface::<Relates<'static>>(snapshot, role.clone()).unwrap(),
+                relation_types: TypeReader::get_object_types_with_capabilities_for_interface::<Relates<'static>>(snapshot, role.clone()).unwrap(),
                 plays: TypeReader::get_capabilities_for_interface::<Plays<'static>>(
                     snapshot,
                     role.clone(),
                 )
                 .unwrap(),
-                player_types: TypeReader::get_objects_with_capabilities_for_interface::<Plays<'static>>(snapshot, role.clone()).unwrap(),
+                player_types: TypeReader::get_object_types_with_capabilities_for_interface::<Plays<'static>>(snapshot, role.clone()).unwrap(),
             };
             caches[role.vertex().type_id_().as_u16() as usize] = Some(cache);
         }
@@ -321,7 +320,6 @@ impl<CAP: Capability<'static>> CommonCapabilityCache<CAP> {
         let constraints = TypeReader::get_capability_constraints(snapshot, capability.clone()).unwrap();
         let specializes = TypeReader::get_type_capability_specializes(snapshot, capability.clone()).unwrap();
         let specializes_transitive = TypeReader::get_capability_specializes_transitive(snapshot, capability.clone()).unwrap();
-        let hides = TypeReader::get_capability_hides(snapshot, capability.clone()).unwrap();
         let specializing = TypeReader::get_specializing_capabilities(snapshot, capability.clone()).unwrap();
         let specializing_transitive = TypeReader::get_specializing_capabilities_transitive(snapshot, capability.clone()).unwrap();
         CommonCapabilityCache {
@@ -330,7 +328,6 @@ impl<CAP: Capability<'static>> CommonCapabilityCache<CAP> {
             constraints,
             specializes,
             specializes_transitive,
-            hides,
             specializing,
             specializing_transitive,
         }

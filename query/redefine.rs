@@ -575,7 +575,7 @@ fn redefine_relates_override<'a>(
         )?;
         error_if_anything_redefined_else_set_true(anything_redefined)?;
         relates
-            .set_override(snapshot, type_manager, thing_manager, overridden_relates)
+            .set_specialize(snapshot, type_manager, thing_manager, overridden_relates)
             .map_err(|source| RedefineError::SetOverride { label: relation_label.clone().into_owned(), source })?;
     }
     Ok(())

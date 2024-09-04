@@ -44,7 +44,7 @@ use crate::{
         relation_type::RelationType,
         role_type::RoleType,
         sub::Sub,
-        Capability, EdgeHidden, KindAPI, Ordering, TypeAPI,
+        Capability, EdgeAbstract, KindAPI, Ordering, TypeAPI,
     },
 };
 use crate::type_::constraint::{CapabilityConstraint, Constraint, ConstraintDescription, ConstraintValidationMode, get_cardinality_constraint_opt, get_distinct_constraints, TypeConstraint};
@@ -347,18 +347,6 @@ impl TypeReader {
         Ok(capability_to_hidden)
     }
 
-    pub(crate) fn get_capability_hides<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        capability: CAP,
-    ) -> Result<Option<CAP>, ConceptReadError> {
-        let hide_property_key = EdgeHidden::<CAP>::build_key(capability);
-        snapshot
-            .get_mapped(hide_property_key.into_storage_key().as_reference(), |hidden_edge_bytes| {
-                EdgeHidden::<CAP>::from_value_bytes(hidden_edge_bytes).hidden
-            })
-            .map_err(|error| ConceptReadError::SnapshotGet { source: error })
-    }
-
     // TODO: Looks like specializes are not needed! Try to work without them!
     // pub(crate) fn get_type_capability_specializes<CAP: Capability<'static>>(
     //     snapshot: &impl ReadableSnapshot,
@@ -459,34 +447,65 @@ impl TypeReader {
             .map_err(|error| ConceptReadError::SnapshotIterate { source: error })
     }
 
-    pub(crate) fn get_objects_with_capabilities_for_interface<CAP: Capability<'static>>(
+    pub(crate) fn get_object_types_with_capabilities_for_interface<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         interface_type: CAP::InterfaceType,
     ) -> Result<HashMap<CAP::ObjectType, CAP>, ConceptReadError> {
         let mut capabilities: HashMap<CAP::ObjectType, CAP> = HashMap::new();
-        let capabilities_declared: HashSet<CAP> =
+        let interface_capabilities: HashSet<CAP> =
             Self::get_capabilities_for_interface(snapshot, interface_type.clone())?;
 
-        for declared_capability in capabilities_declared {
+        for interface_capability in interface_capabilities {
             let mut stack = Vec::new();
-            stack.push(declared_capability.object());
+            stack.push(interface_capability.object());
             while let Some(sub_object) = stack.pop() {
-                let mut is_declared_capability_hidden = false;
+                let mut is_interface_capability_hidden = false;
                 for sub_object_cap in Self::get_capabilities_declared::<CAP>(snapshot, sub_object.clone())? {
                     if let Some(hidden_cap) = Self::get_capability_hides(snapshot, sub_object_cap.clone())? {
-                        is_declared_capability_hidden =
-                            is_declared_capability_hidden || hidden_cap.interface() == interface_type;
+                        if hidden_cap == &interface_capability {
+                            is_interface_capability_hidden = true;
+                            break;
+                        }
                     }
                 }
-                if !is_declared_capability_hidden {
+                if !is_interface_capability_hidden {
                     debug_assert!(!capabilities.contains_key(&sub_object));
-                    capabilities.insert(sub_object.clone(), declared_capability.clone());
+                    capabilities.insert(sub_object.clone(), interface_capability.clone());
                     Self::get_subtypes(snapshot, sub_object)?
                         .into_iter()
                         .for_each(|object_type| stack.push(object_type));
                 }
             }
         }
+
+        Ok(capabilities)
+    }
+
+    pub(crate) fn get_object_types_with_capability<CAP: Capability<'static>>(
+        snapshot: &impl ReadableSnapshot,
+        capability: CAP,
+    ) -> Result<HashSet<CAP::ObjectType>, ConceptReadError> {
+            let mut stack = Vec::new();
+            stack.push(capability.object());
+            while let Some(sub_object) = stack.pop() {
+                let mut is_capability_hidden = false;
+                for sub_object_cap in Self::get_capabilities_declared::<CAP>(snapshot, sub_object.clone())? {
+                    if let Some(hidden_cap) = Self::get_capability_hides(snapshot, sub_object_cap.clone())? {
+                        if hidden_cap == &capability {
+                            is_capability_hidden = true;
+                            break;
+                        }
+                    }
+                }
+                if !is_capability_hidden {
+                    capabilities.insert(sub_object.clone(), interface_capability.clone());
+                    Self::get_subtypes(snapshot, sub_object)?
+                        .into_iter()
+                        .for_each(|object_type| stack.push(object_type));
+                }
+            }
+        }
+
         Ok(capabilities)
     }
 
@@ -622,7 +641,7 @@ impl TypeReader {
                     | Infix::PropertyLabel
                     | Infix::PropertyValueType
                     | Infix::PropertyOrdering
-                    | Infix::PropertyHide
+                    | Infix::PropertyIsAbstract
                     | Infix::PropertyHasOrder
                     | Infix::PropertyLinksOrder => {
                         unreachable!("Retrieved unexpected infixes while reading annotations.")
@@ -703,7 +722,7 @@ impl TypeReader {
                     | Infix::PropertyLabel
                     | Infix::PropertyValueType
                     | Infix::PropertyOrdering
-                    | Infix::PropertyHide
+                    | Infix::PropertyIsAbstract
                     | Infix::PropertyHasOrder
                     | Infix::PropertyLinksOrder => {
                         unreachable!("Retrieved unexpected infixes while reading annotations.")

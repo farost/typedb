@@ -30,6 +30,7 @@ use crate::type_::attribute_type::AttributeType;
 use crate::type_::constraint::{Constraint, ConstraintDescription};
 use crate::type_::object_type::ObjectType;
 use crate::type_::OwnerAPI;
+use crate::type_::relates::Relates;
 
 // TODO: Use get_label_cloned from TypeAPI instead of this function
 pub(crate) fn get_label_or_concept_read_err<'a>(
@@ -560,15 +561,14 @@ pub(crate) fn validate_role_type_supertype_ordering_match(
     }
 }
 
-// TODO: For tomorrow. Use it in type_manager in operation time!
 pub(crate) fn validate_sibling_owns_ordering_match_for_type(
     snapshot: &impl ReadableSnapshot,
     type_manager: &TypeManager,
-    object_type: ObjectType<'static>,
-    new_set_owns_orderings: HashMap<Owns<'static>, Ordering>,
+    owner_type: ObjectType<'static>,
+    new_set_owns_orderings: &HashMap<Owns<'static>, Ordering>,
 ) -> Result<(), SchemaValidationError> {
     let mut attribute_types_ordering: HashMap<AttributeType<'static>, (AttributeType<'static>, Ordering)> = HashMap::new();
-    let existing_owns = object_type
+    let existing_owns = owner_type
         .get_owns_with_hidden(snapshot, type_manager)
         .map_err(SchemaValidationError::ConceptRead)?
         .into_iter()
@@ -592,7 +592,7 @@ pub(crate) fn validate_sibling_owns_ordering_match_for_type(
         if let Some((first_subtype, first_ordering)) = attribute_types_ordering.get(&root_attribute_type) {
             if first_ordering != &ordering {
                 return Err(SchemaValidationError::OrderingDoesNotMatchWithCapabilityOfSubtypeInterface(
-                    get_label_or_schema_err(snapshot, object_type)?,
+                    get_label_or_schema_err(snapshot, owner_type)?,
                     get_label_or_schema_err(snapshot, first_subtype)?,
                     get_label_or_schema_err(snapshot, attribute_type)?,
                     first_ordering.clone(),
@@ -643,7 +643,7 @@ pub(crate) fn validate_type_supertype_abstractness<T: KindAPI<'static>>(
     set_supertype_abstract: Option<bool>,
 ) -> Result<(), SchemaValidationError> {
     let supertype = match supertype {
-        None => TypeReader::get_supertype(snapshot, subtype.clone()).map_err(SchemaValidationError::ConceptRead)?,
+        None => subtype.get_supertype(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?,
         Some(_) => supertype,
     };
 

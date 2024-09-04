@@ -102,7 +102,7 @@ impl<'a> TypeAPI<'a> for RelationType<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_is_abstract(snapshot, self.clone().into_owned())
+        type_manager.get_type_is_abstract(snapshot, self.clone().into_owned())
     }
 
     fn delete(
@@ -224,7 +224,7 @@ impl<'a> RelationType<'a> {
     ) -> Result<(), ConceptWriteError> {
         match annotation {
             RelationTypeAnnotation::Abstract(_) => {
-                type_manager.set_annotation_abstract(snapshot, thing_manager, self.clone().into_owned())?
+                type_manager.set_relation_type_annotation_abstract(snapshot, thing_manager, self.clone().into_owned())?
             }
             RelationTypeAnnotation::Cascade(_) => {
                 type_manager.set_annotation_cascade(snapshot, thing_manager, self.clone().into_owned())?
@@ -243,7 +243,7 @@ impl<'a> RelationType<'a> {
             .map_err(|source| ConceptWriteError::Annotation { source })?;
         match relation_type_annotation {
             RelationTypeAnnotation::Abstract(_) => {
-                type_manager.unset_annotation_abstract(snapshot, self.clone().into_owned())?
+                type_manager.unset_relation_type_annotation_abstract(snapshot, self.clone().into_owned())?
             }
             RelationTypeAnnotation::Cascade(_) => {
                 type_manager.unset_annotation_cascade(snapshot, self.clone().into_owned())?
