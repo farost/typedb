@@ -42,7 +42,7 @@ use crate::{
                 validation::{
                     capability_get_declared_annotation_by_category,
                     capability_get_annotation_with_source_by_category, get_label_or_concept_read_err,
-                    get_label_or_schema_err, get_opt_label_or_schema_err, is_interface_hidden,
+                    get_label_or_schema_err, get_opt_label_or_schema_err,
                     is_ordering_compatible_with_distinct_annotation, is_type_transitive_supertype_or_same,
                     type_get_declared_annotation_by_category,
                     type_get_annotation_with_source_by_category, validate_capabilities_cardinalities_narrowing,
@@ -63,8 +63,10 @@ use crate::{
         Capability, KindAPI, ObjectTypeAPI, Ordering, TypeAPI,
     },
 };
+use crate::thing::object::Object;
+use crate::thing::thing_manager::validation::validation::{check_owns_instances_cardinality, check_relates_instances_cardinality};
 use crate::type_::constraint::ConstraintDescription;
-use crate::type_::type_manager::validation::validation::{validate_relates_specialized_relates_abstractness, validate_sibling_owns_ordering_match_for_type, validate_single_cardinality_narrows_inherited_cardinalities};
+use crate::type_::type_manager::validation::validation::{validate_sibling_owns_ordering_match_for_type, validate_single_cardinality_narrows_inherited_cardinalities};
 
 macro_rules! object_type_match {
     ($obj_var:ident, $block:block) => {
@@ -95,10 +97,10 @@ macro_rules! for_type_and_supertypes_transitive {
     };
 }
 
-macro_rules! for_capability_and_specializing_capabilities_transitive {
+macro_rules! for_capability_and_specialising_capabilities_transitive {
     ($snapshot:ident, $capability:ident, $closure:expr) => {
         $closure($capability.clone())?;
-        TypeReader::get_specializing_capabilities_transitive($snapshot, $capability.clone())
+        TypeReader::get_specialising_capabilities_transitive($snapshot, $capability.clone())
             .map_err(SchemaValidationError::ConceptRead)?
             .into_iter()
             .try_for_each(|current_capability| $closure(current_capability))?;
@@ -671,7 +673,7 @@ macro_rules! new_annotation_compatible_with_capability_and_overriding_capabiliti
     };
 }
 
-macro_rules! updated_annotations_compatible_with_capability_and_specializing_capabilities_instances_on_interface_supertype_change_validation {
+macro_rules! updated_annotations_compatible_with_capability_and_specialising_capabilities_instances_on_interface_supertype_change_validation {
     ($func_name:ident, $capability_kind:path, $capability_type:ident, $validation_func:path) => {
         pub(crate) fn $func_name(
             snapshot: &impl ReadableSnapshot,
@@ -987,7 +989,7 @@ impl OperationTimeValidation {
         type_manager: &TypeManager,
         relates: Relates<'static>,
     ) -> Result<(), SchemaValidationError> {
-        let overriding_relates = relates.get_specializing(snapshot, type_manager)
+        let overriding_relates = relates.get_specialising(snapshot, type_manager)
             .map_err(SchemaValidationError::ConceptRead)?;
 
         match overriding_relates.into_iter().next() {
@@ -1087,47 +1089,6 @@ impl OperationTimeValidation {
         Ok(())
     }
 
-    pub(crate) fn validate_capabilities_are_not_overridden_in_the_new_supertype_transitive<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        object_subtype: CAP::ObjectType,
-        object_supertype: CAP::ObjectType,
-    ) -> Result<(), SchemaValidationError> {
-        for_type_and_subtypes_transitive!(snapshot, object_subtype, |type_: CAP::ObjectType| {
-            Self::validate_capabilities_are_not_overridden_in_the_new_supertype::<CAP>(
-                snapshot,
-                type_,
-                object_supertype.clone(),
-            )
-        });
-        Ok(())
-    }
-
-    pub(crate) fn validate_capabilities_are_not_overridden_in_the_new_supertype<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        object_subtype: CAP::ObjectType,
-        object_supertype: CAP::ObjectType,
-    ) -> Result<(), SchemaValidationError> {
-        let subtype_capabilities_declared: HashSet<CAP> =
-            TypeReader::get_capabilities_declared(snapshot, object_subtype.clone())
-                .map_err(SchemaValidationError::ConceptRead)?;
-
-        for subtype_capability in subtype_capabilities_declared {
-            let interface_type = subtype_capability.interface();
-            if is_interface_hidden::<CAP>(snapshot, object_supertype.clone(), interface_type.clone())
-                .map_err(SchemaValidationError::ConceptRead)?
-            {
-                return Err(SchemaValidationError::CannotChangeSupertypeAsCapabilityIsOverriddenInTheNewSupertype(
-                    CAP::KIND,
-                    get_label_or_schema_err(snapshot, object_subtype)?,
-                    get_label_or_schema_err(snapshot, object_supertype)?,
-                    get_label_or_schema_err(snapshot, interface_type)?,
-                ));
-            }
-        }
-
-        Ok(())
-    }
-
     pub(crate) fn validate_capability_overrides_compatible_with_new_supertype_transitive<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         object_subtype: CAP::ObjectType,
@@ -1147,7 +1108,7 @@ impl OperationTimeValidation {
 
         for subtype_capability in &subtype_capabilities_declared {
             if let Some(old_capability_override) =
-                TypeReader::get_type_capability_specializes(snapshot, subtype_capability.clone())
+                TypeReader::get_type_capability_specialises(snapshot, subtype_capability.clone())
                     .map_err(SchemaValidationError::ConceptRead)?
             {
                 if !supertype_capabilities
@@ -1177,7 +1138,7 @@ impl OperationTimeValidation {
 
             for subsubtype_capability in subsubtype_capabilities_declared {
                 if let Some(old_capability_override) =
-                    TypeReader::get_type_capability_specializes(snapshot, subsubtype_capability.clone())
+                    TypeReader::get_type_capability_specialises(snapshot, subsubtype_capability.clone())
                         .map_err(SchemaValidationError::ConceptRead)?
                 {
                     let is_in_subtype = subtype_capabilities.contains(&old_capability_override);
@@ -1534,7 +1495,7 @@ impl OperationTimeValidation {
         regex: AnnotationRegex,
     ) -> Result<(), SchemaValidationError> {
         let constraint_description = ConstraintDescription::Regex(regex);
-        for_capability_and_specializing_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
+        for_capability_and_specialising_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
             Self::validate_capability_regex_constraint_narrows_interface_type_constraint(snapshot, type_manager, current_owns.clone(), &constraint_description)
         });
         Ok(())
@@ -1569,7 +1530,7 @@ impl OperationTimeValidation {
         range: AnnotationRange,
     ) -> Result<(), SchemaValidationError> {
         let constraint_description = ConstraintDescription::Range(range);
-        for_capability_and_specializing_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
+        for_capability_and_specialising_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
             Self::validate_capability_range_constraint_narrows_interface_type_constraint(snapshot, type_manager, current_owns.clone(), &constraint_description)
         });
         Ok(())
@@ -1604,7 +1565,7 @@ impl OperationTimeValidation {
         values: AnnotationValues,
     ) -> Result<(), SchemaValidationError> {
         let constraint_description = ConstraintDescription::Values(values);
-        for_capability_and_specializing_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
+        for_capability_and_specialising_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
             Self::validate_capability_values_constraint_narrows_interface_type_constraint(snapshot, type_manager, current_owns.clone(), &constraint_description)
         });
         Ok(())
@@ -1765,25 +1726,25 @@ impl OperationTimeValidation {
         Ok(())
     }
 
-    pub(crate) fn validate_specializing_capabilities_narrow_regex(
+    pub(crate) fn validate_specialising_capabilities_narrow_regex(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
         owns: Owns<'static>,
         regex: AnnotationRegex,
     ) -> Result<(), SchemaValidationError> {
         let constraint_description = ConstraintDescription::Regex(regex);
-        let specializings = owns.get_specializing_transitive(snapshot, type_manager)
+        let specialisings = owns.get_specialising_transitive(snapshot, type_manager)
             .map_err(SchemaValidationError::ConceptRead)?;
-        for specializing in specializings.into_iter() {
-            let regex_constraints = specializing.get_constraints_regex(snapshot, type_manager)
+        for specialising in specialisings.into_iter() {
+            let regex_constraints = specialising.get_constraints_regex(snapshot, type_manager)
                 .map_err(SchemaValidationError::ConceptRead)?;
             if let Some(conflicted) = regex_constraints
                 .keys()
                 .find(|subtype_constraint| !constraint_description.narrowed_correctly_by_same_type(&subtype_constraint.description()))
             {
                 return Err(SchemaValidationError::RegexShouldNarrowInheritedCapabilityRegex(
-                    get_label_or_schema_err(snapshot, specializing.object())?,
-                    get_label_or_schema_err(snapshot, specializing.interface())?,
+                    get_label_or_schema_err(snapshot, specialising.object())?,
+                    get_label_or_schema_err(snapshot, specialising.interface())?,
                     get_label_or_schema_err(snapshot, owns.object())?,
                     get_label_or_schema_err(snapshot, owns.interface())?,
                     constraint_description.clone(),
@@ -1794,25 +1755,25 @@ impl OperationTimeValidation {
         Ok(())
     }
 
-    pub(crate) fn validate_specializing_capabilities_narrow_range(
+    pub(crate) fn validate_specialising_capabilities_narrow_range(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
         owns: Owns<'static>,
         range: AnnotationRange,
     ) -> Result<(), SchemaValidationError> {
         let constraint_description = ConstraintDescription::Range(range);
-        let specializings = owns.get_specializing_transitive(snapshot, type_manager)
+        let specialisings = owns.get_specialising_transitive(snapshot, type_manager)
             .map_err(SchemaValidationError::ConceptRead)?;
-        for specializing in specializings.into_iter() {
-            let range_constraints = specializing.get_constraints_range(snapshot, type_manager)
+        for specialising in specialisings.into_iter() {
+            let range_constraints = specialising.get_constraints_range(snapshot, type_manager)
                 .map_err(SchemaValidationError::ConceptRead)?;
             if let Some(conflicted) = range_constraints
                 .keys()
                 .find(|subtype_constraint| !constraint_description.narrowed_correctly_by_same_type(&subtype_constraint.description()))
             {
                 return Err(SchemaValidationError::RangeShouldNarrowInheritedCapabilityRange(
-                    get_label_or_schema_err(snapshot, specializing.object())?,
-                    get_label_or_schema_err(snapshot, specializing.interface())?,
+                    get_label_or_schema_err(snapshot, specialising.object())?,
+                    get_label_or_schema_err(snapshot, specialising.interface())?,
                     get_label_or_schema_err(snapshot, owns.object())?,
                     get_label_or_schema_err(snapshot, owns.interface())?,
                     constraint_description.clone(),
@@ -1823,25 +1784,25 @@ impl OperationTimeValidation {
         Ok(())
     }
 
-    pub(crate) fn validate_specializing_capabilities_narrow_values(
+    pub(crate) fn validate_specialising_capabilities_narrow_values(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
         owns: Owns<'static>,
         values: AnnotationValues,
     ) -> Result<(), SchemaValidationError> {
         let constraint_description = ConstraintDescription::Values(values);
-        let specializings = owns.get_specializing_transitive(snapshot, type_manager)
+        let specialisings = owns.get_specialising_transitive(snapshot, type_manager)
             .map_err(SchemaValidationError::ConceptRead)?;
-        for specializing in specializings.into_iter() {
-            let values_constraints = specializing.get_constraints_values(snapshot, type_manager)
+        for specialising in specialisings.into_iter() {
+            let values_constraints = specialising.get_constraints_values(snapshot, type_manager)
                 .map_err(SchemaValidationError::ConceptRead)?;
             if let Some(conflicted) = values_constraints
                 .keys()
                 .find(|subtype_constraint| !constraint_description.narrowed_correctly_by_same_type(&subtype_constraint.description()))
             {
                 return Err(SchemaValidationError::ValuesShouldNarrowInheritedCapabilityValues(
-                    get_label_or_schema_err(snapshot, specializing.object())?,
-                    get_label_or_schema_err(snapshot, specializing.interface())?,
+                    get_label_or_schema_err(snapshot, specialising.object())?,
+                    get_label_or_schema_err(snapshot, specialising.interface())?,
                     get_label_or_schema_err(snapshot, owns.object())?,
                     get_label_or_schema_err(snapshot, owns.interface())?,
                     constraint_description.clone(),
@@ -1996,7 +1957,7 @@ impl OperationTimeValidation {
         Ok(())
     }
 
-    pub(crate) fn validate_no_specializing_relates_to_unset_abstract_annotation_from_relates(
+    pub(crate) fn validate_no_specialising_relates_to_unset_abstract_annotation_from_relates(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
         relates: Relates<'static>,
@@ -2004,7 +1965,7 @@ impl OperationTimeValidation {
         if relates.role().get_subtypes(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?.is_empty() {
             Ok(())
         } else {
-            Err(SchemaValidationError::CannotUnsetRelatesAbstractnessAsItHasSpecializingRelates(relates))
+            Err(SchemaValidationError::CannotUnsetRelatesAbstractnessAsItHasspecialisingRelates(relates))
         }
     }
 
@@ -2081,7 +2042,7 @@ impl OperationTimeValidation {
         }
     }
 
-    pub(crate) fn validate_updated_owns_does_not_conflict_with_specializing_owns_ordering(
+    pub(crate) fn validate_updated_owns_does_not_conflict_with_specialising_owns_ordering(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
         owns: Owns<'static>,
@@ -2207,7 +2168,7 @@ impl OperationTimeValidation {
 
         // also check annotations declarable below
 
-        for_capability_and_specializing_capabilities_transitive!(snapshot, capability, |cap: CAP| {
+        for_capability_and_specialising_capabilities_transitive!(snapshot, capability, |cap: CAP| {
             Self::validate_capabilities_constraints_compatibility_when_interface_type_supertype_is_set::<CAP>(
                 snapshot,
                 type_manager,
@@ -2327,24 +2288,6 @@ impl OperationTimeValidation {
                 get_label_or_schema_err(snapshot, capability.object())?,
                 get_label_or_schema_err(snapshot, capability.interface())?,
                 get_label_or_schema_err(snapshot, interface_type_overridden)?,
-            ))
-        }
-    }
-
-    pub(crate) fn validate_interface_not_overridden<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        object_type: CAP::ObjectType,
-        interface_type: CAP::InterfaceType,
-    ) -> Result<(), SchemaValidationError> {
-        if !is_interface_hidden::<CAP>(snapshot, object_type.clone(), interface_type.clone())
-            .map_err(SchemaValidationError::ConceptRead)?
-        {
-            Ok(())
-        } else {
-            Err(SchemaValidationError::OverriddenCapabilityCannotBeRedeclared(
-                CapabilityKind::Owns,
-                get_label_or_schema_err(snapshot, object_type)?,
-                get_label_or_schema_err(snapshot, interface_type)?,
             ))
         }
     }
@@ -2746,7 +2689,7 @@ impl OperationTimeValidation {
             return Ok(());
         }
 
-        TypeReader::get_specializing_capabilities_transitive(snapshot, capability.clone())
+        TypeReader::get_specialising_capabilities_transitive(snapshot, capability.clone())
             .map_err(SchemaValidationError::ConceptRead)?
             .into_iter()
             .try_for_each(|overriding_capability| {
@@ -3087,6 +3030,15 @@ impl OperationTimeValidation {
                     }
                 }
 
+                // check_owns_instances_cardinality(
+                //     snapshot,
+                //     type_manager,
+                //     object,
+                //     constraint.source(),
+                //     cardinality,
+                //     real_cardinality,
+                // )
+
                 if !Self::check_operation_time_cardinality_constraint(
                     cardinality.clone(),
                     real_cardinality,
@@ -3133,6 +3085,15 @@ impl OperationTimeValidation {
 
                     real_cardinality += count;
                 }
+
+                // check_plays_instances_cardinality(
+                //     snapshot,
+                //     type_manager,
+                //     object,
+                //     constraint.source(),
+                //     cardinality,
+                //     real_cardinality,
+                // )
 
                 if !Self::check_operation_time_cardinality_constraint(
                     cardinality.clone(),
@@ -3193,6 +3154,15 @@ impl OperationTimeValidation {
                     }
                 }
 
+                // check_relates_instances_cardinality(
+                //     snapshot,
+                //     type_manager,
+                //     relation,
+                //     constraint.source(),
+                //     cardinality,
+                //     real_cardinality,
+                // )
+
                 if !Self::check_operation_time_cardinality_constraint(
                     cardinality.clone(),
                     real_cardinality,
@@ -3236,7 +3206,7 @@ impl OperationTimeValidation {
         snapshot: &impl ReadableSnapshot,
         owns: Owns<'static>,
     ) -> Result<(), SchemaValidationError> {
-        for_capability_and_specializing_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
+        for_capability_and_specialising_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
             let value_type = TypeReader::get_value_type(snapshot, current_owns.attribute())
                 .map_err(SchemaValidationError::ConceptRead)?
                 .map(|(value_type, _)| value_type.clone());
@@ -3267,7 +3237,7 @@ impl OperationTimeValidation {
         snapshot: &impl ReadableSnapshot,
         owns: Owns<'static>,
     ) -> Result<(), SchemaValidationError> {
-        for_capability_and_specializing_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
+        for_capability_and_specialising_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
             let value_type = TypeReader::get_value_type(snapshot, current_owns.attribute())
                 .map_err(SchemaValidationError::ConceptRead)?
                 .map(|(value_type, _)| value_type.clone());
@@ -3381,7 +3351,7 @@ impl OperationTimeValidation {
         owns: Owns<'static>,
         overridden_owns: Owns<'static>,
     ) -> Result<(), SchemaValidationError> {
-        for_capability_and_specializing_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
+        for_capability_and_specialising_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
             let value_type = TypeReader::get_value_type(snapshot, current_owns.attribute())
                 .map_err(SchemaValidationError::ConceptRead)?
                 .map(|(value_type, _)| value_type.clone());
@@ -3805,7 +3775,7 @@ impl OperationTimeValidation {
         capability: CAP,
         capability_override: Option<CAP>,
     ) -> Result<HashSet<Annotation>, SchemaValidationError> {
-        let current_override = TypeReader::get_type_capability_specializes(snapshot, capability.clone())
+        let current_override = TypeReader::get_type_capability_specialises(snapshot, capability.clone())
             .map_err(SchemaValidationError::ConceptRead)?;
         if current_override == capability_override {
             return Ok(HashSet::new());
@@ -4077,20 +4047,20 @@ impl OperationTimeValidation {
         Self::get_relates_or_its_overriding_relates_with_violated_new_annotation_constraints
     );
 
-    updated_annotations_compatible_with_capability_and_specializing_capabilities_instances_on_interface_supertype_change_validation!(
-        validate_updated_annotations_compatible_with_owns_and_specializing_owns_instances_on_attribute_supertype_change,
+    updated_annotations_compatible_with_capability_and_specialising_capabilities_instances_on_interface_supertype_change_validation!(
+        validate_updated_annotations_compatible_with_owns_and_specialising_owns_instances_on_attribute_supertype_change,
         CapabilityKind::Owns,
         Owns,
         Self::get_owns_or_its_overriding_owns_with_violated_new_annotation_constraints
     );
-    updated_annotations_compatible_with_capability_and_specializing_capabilities_instances_on_interface_supertype_change_validation!(
-        validate_updated_annotations_compatible_with_plays_and_specializing_plays_instances_on_role_supertype_change,
+    updated_annotations_compatible_with_capability_and_specialising_capabilities_instances_on_interface_supertype_change_validation!(
+        validate_updated_annotations_compatible_with_plays_and_specialising_plays_instances_on_role_supertype_change,
         CapabilityKind::Plays,
         Plays,
         Self::get_plays_or_its_overriding_plays_with_violated_new_annotation_constraints
     );
-    updated_annotations_compatible_with_capability_and_specializing_capabilities_instances_on_interface_supertype_change_validation!(
-        validate_updated_annotations_compatible_with_relates_and_specializing_relates_instances_on_role_supertype_change,
+    updated_annotations_compatible_with_capability_and_specialising_capabilities_instances_on_interface_supertype_change_validation!(
+        validate_updated_annotations_compatible_with_relates_and_specialising_relates_instances_on_role_supertype_change,
         CapabilityKind::Relates,
         Relates,
         Self::get_relates_or_its_overriding_relates_with_violated_new_annotation_constraints

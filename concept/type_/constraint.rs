@@ -123,20 +123,6 @@ impl ConstraintDescription {
         }
     }
 
-    pub fn inheritable(&self) -> bool {
-        match self {
-            ConstraintDescription::Abstract(_) => true,
-
-            | ConstraintDescription::Distinct(_)
-            | ConstraintDescription::Independent(_)
-            | ConstraintDescription::Unique(_)
-            | ConstraintDescription::Cardinality(_)
-            | ConstraintDescription::Regex(_)
-            | ConstraintDescription::Range(_)
-            | ConstraintDescription::Values(_) => false,
-        }
-    }
-
     pub fn unchecked(&self) -> bool {
         match self {
             ConstraintDescription::Cardinality(cardinality) => cardinality == &AnnotationCardinality::unchecked(),

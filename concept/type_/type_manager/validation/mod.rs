@@ -68,7 +68,7 @@ pub enum SchemaValidationError {
         Label<'static>,
         Label<'static>,
     ),
-    CannotUnsetRelatesAbstractnessAsItHasSpecializingRelates(Relates<'static>),
+    CannotUnsetRelatesAbstractnessAsItHasspecialisingRelates(Relates<'static>),
     OrderingDoesNotMatchWithSupertype(Label<'static>, Label<'static>, Ordering, Ordering),
     OrderingDoesNotMatchWithCapabilityOfSubtypeInterface(Label<'static>, Label<'static>, Label<'static>, Ordering, Ordering),
     CannotChangeSupertypeAsCapabilityOverrideIsImplicitlyLost(
@@ -167,7 +167,7 @@ pub enum SchemaValidationError {
     CannotUnsetInheritedEdgeAnnotation(AnnotationCategory, Label<'static>, Label<'static>),
     CannotUnsetInheritedValueType(ValueType, Label<'static>),
     ValueTypeNotCompatibleWithInheritedValueType(Label<'static>, Label<'static>, ValueType, ValueType),
-    CannotRedeclareInheritedValueTypeWithoutSpecialization(Label<'static>, Label<'static>, ValueType, ValueType),
+    CannotRedeclareInheritedValueTypeWithoutspecialisation(Label<'static>, Label<'static>, ValueType, ValueType),
     DeclaredAnnotationIsNotCompatibleWithInheritedAnnotation(AnnotationCategory, AnnotationCategory, Label<'static>),
     DeclaredCapabilityAnnotationIsNotCompatibleWithInheritedAnnotation(
         AnnotationCategory,
@@ -177,14 +177,14 @@ pub enum SchemaValidationError {
     ),
     AnnotationIsNotCompatibleWithDeclaredAnnotation(AnnotationCategory, AnnotationCategory, Label<'static>),
     RelationTypeMustRelateAtLeastOneRole(Label<'static>),
-    CannotRedeclareInheritedCapabilityWithoutSpecializationWithOverride(
+    CannotRedeclareInheritedCapabilityWithoutspecialisationWithOverride(
         CapabilityKind,
         Label<'static>,
         Label<'static>,
         Label<'static>,
     ),
-    CannotRedeclareInheritedAnnotationWithoutSpecializationForType(Kind, Label<'static>, Label<'static>, Annotation),
-    CannotRedeclareInheritedAnnotationWithoutSpecializationForCapability(
+    CannotRedeclareInheritedAnnotationWithoutspecialisationForType(Kind, Label<'static>, Label<'static>, Annotation),
+    CannotRedeclareInheritedAnnotationWithoutspecialisationForCapability(
         CapabilityKind,
         Label<'static>,
         Label<'static>,
@@ -299,7 +299,7 @@ impl Error for SchemaValidationError {
             Self::AbstractTypesSupertypeHasToBeAbstract(_, _) => None,
             Self::CannotUnsetAbstractnessAsItHasDeclaredCapabilityOfAbstractInterface(_, _, _) => None,
             Self::CannotUnsetAbstractnessAsItHasInheritedCapabilityOfAbstractInterface(_, _, _) => None,
-            Self::CannotUnsetRelatesAbstractnessAsItHasSpecializingRelates(_) => None,
+            Self::CannotUnsetRelatesAbstractnessAsItHasspecialisingRelates(_) => None,
             Self::AttributeTypeWithoutValueTypeShouldBeAbstract(_) => None,
             Self::ValueTypeIsNotCompatibleWithRegexAnnotation(_, _) => None,
             Self::ValueTypeIsNotCompatibleWithRangeAnnotation(_, _) => None,
@@ -334,14 +334,14 @@ impl Error for SchemaValidationError {
             Self::CannotUnsetInheritedEdgeAnnotation(_, _, _) => None,
             Self::CannotUnsetInheritedValueType(_, _) => None,
             Self::ValueTypeNotCompatibleWithInheritedValueType(_, _, _, _) => None,
-            Self::CannotRedeclareInheritedValueTypeWithoutSpecialization(_, _, _, _) => None,
+            Self::CannotRedeclareInheritedValueTypeWithoutspecialisation(_, _, _, _) => None,
             Self::DeclaredAnnotationIsNotCompatibleWithInheritedAnnotation(_, _, _) => None,
             Self::DeclaredCapabilityAnnotationIsNotCompatibleWithInheritedAnnotation(_, _, _, _) => None,
             Self::AnnotationIsNotCompatibleWithDeclaredAnnotation(_, _, _) => None,
             Self::RelationTypeMustRelateAtLeastOneRole(_) => None,
-            Self::CannotRedeclareInheritedCapabilityWithoutSpecializationWithOverride(_, _, _, _) => None,
-            Self::CannotRedeclareInheritedAnnotationWithoutSpecializationForType(_, _, _, _) => None,
-            Self::CannotRedeclareInheritedAnnotationWithoutSpecializationForCapability(_, _, _, _, _) => None,
+            Self::CannotRedeclareInheritedCapabilityWithoutspecialisationWithOverride(_, _, _, _) => None,
+            Self::CannotRedeclareInheritedAnnotationWithoutspecialisationForType(_, _, _, _) => None,
+            Self::CannotRedeclareInheritedAnnotationWithoutspecialisationForCapability(_, _, _, _, _) => None,
             Self::ChangingRelationSupertypeLeadsToImplicitCascadeAnnotationAcquisitionAndUnexpectedDataLoss(
                 _,
                 _,

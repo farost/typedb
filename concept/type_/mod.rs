@@ -542,24 +542,24 @@ pub trait Capability<'a>:
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError>;
 
-    // fn get_specializes<'this>(
+    // fn get_specialises<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
     //     type_manager: &'this TypeManager,
     // ) -> Result<MaybeOwns<'this, Option<Self>>, ConceptReadError>;
     //
-    // fn get_specializes_transitive<'this>(
+    // fn get_specialises_transitive<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
     //     type_manager: &'this TypeManager,
     // ) -> Result<MaybeOwns<'this, Vec<Self>>, ConceptReadError>;
-    // fn get_specializing<'this>(
+    // fn get_specialising<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
     //     type_manager: &'this TypeManager,
     // ) -> Result<MaybeOwns<'this, HashSet<Self>>, ConceptReadError>;
     //
-    // fn get_specializing_transitive<'this>(
+    // fn get_specialising_transitive<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
     //     type_manager: &'this TypeManager,

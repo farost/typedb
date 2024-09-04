@@ -73,8 +73,8 @@ pub async fn relation_type_create_role_ordered(
 }
 
 #[apply(generic_step)]
-#[step(expr = r"relation\({type_label}\) get role\({type_label}\) set specialize: {type_label}{may_error}")]
-pub async fn relation_role_set_specialize(
+#[step(expr = r"relation\({type_label}\) get role\({type_label}\) set specialise: {type_label}{may_error}")]
+pub async fn relation_role_set_specialise(
     context: &mut Context,
     type_label: Label,
     role_label: Label,
@@ -99,7 +99,7 @@ pub async fn relation_role_set_specialize(
                 )
                 .unwrap()
             {
-                let res = relates.set_specialize(
+                let res = relates.set_specialise(
                     Arc::get_mut(&mut tx.snapshot).unwrap(),
                     &tx.type_manager,
                     &tx.thing_manager,
@@ -116,8 +116,8 @@ pub async fn relation_role_set_specialize(
 }
 
 #[apply(generic_step)]
-#[step(expr = r"relation\({type_label}\) get role\({type_label}\) unset specialize{may_error}")]
-pub async fn relation_role_unset_specialize(
+#[step(expr = r"relation\({type_label}\) get role\({type_label}\) unset specialise{may_error}")]
+pub async fn relation_role_unset_specialise(
     context: &mut Context,
     type_label: Label,
     role_label: Label,
@@ -134,7 +134,7 @@ pub async fn relation_role_unset_specialize(
             )
             .unwrap()
             .unwrap();
-        let res = relates.unset_specialize(Arc::get_mut(&mut tx.snapshot).unwrap(), &tx.type_manager, &tx.thing_manager);
+        let res = relates.unset_specialise(Arc::get_mut(&mut tx.snapshot).unwrap(), &tx.type_manager, &tx.thing_manager);
         may_error.check_concept_write_without_read_errors(&res);
     });
 }

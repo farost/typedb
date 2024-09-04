@@ -49,7 +49,7 @@ macro_rules! validate_capability_cardinality_constraint {
                 let count = TypeAPI::chain_types(source_interface_type, sub_interface_types)
                     .filter_map(|interface_type| counts.get(&interface_type))
                     .sum();
-                $check_func(snapshot, thing_manager, &object, constraint.source(), cardinality, count)?;
+                $check_func(snapshot, thing_manager.type_manager(), &object, constraint.source(), cardinality, count)?;
             }
 
             Ok(())
@@ -72,6 +72,7 @@ macro_rules! collect_errors {
 }
 
 pub(crate) use collect_errors;
+use crate::thing::thing_manager::validation::validation::{check_owns_instances_cardinality, check_plays_instances_cardinality, check_relates_instances_cardinality};
 use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription};
 
 pub struct CommitTimeValidation {}
@@ -128,67 +129,13 @@ impl CommitTimeValidation {
         Ok(())
     }
 
-    fn check_owns_cardinality<'a>(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
-        owner: &Object<'a>,
-        owns: Owns<'static>,
-        cardinality: AnnotationCardinality,
-        count: u64,
-    ) -> Result<(), DataValidationError> {
-        if !cardinality.value_valid(count) {
-            let is_key =
-                owns.is_key(snapshot, thing_manager.type_manager()).map_err(DataValidationError::ConceptRead)?;
-            let owner = owner.clone().into_owned();
-            if is_key {
-                Err(DataValidationError::KeyCardinalityViolated { owner, owns, count })
-            } else {
-                Err(DataValidationError::OwnsCardinalityViolated { owner, owns, count, cardinality })
-            }
-        } else {
-            Ok(())
-        }
-    }
-
-    fn check_plays_cardinality<'a>(
-        _snapshot: &impl ReadableSnapshot,
-        _thing_manager: &ThingManager,
-        player: &Object<'a>,
-        plays: Plays<'static>,
-        cardinality: AnnotationCardinality,
-        count: u64,
-    ) -> Result<(), DataValidationError> {
-        if !cardinality.value_valid(count) {
-            let player = player.clone().into_owned();
-            Err(DataValidationError::PlaysCardinalityViolated { player, plays, count, cardinality })
-        } else {
-            Ok(())
-        }
-    }
-
-    fn check_relates_cardinality<'a>(
-        _snapshot: &impl ReadableSnapshot,
-        _thing_manager: &ThingManager,
-        relation: &Relation<'a>,
-        relates: Relates<'static>,
-        cardinality: AnnotationCardinality,
-        count: u64,
-    ) -> Result<(), DataValidationError> {
-        if !cardinality.value_valid(count) {
-            let relation = relation.clone().into_owned();
-            Err(DataValidationError::RelatesCardinalityViolated { relation, relates, count, cardinality })
-        } else {
-            Ok(())
-        }
-    }
-
     validate_capability_cardinality_constraint!(
         validate_owns_cardinality_constraint,
         Owns,
         Object,
         get_type_owns_constraints_cardinality,
         get_has_counts,
-        Self::check_owns_cardinality
+        check_owns_instances_cardinality
     );
     validate_capability_cardinality_constraint!(
         validate_plays_cardinality_constraint,
@@ -196,7 +143,7 @@ impl CommitTimeValidation {
         Object,
         get_type_plays_constraints_cardinality,
         get_played_roles_counts,
-        Self::check_plays_cardinality
+        check_plays_instances_cardinality
     );
     validate_capability_cardinality_constraint!(
         validate_relates_cardinality_constraint,
@@ -204,6 +151,6 @@ impl CommitTimeValidation {
         Relation,
         get_type_relates_constraints_cardinality,
         get_player_counts,
-        Self::check_relates_cardinality
+        check_relates_instances_cardinality
     );
 }

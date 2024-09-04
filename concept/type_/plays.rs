@@ -131,39 +131,41 @@ impl<'a> Capability<'a> for Plays<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_capability_is_abstract(snapshot, self.clone().into_owned())
+        let is_abstract = type_manager.get_capability_is_abstract(snapshot, self.clone().into_owned())?;
+        debug_assert!(!is_abstract, "Abstractness of plays is not implemented! Take care of validation");
+        Ok(is_abstract)
     }
 
-    // fn get_specializes<'this>(
+    // fn get_specialises<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
     //     type_manager: &'this TypeManager,
     // ) -> Result<MaybeOwns<'this, Option<Plays<'static>>>, ConceptReadError> {
-    //     type_manager.get_plays_specializes(snapshot, self.clone().into_owned())
+    //     type_manager.get_plays_specialises(snapshot, self.clone().into_owned())
     // }
     //
-    // fn get_specializes_transitive<'this>(
+    // fn get_specialises_transitive<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
     //     type_manager: &'this TypeManager,
     // ) -> Result<MaybeOwns<'this, Vec<Plays<'static>>>, ConceptReadError> {
-    //     type_manager.get_plays_specializes_transitive(snapshot, self.clone().into_owned())
+    //     type_manager.get_plays_specialises_transitive(snapshot, self.clone().into_owned())
     // }
 
-    fn get_specializing<'this>(
+    fn get_specialising<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, HashSet<Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_specializing(snapshot, self.clone().into_owned())
+        type_manager.get_plays_specialising(snapshot, self.clone().into_owned())
     }
 
-    fn get_specializing_transitive<'this>(
+    fn get_specialising_transitive<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
     ) -> Result<MaybeOwns<'this, Vec<Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_specializing_transitive(snapshot, self.clone().into_owned())
+        type_manager.get_plays_specialising_transitive(snapshot, self.clone().into_owned())
     }
 
     fn get_annotations_declared<'this>(

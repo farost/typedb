@@ -349,6 +349,13 @@ impl TypeCache {
         &RelationType::get_cache(self, relation_type).relates_with_hidden
     }
 
+    pub(crate) fn get_relation_types_with_relates<'c>(
+        &'c self,
+        relates: Relates<'c>,
+    ) -> &'c HashSet<RelationType<'static>> {
+        &self.relates.get(&relates).unwrap().common_capability_cache.object_types_with_capability
+    }
+
     pub(crate) fn get_relates_annotations_declared<'c>(
         &'c self,
         relates: Relates<'c>,
@@ -363,23 +370,23 @@ impl TypeCache {
         &self.relates.get(&relates).unwrap().common_capability_cache.constraints
     }
 
-    pub(crate) fn get_relates_specializes<'c>(&'c self, relates: Relates<'c>) -> &'c Option<Relates<'static>> {
-        &self.relates.get(&relates).unwrap().common_capability_cache.specializes
+    pub(crate) fn get_relates_specialises<'c>(&'c self, relates: Relates<'c>) -> &'c Option<Relates<'static>> {
+        &self.relates.get(&relates).unwrap().common_capability_cache.specialises
     }
 
-    pub(crate) fn get_relates_specializes_transitive<'c>(&'c self, relates: Relates<'c>) -> &'c Vec<Relates<'static>> {
-        &self.relates.get(&relates).unwrap().common_capability_cache.specializes_transitive
+    pub(crate) fn get_relates_specialises_transitive<'c>(&'c self, relates: Relates<'c>) -> &'c Vec<Relates<'static>> {
+        &self.relates.get(&relates).unwrap().common_capability_cache.specialises_transitive
     }
 
-    pub(crate) fn get_relates_specializing<'c>(&'c self, relates: Relates<'c>) -> &'c HashSet<Relates<'static>> {
-        &self.relates.get(&relates).unwrap().common_capability_cache.specializing
+    pub(crate) fn get_relates_specialising<'c>(&'c self, relates: Relates<'c>) -> &'c HashSet<Relates<'static>> {
+        &self.relates.get(&relates).unwrap().common_capability_cache.specialising
     }
 
-    pub(crate) fn get_relates_specializing_transitive<'c>(
+    pub(crate) fn get_relates_specialising_transitive<'c>(
         &'c self,
         relates: Relates<'c>,
     ) -> &'c Vec<Relates<'static>> {
-        &self.relates.get(&relates).unwrap().common_capability_cache.specializing_transitive
+        &self.relates.get(&relates).unwrap().common_capability_cache.specialising_transitive
     }
 
     pub(crate) fn get_role_type_plays(&self, role_type: RoleType<'_>) -> &HashSet<Plays<'static>> {
@@ -417,20 +424,27 @@ impl TypeCache {
         &T::get_cache(self, type_).object_cache().plays_with_hidden
     }
 
-    pub(crate) fn get_plays_specializes<'c>(&'c self, plays: Plays<'c>) -> &'c Option<Plays<'static>> {
-        &self.plays.get(&plays).unwrap().common_capability_cache.specializes
+    pub(crate) fn get_plays_specialises<'c>(&'c self, plays: Plays<'c>) -> &'c Option<Plays<'static>> {
+        &self.plays.get(&plays).unwrap().common_capability_cache.specialises
     }
 
-    pub(crate) fn get_plays_specializes_transitive<'c>(&'c self, plays: Plays<'c>) -> &'c Vec<Plays<'static>> {
-        &self.plays.get(&plays).unwrap().common_capability_cache.specializes_transitive
+    pub(crate) fn get_plays_specialises_transitive<'c>(&'c self, plays: Plays<'c>) -> &'c Vec<Plays<'static>> {
+        &self.plays.get(&plays).unwrap().common_capability_cache.specialises_transitive
     }
 
-    pub(crate) fn get_plays_specializing<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<Plays<'static>> {
-        &self.plays.get(&plays).unwrap().common_capability_cache.specializing
+    pub(crate) fn get_plays_specialising<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<Plays<'static>> {
+        &self.plays.get(&plays).unwrap().common_capability_cache.specialising
     }
 
-    pub(crate) fn get_plays_specializing_transitive<'c>(&'c self, plays: Plays<'c>) -> &'c Vec<Plays<'static>> {
-        &self.plays.get(&plays).unwrap().common_capability_cache.specializing_transitive
+    pub(crate) fn get_plays_specialising_transitive<'c>(&'c self, plays: Plays<'c>) -> &'c Vec<Plays<'static>> {
+        &self.plays.get(&plays).unwrap().common_capability_cache.specialising_transitive
+    }
+
+    pub(crate) fn get_object_types_with_plays<'c>(
+        &'c self,
+        plays: Plays<'c>,
+    ) -> &'c HashSet<ObjectType<'static>> {
+        &self.plays.get(&plays).unwrap().common_capability_cache.object_types_with_capability
     }
 
     pub(crate) fn get_plays_annotations_declared<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<PlaysAnnotation> {
@@ -458,6 +472,13 @@ impl TypeCache {
         &AttributeType::get_cache(self, attribute_type).value_type
     }
 
+    pub(crate) fn get_object_types_with_owns<'c>(
+        &'c self,
+        owns: Owns<'c>,
+    ) -> &'c HashSet<ObjectType<'static>> {
+        &self.owns.get(&owns).unwrap().common_capability_cache.object_types_with_capability
+    }
+
     pub(crate) fn get_owns_annotations_declared<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<OwnsAnnotation> {
         &self.owns.get(&owns).unwrap().common_capability_cache.annotations_declared
     }
@@ -470,20 +491,20 @@ impl TypeCache {
         self.owns.get(&owns).unwrap().ordering
     }
 
-    pub(crate) fn get_owns_specializes<'c>(&'c self, owns: Owns<'c>) -> &'c Option<Owns<'static>> {
-        &self.owns.get(&owns).unwrap().common_capability_cache.specializes
+    pub(crate) fn get_owns_specialises<'c>(&'c self, owns: Owns<'c>) -> &'c Option<Owns<'static>> {
+        &self.owns.get(&owns).unwrap().common_capability_cache.specialises
     }
 
-    pub(crate) fn get_owns_specializes_transitive<'c>(&'c self, owns: Owns<'c>) -> &'c Vec<Owns<'static>> {
-        &self.owns.get(&owns).unwrap().common_capability_cache.specializes_transitive
+    pub(crate) fn get_owns_specialises_transitive<'c>(&'c self, owns: Owns<'c>) -> &'c Vec<Owns<'static>> {
+        &self.owns.get(&owns).unwrap().common_capability_cache.specialises_transitive
     }
 
-    pub(crate) fn get_owns_specializing<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<Owns<'static>> {
-        &self.owns.get(&owns).unwrap().common_capability_cache.specializing
+    pub(crate) fn get_owns_specialising<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<Owns<'static>> {
+        &self.owns.get(&owns).unwrap().common_capability_cache.specialising
     }
 
-    pub(crate) fn get_owns_specializing_transitive<'c>(&'c self, owns: Owns<'c>) -> &'c Vec<Owns<'static>> {
-        &self.owns.get(&owns).unwrap().common_capability_cache.specializing_transitive
+    pub(crate) fn get_owns_specialising_transitive<'c>(&'c self, owns: Owns<'c>) -> &'c Vec<Owns<'static>> {
+        &self.owns.get(&owns).unwrap().common_capability_cache.specialising_transitive
     }
 
     pub(crate) fn get_struct_definition_key(&self, label: &str) -> Option<DefinitionKey<'static>> {

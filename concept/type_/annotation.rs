@@ -529,7 +529,7 @@ impl AnnotationCategory {
         }
     }
 
-    // TODO: remove and use constraint
+    // TODO: remove and constraint validation type instead!
     pub fn inheritable(&self) -> bool {
         match self {
             AnnotationCategory::Abstract => false,

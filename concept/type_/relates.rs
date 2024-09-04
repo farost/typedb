@@ -58,23 +58,23 @@ impl<'a> Relates<'a> {
         type_manager.get_is_distinct(snapshot, self.clone().into_owned())
     }
 
-    pub fn set_specialize(
+    pub fn set_specialise(
         &self,
         snapshot: &mut impl WritableSnapshot,
         type_manager: &TypeManager,
         thing_manager: &ThingManager,
-        specialized: Relates<'static>,
+        specialised: Relates<'static>,
     ) -> Result<(), ConceptWriteError> {
-        type_manager.set_relates_specialize(snapshot, thing_manager, self.clone().into_owned(), specialized)
+        type_manager.set_relates_specialise(snapshot, thing_manager, self.clone().into_owned(), specialised)
     }
 
-    pub fn unset_specialize(
+    pub fn unset_specialise(
         &self,
         snapshot: &mut impl WritableSnapshot,
         type_manager: &TypeManager,
         thing_manager: &ThingManager,
     ) -> Result<(), ConceptWriteError> {
-        type_manager.unset_relates_specialize(snapshot, thing_manager, self.clone().into_owned())
+        type_manager.unset_relates_specialise(snapshot, thing_manager, self.clone().into_owned())
     }
 
     pub fn set_annotation(
@@ -188,35 +188,35 @@ impl<'a> Capability<'a> for Relates<'a> {
         type_manager.get_capability_is_abstract(snapshot, self.clone().into_owned())
     }
 
-    // fn get_specializes<'this>(
+    // fn get_specialises<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
     //     type_manager: &'this TypeManager,
     // ) -> Result<MaybeOwns<'this, Option<Relates<'static>>>, ConceptReadError> {
-    //     type_manager.get_relates_specializes(snapshot, self.clone().into_owned())
+    //     type_manager.get_relates_specialises(snapshot, self.clone().into_owned())
     // }
     //
-    // fn get_specializes_transitive<'this>(
+    // fn get_specialises_transitive<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
     //     type_manager: &'this TypeManager,
     // ) -> Result<MaybeOwns<'this, Vec<Relates<'static>>>, ConceptReadError> {
-    //     type_manager.get_relates_specializes_transitive(snapshot, self.clone().into_owned())
+    //     type_manager.get_relates_specialises_transitive(snapshot, self.clone().into_owned())
     // }
-    // fn get_specializing<'this>(
+    // fn get_specialising<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
     //     type_manager: &'this TypeManager,
     // ) -> Result<MaybeOwns<'this, HashSet<Relates<'static>>>, ConceptReadError> {
-    //     type_manager.get_relates_specializing(snapshot, self.clone().into_owned())
+    //     type_manager.get_relates_specialising(snapshot, self.clone().into_owned())
     // }
     //
-    // fn get_specializing_transitive<'this>(
+    // fn get_specialising_transitive<'this>(
     //     &'this self,
     //     snapshot: &impl ReadableSnapshot,
     //     type_manager: &'this TypeManager,
     // ) -> Result<MaybeOwns<'this, Vec<Relates<'static>>>, ConceptReadError> {
-    //     type_manager.get_relates_specializing_transitive(snapshot, self.clone().into_owned())
+    //     type_manager.get_relates_specialising_transitive(snapshot, self.clone().into_owned())
     // }
 
     fn get_annotations_declared<'m>(

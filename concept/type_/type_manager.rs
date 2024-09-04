@@ -202,6 +202,25 @@ macro_rules! get_type_label_methods {
     }
 }
 
+macro_rules! get_object_types_with_capability_methods {
+    ($(
+        fn $method_name:ident($capability:ident) -> $object_type:ident = $reader_method:ident | $cache_method:ident;
+    )*) => {
+        $(
+            pub(crate) fn $method_name(
+                &self, snapshot: &impl ReadableSnapshot, capability: $capability<'static>
+            ) -> Result<MaybeOwns<'_, HashSet<$object_type>>, ConceptReadError> {
+                 if let Some(cache) = &self.type_cache {
+                    Ok(MaybeOwns::Borrowed(cache.$cache_method(type_)))
+                } else {
+                    let annotations = TypeReader::$reader_method(snapshot, type_)?;
+                    Ok(MaybeOwns::Owned(annotations))
+                }
+            }
+        )*
+    }
+}
+
 macro_rules! get_annotations_declared_methods {
     ($(
         fn $method_name:ident($type_:ident) -> $annotation_type:ident = $reader_method:ident | $cache_method:ident;
@@ -855,53 +874,53 @@ impl TypeManager {
         }
     }
 
-    // TODO: Remove specializes?
+    // TODO: Remove specialises?
 
-    pub(crate) fn get_plays_specializes(
+    pub(crate) fn get_plays_specialises(
         &self,
         snapshot: &impl ReadableSnapshot,
         plays: Plays<'static>,
     ) -> Result<MaybeOwns<'_, Option<Plays<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_plays_specializes(plays)))
+            Ok(MaybeOwns::Borrowed(cache.get_plays_specialises(plays)))
         } else {
-            Ok(MaybeOwns::Owned(TypeReader::get_type_capability_specializes(snapshot, plays)?))
+            Ok(MaybeOwns::Owned(TypeReader::get_type_capability_specialises(snapshot, plays)?))
         }
     }
 
-    pub(crate) fn get_plays_specializes_transitive(
+    pub(crate) fn get_plays_specialises_transitive(
         &self,
         snapshot: &impl ReadableSnapshot,
         plays: Plays<'static>,
     ) -> Result<MaybeOwns<'_, Vec<Plays<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_plays_specializes_transitive(plays)))
+            Ok(MaybeOwns::Borrowed(cache.get_plays_specialises_transitive(plays)))
         } else {
-            Ok(MaybeOwns::Owned(TypeReader::get_capability_specializes_transitive(snapshot, plays)?))
+            Ok(MaybeOwns::Owned(TypeReader::get_capability_specialises_transitive(snapshot, plays)?))
         }
     }
 
-    pub(crate) fn get_plays_specializing(
+    pub(crate) fn get_plays_specialising(
         &self,
         snapshot: &impl ReadableSnapshot,
         plays: Plays<'static>,
     ) -> Result<MaybeOwns<'_, HashSet<Plays<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_plays_specializing(plays)))
+            Ok(MaybeOwns::Borrowed(cache.get_plays_specialising(plays)))
         } else {
-            Ok(MaybeOwns::Owned(TypeReader::get_specializing_capabilities(snapshot, plays)?))
+            Ok(MaybeOwns::Owned(TypeReader::get_specialising_capabilities(snapshot, plays)?))
         }
     }
 
-    pub(crate) fn get_plays_specializing_transitive(
+    pub(crate) fn get_plays_specialising_transitive(
         &self,
         snapshot: &impl ReadableSnapshot,
         plays: Plays<'static>,
     ) -> Result<MaybeOwns<'_, Vec<Plays<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_plays_specializing_transitive(plays)))
+            Ok(MaybeOwns::Borrowed(cache.get_plays_specialising_transitive(plays)))
         } else {
-            Ok(MaybeOwns::Owned(TypeReader::get_specializing_capabilities_transitive(snapshot, plays)?))
+            Ok(MaybeOwns::Owned(TypeReader::get_specialising_capabilities_transitive(snapshot, plays)?))
         }
     }
 
@@ -929,51 +948,51 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_owns_specializes(
+    pub(crate) fn get_owns_specialises(
         &self,
         snapshot: &impl ReadableSnapshot,
         owns: Owns<'static>,
     ) -> Result<MaybeOwns<'_, Option<Owns<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_owns_specializes(owns)))
+            Ok(MaybeOwns::Borrowed(cache.get_owns_specialises(owns)))
         } else {
-            Ok(MaybeOwns::Owned(TypeReader::get_type_capability_specializes(snapshot, owns)?))
+            Ok(MaybeOwns::Owned(TypeReader::get_type_capability_specialises(snapshot, owns)?))
         }
     }
 
-    pub(crate) fn get_owns_specializes_transitive(
+    pub(crate) fn get_owns_specialises_transitive(
         &self,
         snapshot: &impl ReadableSnapshot,
         owns: Owns<'static>,
     ) -> Result<MaybeOwns<'_, Vec<Owns<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_owns_specializes_transitive(owns)))
+            Ok(MaybeOwns::Borrowed(cache.get_owns_specialises_transitive(owns)))
         } else {
-            Ok(MaybeOwns::Owned(TypeReader::get_capability_specializes_transitive(snapshot, owns)?))
+            Ok(MaybeOwns::Owned(TypeReader::get_capability_specialises_transitive(snapshot, owns)?))
         }
     }
 
-    pub(crate) fn get_owns_specializing(
+    pub(crate) fn get_owns_specialising(
         &self,
         snapshot: &impl ReadableSnapshot,
         owns: Owns<'static>,
     ) -> Result<MaybeOwns<'_, HashSet<Owns<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_owns_specializing(owns)))
+            Ok(MaybeOwns::Borrowed(cache.get_owns_specialising(owns)))
         } else {
-            Ok(MaybeOwns::Owned(TypeReader::get_specializing_capabilities(snapshot, owns)?))
+            Ok(MaybeOwns::Owned(TypeReader::get_specialising_capabilities(snapshot, owns)?))
         }
     }
 
-    pub(crate) fn get_owns_specializing_transitive(
+    pub(crate) fn get_owns_specialising_transitive(
         &self,
         snapshot: &impl ReadableSnapshot,
         owns: Owns<'static>,
     ) -> Result<MaybeOwns<'_, Vec<Owns<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_owns_specializing_transitive(owns)))
+            Ok(MaybeOwns::Borrowed(cache.get_owns_specialising_transitive(owns)))
         } else {
-            Ok(MaybeOwns::Owned(TypeReader::get_specializing_capabilities_transitive(snapshot, owns)?))
+            Ok(MaybeOwns::Owned(TypeReader::get_specialising_capabilities_transitive(snapshot, owns)?))
         }
     }
 
@@ -989,52 +1008,58 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_relates_specializes(
+    pub(crate) fn get_relates_specialises(
         &self,
         snapshot: &impl ReadableSnapshot,
         relates: Relates<'static>,
     ) -> Result<MaybeOwns<'_, Option<Relates<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_relates_specializes(relates)))
+            Ok(MaybeOwns::Borrowed(cache.get_relates_specialises(relates)))
         } else {
-            Ok(MaybeOwns::Owned(TypeReader::get_type_capability_specializes(snapshot, relates)?))
+            Ok(MaybeOwns::Owned(TypeReader::get_type_capability_specialises(snapshot, relates)?))
         }
     }
 
-    pub(crate) fn get_relates_specializes_transitive(
+    pub(crate) fn get_relates_specialises_transitive(
         &self,
         snapshot: &impl ReadableSnapshot,
         relates: Relates<'static>,
     ) -> Result<MaybeOwns<'_, Vec<Relates<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_relates_specializes_transitive(relates)))
+            Ok(MaybeOwns::Borrowed(cache.get_relates_specialises_transitive(relates)))
         } else {
-            Ok(MaybeOwns::Owned(TypeReader::get_capability_specializes_transitive(snapshot, relates)?))
+            Ok(MaybeOwns::Owned(TypeReader::get_capability_specialises_transitive(snapshot, relates)?))
         }
     }
 
-    pub(crate) fn get_relates_specializing(
+    pub(crate) fn get_relates_specialising(
         &self,
         snapshot: &impl ReadableSnapshot,
         relates: Relates<'static>,
     ) -> Result<MaybeOwns<'_, HashSet<Relates<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_relates_specializing(relates)))
+            Ok(MaybeOwns::Borrowed(cache.get_relates_specialising(relates)))
         } else {
-            Ok(MaybeOwns::Owned(TypeReader::get_specializing_capabilities(snapshot, relates)?))
+            Ok(MaybeOwns::Owned(TypeReader::get_specialising_capabilities(snapshot, relates)?))
         }
     }
 
-    pub(crate) fn get_relates_specializing_transitive(
+    pub(crate) fn get_relates_specialising_transitive(
         &self,
         snapshot: &impl ReadableSnapshot,
         relates: Relates<'static>,
     ) -> Result<MaybeOwns<'_, Vec<Relates<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_relates_specializing_transitive(relates)))
+            Ok(MaybeOwns::Borrowed(cache.get_relates_specialising_transitive(relates)))
         } else {
-            Ok(MaybeOwns::Owned(TypeReader::get_specializing_capabilities_transitive(snapshot, relates)?))
+            Ok(MaybeOwns::Owned(TypeReader::get_specialising_capabilities_transitive(snapshot, relates)?))
         }
+    }
+
+    get_object_types_with_capability_methods! {
+        fn get_owns_annotations_declared(Owns) -> ObjectType = get_object_types_with_capability | get_object_types_with_owns;
+        fn get_plays_annotations_declared(Plays) -> ObjectType = get_object_types_with_capability | get_object_types_with_plays;
+        fn get_relates_annotations_declared(Relates) -> RelationType = get_object_types_with_capability | get_relation_types_with_relates;
     }
 
     get_annotations_declared_methods! {
@@ -1802,7 +1827,7 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_owns_and_specializing_owns_instances_on_attribute_supertype_change(
+        OperationTimeValidation::validate_updated_annotations_compatible_with_owns_and_specialising_owns_instances_on_attribute_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -1846,7 +1871,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_owns_and_specializing_owns_instances_on_attribute_supertype_change(
+        OperationTimeValidation::validate_updated_annotations_compatible_with_owns_and_specialising_owns_instances_on_attribute_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -1867,11 +1892,6 @@ impl TypeManager {
     ) -> Result<(), ConceptWriteError> {
         let object_subtype = subtype.clone().into_owned_object_type();
         let object_supertype = supertype.clone().into_owned_object_type();
-
-        OperationTimeValidation::validate_capabilities_are_not_overridden_in_the_new_supertype_transitive::<
-            Owns<'static>,
-        >(snapshot, object_subtype.clone(), object_supertype.clone())
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         OperationTimeValidation::validate_capability_overrides_compatible_with_new_supertype_transitive::<Owns<'static>>(
             snapshot,
@@ -1897,11 +1917,6 @@ impl TypeManager {
             object_supertype.clone(),
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_capabilities_are_not_overridden_in_the_new_supertype_transitive::<
-            Plays<'static>,
-        >(snapshot, object_subtype.clone(), object_supertype.clone())
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         OperationTimeValidation::validate_capability_overrides_compatible_with_new_supertype_transitive::<Plays<'static>>(
             snapshot,
@@ -2096,13 +2111,8 @@ impl TypeManager {
         attribute: AttributeType<'static>,
         ordering: Ordering,
     ) -> Result<(), ConceptWriteError> {
-        OperationTimeValidation::validate_interface_not_overridden::<Owns<'static>>(
-            snapshot,
-            owner.clone(),
-            attribute.clone(),
-        )
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
+        // TODO: When we introduce abstract owns, take care of extra validation of having
+        // abstract - concrete - abstract - concrete - abstract for owner - subowner - subsubowner - ...
         let owns = Owns::new(ObjectType::new(owner.clone().into_vertex()), attribute.clone());
         let exists = owner.get_owns(snapshot, self)?.contains(&owns);
 
@@ -2115,7 +2125,7 @@ impl TypeManager {
             )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
         } else {
-            OperationTimeValidation::validate_updated_owns_does_not_conflict_with_specializing_owns_ordering(
+            OperationTimeValidation::validate_updated_owns_does_not_conflict_with_specialising_owns_ordering(
                 snapshot,
                 self,
                 owns.clone(),
@@ -2188,13 +2198,8 @@ impl TypeManager {
         player: ObjectType<'static>,
         role: RoleType<'static>,
     ) -> Result<Plays<'static>, ConceptWriteError> {
-        OperationTimeValidation::validate_interface_not_overridden::<Plays<'static>>(
-            snapshot,
-            player.clone(),
-            role.clone(),
-        )
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
+        // TODO: When we introduce abstract plays, take care of extra validation of having
+        // abstract - concrete - abstract - concrete - abstract for owner - subowner - subsubowner - ...
         let plays = Plays::new(ObjectType::new(player.clone().into_vertex()), role);
         let exists = player.get_plays(snapshot, self)?.contains(&plays);
 
@@ -2262,7 +2267,7 @@ impl TypeManager {
         owns: Owns<'static>,
         ordering: Ordering,
     ) -> Result<(), ConceptWriteError> {
-        OperationTimeValidation::validate_updated_owns_does_not_conflict_with_specializing_owns_ordering(
+        OperationTimeValidation::validate_updated_owns_does_not_conflict_with_specialising_owns_ordering(
             snapshot,
             self,
             owns.clone(),
@@ -2302,7 +2307,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        let relates_override_opt = TypeReader::get_type_capability_specializes(snapshot, relates.clone())?;
+        let relates_override_opt = TypeReader::get_type_capability_specialises(snapshot, relates.clone())?;
         if let Some(relates_override) = relates_override_opt {
             OperationTimeValidation::validate_role_supertype_ordering_match(
                 snapshot,
@@ -2468,7 +2473,7 @@ impl TypeManager {
 
         self.validate_unset_capability_annotation_general(snapshot, relates.clone(), annotation_category.clone())?;
 
-        OperationTimeValidation::validate_no_specializing_relates_to_unset_abstract_annotation_from_relates(
+        OperationTimeValidation::validate_no_specialising_relates_to_unset_abstract_annotation_from_relates(
             snapshot,
             self,
             relates.clone(),
@@ -2511,18 +2516,18 @@ impl TypeManager {
         self.unset_type_annotation(snapshot, type_, annotation_category)
     }
 
-    pub(crate) fn set_relates_specialize(
+    pub(crate) fn set_relates_specialise(
         &self,
         snapshot: &mut impl WritableSnapshot,
         thing_manager: &ThingManager,
         relates: Relates<'static>,
-        specialized: Relates<'static>,
+        specialised: Relates<'static>,
     ) -> Result<(), ConceptWriteError> {
-        OperationTimeValidation::validate_relates_is_inherited(snapshot, relates.relation(), specialized.role())
+        OperationTimeValidation::validate_relates_is_inherited(snapshot, relates.relation(), specialised.role())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        self.set_role_type_supertype(snapshot, thing_manager, relates.role(), specialized.role())?;
-        self.set_relates_annotation_abstract(snapshot, thing_manager, specialized.clone())?;
+        self.set_role_type_supertype(snapshot, thing_manager, relates.role(), specialised.role())?;
+        self.set_relates_annotation_abstract(snapshot, thing_manager, specialised.clone())?;
         Ok(())
     }
 
@@ -2566,7 +2571,7 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_relates_and_specializing_relates_instances_on_role_supertype_change(
+        OperationTimeValidation::validate_updated_annotations_compatible_with_relates_and_specialising_relates_instances_on_role_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -2575,7 +2580,7 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_plays_and_specializing_plays_instances_on_role_supertype_change(
+        OperationTimeValidation::validate_updated_annotations_compatible_with_plays_and_specialising_plays_instances_on_role_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -2587,7 +2592,7 @@ impl TypeManager {
         self.set_supertype(snapshot, subtype, supertype)
     }
 
-    pub(crate) fn unset_relates_specialize(
+    pub(crate) fn unset_relates_specialise(
         &self,
         snapshot: &mut impl WritableSnapshot,
         thing_manager: &ThingManager,
@@ -2622,7 +2627,7 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_relates_and_specializing_relates_instances_on_role_supertype_change(
+        OperationTimeValidation::validate_updated_annotations_compatible_with_relates_and_specialising_relates_instances_on_role_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -2631,7 +2636,7 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_plays_and_specializing_plays_instances_on_role_supertype_change(
+        OperationTimeValidation::validate_updated_annotations_compatible_with_plays_and_specialising_plays_instances_on_role_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -3067,7 +3072,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_specializing_capabilities_narrow_regex(snapshot, self, owns.clone(), regex.clone())
+        OperationTimeValidation::validate_specialising_capabilities_narrow_regex(snapshot, self, owns.clone(), regex.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         OperationTimeValidation::validate_new_annotation_compatible_with_owns_and_overriding_owns_instances(
@@ -3232,7 +3237,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_specializing_capabilities_narrow_range(snapshot, self, owns.clone(), range.clone())
+        OperationTimeValidation::validate_specialising_capabilities_narrow_range(snapshot, self, owns.clone(), range.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         // TODO: Maybe for the future: check if compatible with existing VALUES annotation
@@ -3364,7 +3369,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_specializing_capabilities_narrow_values(snapshot, self, owns.clone(), values.clone())
+        OperationTimeValidation::validate_specialising_capabilities_narrow_values(snapshot, self, owns.clone(), values.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         // TODO: Maybe for the future: check if compatible with existing RANGE annotation

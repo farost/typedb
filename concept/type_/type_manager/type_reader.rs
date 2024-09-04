@@ -294,22 +294,18 @@ impl TypeReader {
     pub(crate) fn get_capabilities<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         object_type: CAP::ObjectType,
-        allow_hidden: bool,
+        allow_specialised: bool,
     ) -> Result<HashSet<CAP>, ConceptReadError> {
         let mut transitive_capabilities: HashSet<CAP> = HashSet::new();
-        let mut hidden_interfaces: HashSet<CAP::InterfaceType> = HashSet::new();
+        let mut transitive_interfaces: HashSet<CAP::InterfaceType> = HashSet::new();
         let mut current_type = Some(object_type);
         while current_type.is_some() {
-            let declared_capabilities =
-                Self::get_capabilities_declared::<CAP>(snapshot, current_type.as_ref().unwrap().clone())?;
+            let declared_capabilities: HashSet<CAP> =
+                Self::get_capabilities_declared(snapshot, current_type.as_ref().unwrap().clone())?;
             for capability in declared_capabilities.into_iter() {
-                let interface = capability.interface();
-                // TODO: Maybe need to check the whole capability, not interface. Revisit when hiding for plays and owns is implemented.
-                if allow_hidden || !hidden_interfaces.contains(&interface) {
+                if allow_specialised || !transitive_interfaces.contains(&capability.interface()) {
                     transitive_capabilities.insert(capability.clone());
-                }
-                if let Some(hidden) = Self::get_capability_hides(snapshot, capability.clone())? {
-                    hidden_interfaces.add(hidden.interface());
+                    transitive_interfaces.insert(capability.interface());
                 }
             }
             current_type = Self::get_supertype(snapshot, current_type.unwrap())?;
@@ -317,38 +313,8 @@ impl TypeReader {
         Ok(transitive_capabilities)
     }
 
-    pub(crate) fn get_object_capabilities_hides_declared<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        object_type: CAP::ObjectType,
-    ) -> Result<HashMap<CAP, CAP>, ConceptReadError> {
-        let mut capability_to_hidden: HashMap<CAP, CAP> = HashMap::new();
-        let declared_capabilities = Self::get_capabilities_declared::<CAP>(snapshot, object_type)?;
-        for capability in declared_capabilities.into_iter() {
-            debug_assert!(!capability_to_hidden.contains_key(&capability));
-            if let Some(hidden) = Self::get_capability_hides(snapshot, capability.clone())? {
-                capability_to_hidden.insert(capability, hidden);
-            }
-        }
-        Ok(capability_to_hidden)
-    }
-
-    pub(crate) fn get_object_capabilities_hides<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        object_type: CAP::ObjectType,
-    ) -> Result<HashMap<CAP, CAP>, ConceptReadError> {
-        let mut capability_to_hidden: HashMap<CAP, CAP> = HashMap::new();
-        let mut current_type = Some(object_type);
-        while let Some(current_type_val) = &current_type {
-            let current_type_capability_to_hidden =
-                Self::get_object_capabilities_hides_declared(snapshot, current_type_val.clone())?;
-            capability_to_hidden.extend(current_type_capability_to_hidden.into_iter());
-            current_type = Self::get_supertype(snapshot, current_type_val.clone())?;
-        }
-        Ok(capability_to_hidden)
-    }
-
-    // TODO: Looks like specializes are not needed! Try to work without them!
-    // pub(crate) fn get_type_capability_specializes<CAP: Capability<'static>>(
+    // TODO: Looks like specialises are not needed! Try to work without them!
+    // pub(crate) fn get_type_capability_specialises<CAP: Capability<'static>>(
     //     snapshot: &impl ReadableSnapshot,
     //     object_type: CAP::ObjectType,
     //     capability: CAP,
@@ -362,12 +328,12 @@ impl TypeReader {
     //     let mut current_interface_type_opt = Some(capability.interface());
     //
     //     while let Some(current_interface_type) = current_interface_type_opt {
-    //         let specialized = all_capabilities.iter().filter(|potential_specialized| {
-    //             potential_specialized != capability
-    //                 && &potential_specialized.interface() == &current_interface_type
+    //         let specialised = all_capabilities.iter().filter(|potential_specialised| {
+    //             potential_specialised != capability
+    //                 && &potential_specialised.interface() == &current_interface_type
     //         }).sorted_by(|lhs, rhs| lhs.interface().is_subtype_transitive_of(rhs.interface())).next();
-    //         if specialized.is_some() {
-    //             return Ok(specialized);
+    //         if specialised.is_some() {
+    //             return Ok(specialised);
     //         }
     //         current_interface_type_opt = Self::get_supertype(snapshot, current_interface_type)?;
     //     }
@@ -375,35 +341,35 @@ impl TypeReader {
     //     Ok(None)
     // }
 
-    // pub(crate) fn get_capability_specializes_transitive<CAP: Capability<'static>>(
+    // pub(crate) fn get_capability_specialises_transitive<CAP: Capability<'static>>(
     //     snapshot: &impl ReadableSnapshot,
     //     capability: CAP,
     // ) -> Result<Vec<CAP>, ConceptReadError> {
-    //     let mut capability_specializes: Vec<CAP> = Vec::new();
+    //     let mut capability_specialises: Vec<CAP> = Vec::new();
     //
-    //     let mut specializes_opt = TypeReader::get_type_capability_specializes(snapshot, capability)?;
-    //     while let Some(specializes) = specializes_opt {
-    //         capability_specializes.push(specializes.clone());
-    //         specializes_opt = TypeReader::get_supertype(snapshot, specializes)?;
+    //     let mut specialises_opt = TypeReader::get_type_capability_specialises(snapshot, capability)?;
+    //     while let Some(specialises) = specialises_opt {
+    //         capability_specialises.push(specialises.clone());
+    //         specialises_opt = TypeReader::get_supertype(snapshot, specialises)?;
     //     }
     //
-    //     Ok(capability_specializes)
+    //     Ok(capability_specialises)
     // }
     //
-    // pub(crate) fn get_specializing_capabilities<CAP: Capability<'static>>(
+    // pub(crate) fn get_specialising_capabilities<CAP: Capability<'static>>(
     //     snapshot: &impl ReadableSnapshot,
     //     capability: CAP,
     // ) -> Result<HashSet<CAP>, ConceptReadError> {
-    //     let mut specializing_capabilities: HashSet<CAP> = HashSet::new();
+    //     let mut specialising_capabilities: HashSet<CAP> = HashSet::new();
     //     let mut object_types_to_check: Vec<CAP::ObjectType> = Vec::from([capability.object()]);
     //
     //     while let Some(current_object_type) = object_types_to_check.pop() {
     //         let object_type_capabilities = Self::get_capabilities_declared::<CAP>(snapshot, current_object_type.clone())?;
     //         let is_hidden = object_type_capabilities.get(&capability).is_none();
-    //         for potential_specializing in object_type_capabilities.into_iter() {
-    //             let specializes = Self::get_type_capability_specializes(snapshot, potential_specializing.clone())?;
-    //             if specializes == capability {
-    //                 specializing_capabilities.insert(potential_specializing);
+    //         for potential_specialising in object_type_capabilities.into_iter() {
+    //             let specialises = Self::get_type_capability_specialises(snapshot, potential_specialising.clone())?;
+    //             if specialises == capability {
+    //                 specialising_capabilities.insert(potential_specialising);
     //             }
     //         }
     //
@@ -414,23 +380,23 @@ impl TypeReader {
     //         }
     //     }
     //
-    //     Ok(specializing_capabilities)
+    //     Ok(specialising_capabilities)
     // }
 
-    // pub(crate) fn get_specializing_capabilities_transitive<CAP: Capability<'static>>(
+    // pub(crate) fn get_specialising_capabilities_transitive<CAP: Capability<'static>>(
     //     snapshot: &impl ReadableSnapshot,
     //     capability: CAP,
     // ) -> Result<Vec<CAP>, ConceptReadError> {
-    //     let mut specializing_capabilities: Vec<CAP> = Vec::new();
+    //     let mut specialising_capabilities: Vec<CAP> = Vec::new();
     //     let mut capabilities_to_check: Vec<CAP> = Vec::from([capability]);
     //
     //     while let Some(capability) = capabilities_to_check.pop() {
-    //         let specializings = Self::get_specializing_capabilities(snapshot, capability)?;
-    //         capabilities_to_check.extend(specializings.iter());
-    //         specializing_capabilities.extend(specializings.into_iter());
+    //         let specialisings = Self::get_specialising_capabilities(snapshot, capability)?;
+    //         capabilities_to_check.extend(specialisings.iter());
+    //         specialising_capabilities.extend(specialisings.into_iter());
     //     }
     //
-    //     Ok(specializing_capabilities)
+    //     Ok(specialising_capabilities)
     // }
 
     pub(crate) fn get_capabilities_for_interface<CAP>(
@@ -456,25 +422,9 @@ impl TypeReader {
             Self::get_capabilities_for_interface(snapshot, interface_type.clone())?;
 
         for interface_capability in interface_capabilities {
-            let mut stack = Vec::new();
-            stack.push(interface_capability.object());
-            while let Some(sub_object) = stack.pop() {
-                let mut is_interface_capability_hidden = false;
-                for sub_object_cap in Self::get_capabilities_declared::<CAP>(snapshot, sub_object.clone())? {
-                    if let Some(hidden_cap) = Self::get_capability_hides(snapshot, sub_object_cap.clone())? {
-                        if hidden_cap == &interface_capability {
-                            is_interface_capability_hidden = true;
-                            break;
-                        }
-                    }
-                }
-                if !is_interface_capability_hidden {
-                    debug_assert!(!capabilities.contains_key(&sub_object));
-                    capabilities.insert(sub_object.clone(), interface_capability.clone());
-                    Self::get_subtypes(snapshot, sub_object)?
-                        .into_iter()
-                        .for_each(|object_type| stack.push(object_type));
-                }
+            for object_type in Self::get_object_types_with_capability(snapshot, interface_capability)? {
+                debug_assert!(!capabilities.contains_key(&object_type));
+                capabilities.insert(object_type, interface_capability.clone());
             }
         }
 
@@ -485,28 +435,21 @@ impl TypeReader {
         snapshot: &impl ReadableSnapshot,
         capability: CAP,
     ) -> Result<HashSet<CAP::ObjectType>, ConceptReadError> {
-            let mut stack = Vec::new();
-            stack.push(capability.object());
-            while let Some(sub_object) = stack.pop() {
-                let mut is_capability_hidden = false;
-                for sub_object_cap in Self::get_capabilities_declared::<CAP>(snapshot, sub_object.clone())? {
-                    if let Some(hidden_cap) = Self::get_capability_hides(snapshot, sub_object_cap.clone())? {
-                        if hidden_cap == &capability {
-                            is_capability_hidden = true;
-                            break;
-                        }
-                    }
-                }
-                if !is_capability_hidden {
-                    capabilities.insert(sub_object.clone(), interface_capability.clone());
-                    Self::get_subtypes(snapshot, sub_object)?
-                        .into_iter()
-                        .for_each(|object_type| stack.push(object_type));
-                }
+        let mut object_types = HashSet::new();
+
+        let all_subtypes = TypeAPI::chain_types(capability.object(), Self::get_subtypes_transitive(snapshot, capability.object())?.into_iter());
+        for object_type in all_subtypes {
+            if object_types.contains(&object_type) {
+                continue;
+            }
+
+            let object_type_capabilities = TypeReader::get_capabilities(snapshot, object_type.clone(), false)?;
+            if object_type_capabilities.contains(&capability) {
+                object_types.insert(object_type.clone());
             }
         }
 
-        Ok(capabilities)
+        Ok(object_types)
     }
 
     pub(crate) fn get_role_type_relates_declared(
@@ -733,6 +676,25 @@ impl TypeReader {
             .map_err(|err| ConceptReadError::SnapshotIterate { source: err.clone() })
     }
 
+    pub(crate) fn get_capability_constraints<CAP: Capability<'static>>(
+        snapshot: &impl ReadableSnapshot,
+        capability: CAP,
+    ) -> Result<HashSet<CapabilityConstraint<CAP>>, ConceptReadError> {
+        let mut constraints: HashSet<CapabilityConstraint<CAP>> = HashSet::new();
+        let declared_annotations = Self::get_capability_annotations_declared(snapshot, capability.clone())?;
+
+        for annotation in declared_annotations {
+            for constraint in annotation.clone().into().into_capability_constraints(capability.clone()) {
+                debug_assert!(!constraints.contains(&constraint));
+                debug_assert!(constraints.iter().find(|existing_constraint| existing_constraint.category() == constraint.category()).is_none());
+                constraints.insert(constraint);
+            }
+        }
+
+        Self::add_capability_default_constraints_if_not_declared(snapshot, capability, &mut constraints)?;
+        Ok(constraints)
+    }
+
     pub(crate) fn get_type_capability_constraints<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         object_type: CAP::ObjectType,
@@ -771,25 +733,6 @@ impl TypeReader {
         }
 
         Ok(all_constraints)
-    }
-
-    pub(crate) fn get_capability_constraints<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        capability: CAP,
-    ) -> Result<HashSet<CapabilityConstraint<CAP>>, ConceptReadError> {
-        let mut constraints: HashSet<CapabilityConstraint<CAP>> = HashSet::new();
-        let declared_annotations = Self::get_capability_annotations_declared(snapshot, capability.clone())?;
-
-        for annotation in declared_annotations {
-            for constraint in annotation.clone().into().into_capability_constraints(capability.clone()) {
-                debug_assert!(!constraints.contains(&constraint));
-                debug_assert!(constraints.iter().find(|existing_constraint| existing_constraint.category() == constraint.category()).is_none());
-                constraints.insert(constraint);
-            }
-        }
-
-        Self::add_capability_default_constraints_if_not_declared(snapshot, capability, &mut constraints)?;
-        Ok(constraints)
     }
 
     fn add_capability_default_constraints_if_not_declared<CAP: Capability<'static>>(

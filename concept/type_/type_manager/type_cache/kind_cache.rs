@@ -102,10 +102,11 @@ pub(crate) struct CommonTypeCache<T: KindAPI<'static>> {
 #[derive(Debug)]
 pub(crate) struct CommonCapabilityCache<CAP: Capability<'static>> {
     pub(super) capability: CAP,
-    pub(super) specializes: Option<CAP>,
-    pub(super) specializes_transitive: Vec<CAP>,
-    pub(super) specializing: HashSet<CAP>,
-    pub(super) specializing_transitive: Vec<CAP>,
+    pub(super) object_types_with_capability: HashSet<CAP::ObjectType>,
+    pub(super) specialises: Option<CAP>,
+    pub(super) specialises_transitive: Vec<CAP>,
+    pub(super) specialising: HashSet<CAP>,
+    pub(super) specialising_transitive: Vec<CAP>,
     pub(super) annotations_declared: HashSet<CAP::AnnotationType>,
     pub(super) constraints: HashSet<CapabilityConstraint<CAP>>,
 }
@@ -316,20 +317,22 @@ impl<CAP: Capability<'static>> CommonCapabilityCache<CAP> {
         where
             Snapshot: ReadableSnapshot,
     {
+        let object_types_with_capability = TypeReader::get_object_types_with_capability(snapshot, capability.clone()).unwrap();
         let annotations_declared = TypeReader::get_capability_annotations_declared(snapshot, capability.clone()).unwrap();
         let constraints = TypeReader::get_capability_constraints(snapshot, capability.clone()).unwrap();
-        let specializes = TypeReader::get_type_capability_specializes(snapshot, capability.clone()).unwrap();
-        let specializes_transitive = TypeReader::get_capability_specializes_transitive(snapshot, capability.clone()).unwrap();
-        let specializing = TypeReader::get_specializing_capabilities(snapshot, capability.clone()).unwrap();
-        let specializing_transitive = TypeReader::get_specializing_capabilities_transitive(snapshot, capability.clone()).unwrap();
+        let specialises = TypeReader::get_type_capability_specialises(snapshot, capability.clone()).unwrap();
+        let specialises_transitive = TypeReader::get_capability_specialises_transitive(snapshot, capability.clone()).unwrap();
+        let specialising = TypeReader::get_specialising_capabilities(snapshot, capability.clone()).unwrap();
+        let specialising_transitive = TypeReader::get_specialising_capabilities_transitive(snapshot, capability.clone()).unwrap();
         CommonCapabilityCache {
+            object_types_with_capability,
             capability,
             annotations_declared,
             constraints,
-            specializes,
-            specializes_transitive,
-            specializing,
-            specializing_transitive,
+            specialises,
+            specialises_transitive,
+            specialising,
+            specialising_transitive,
         }
     }
 }

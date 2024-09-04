@@ -112,20 +112,6 @@ pub(crate) fn is_overridden_interface_object_declared_supertype_or_self<T: KindA
     Ok(TypeReader::get_supertype(snapshot, type_.clone())? == Some(overridden.clone()))
 }
 
-pub(crate) fn is_interface_hidden<CAP: Capability<'static>>(
-    snapshot: &impl ReadableSnapshot,
-    object_type: CAP::ObjectType,
-    interface_type: CAP::InterfaceType,
-) -> Result<bool, ConceptReadError> {
-    let capabilities_overrides = TypeReader::get_object_capabilities_hides::<CAP>(snapshot, object_type)?;
-    Ok(capabilities_overrides
-        .iter()
-        .find(|(capability, overridden_capability)| {
-            interface_type == overridden_capability.interface() && interface_type != capability.interface()
-        })
-        .is_some())
-}
-
 pub(crate) fn validate_declared_annotation_is_compatible_with_inherited_annotations(
     snapshot: &impl ReadableSnapshot,
     type_: impl KindAPI<'static>,
@@ -264,7 +250,7 @@ pub(crate) fn validate_edge_regex_narrows_inherited_regex<CAP: Capability<'stati
 ) -> Result<(), SchemaValidationError> {
     let overridden_owns = match overridden_owns {
         None => {
-            TypeReader::get_type_capability_specializes(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
+            TypeReader::get_type_capability_specialises(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
         }
         Some(_) => overridden_owns,
     };
@@ -345,7 +331,7 @@ pub(crate) fn validate_edge_range_narrows_inherited_range<CAP: Capability<'stati
 ) -> Result<(), SchemaValidationError> {
     let overridden_owns = match overridden_owns {
         None => {
-            TypeReader::get_type_capability_specializes(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
+            TypeReader::get_type_capability_specialises(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
         }
         Some(_) => overridden_owns,
     };
@@ -425,7 +411,7 @@ pub(crate) fn validate_edge_values_narrows_inherited_values<CAP: Capability<'sta
 ) -> Result<(), SchemaValidationError> {
     let overridden_owns = match overridden_owns {
         None => {
-            TypeReader::get_type_capability_specializes(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
+            TypeReader::get_type_capability_specialises(snapshot, owns.clone()).map_err(SchemaValidationError::ConceptRead)?
         }
         Some(_) => overridden_owns,
     };
@@ -722,8 +708,8 @@ pub(crate) fn capability_get_annotation_with_source_by_category<CAP: Capability<
     capability: CAP,
     annotation_category: AnnotationCategory,
 ) -> Result<Option<(CAP::AnnotationType, CAP)>, ConceptReadError> {
-    let capability_and_specialized = iter::once(capability).chain(capability.get_specializes_transitive(snapshot, type_manager)?.into_iter());
-    for current_capability in capability_and_specialized {
+    let capability_and_specialised = iter::once(capability).chain(capability.get_specialises_transitive(snapshot, type_manager)?.into_iter());
+    for current_capability in capability_and_specialised {
         let annotations = current_capability.get_annotations_declared(snapshot, type_manager)?;
         let found_annotation_opt = annotations
             .iter()
@@ -750,32 +736,32 @@ pub fn validate_capabilities_cardinalities_narrowing<CAP: Capability<'static>>(
     let capabilities: HashSet<CAP> = TypeReader::get_capabilities(snapshot, type_.clone(), true)?;
 
     for capability in capabilities.into_iter().chain(not_stored_set_capabilities.iter().filter(|(_, is_set)| **is_set)).map(|(cap, _)| cap) {
-        let is_hidden_in_storage = TypeReader::get_object_capabilities_hides(snapshot, type_.clone())?.into_iter().find(|(hider, hidden)| hidden == &capability);
         let updated_hide = not_stored_set_hidden.get(&capability);
         let updated_set_hidden = *updated_hide.unwrap_or(&false);
         let updated_unset_hidden = !*updated_hide.unwrap_or(&true);
         let updated_unset_capability = !not_stored_set_capabilities.get(&capability).unwrap_or(&true);
-        if is_hidden_in_storage.is_some() && !updated_unset_hidden || updated_set_hidden || updated_unset_capability {
-            continue;
-        }
+        // TODO: Maybe ignore abstract capabilities? Think about it!
+        // if is_hidden_in_storage.is_some() && !updated_unset_hidden || updated_set_hidden || updated_unset_capability {
+        //     continue;
+        // }
 
         if !cardinalities.contains_key(&capability) {
             cardinalities.insert(capability.clone(), capability.get_cardinality(snapshot, type_manager)?);
         }
 
-        for capability_specialized in capability.get_specializes_transitive(snapshot, type_manager)? {
+        for capability_specialised in capability.get_specialises_transitive(snapshot, type_manager)? {
             if !cardinalities.contains_key(&capability) {
-                cardinalities.insert(capability.clone(), capability_specialized.get_cardinality(snapshot, type_manager)?);
+                cardinalities.insert(capability.clone(), capability_specialised.get_cardinality(snapshot, type_manager)?);
             }
-            let capability_connection = cardinality_connections.entry(capability_specialized.clone()).or_insert(HashSet::new());
+            let capability_connection = cardinality_connections.entry(capability_specialised.clone()).or_insert(HashSet::new());
             capability_connection.insert(capability.clone());
         }
     }
 
-    for (root_capability, specializing_capabilities) in cardinality_connections {
+    for (root_capability, specialising_capabilities) in cardinality_connections {
         let root_cardinality = cardinalities.get(&root_capability).unwrap();
         let inheriting_cardinality =
-            specializing_capabilities.iter().filter_map(|capability| cardinalities.get(capability).copied()).sum();
+            specialising_capabilities.iter().filter_map(|capability| cardinalities.get(capability).copied()).sum();
 
         if !root_cardinality.narrowed_correctly_by(&inheriting_cardinality) {
             validation_errors.push(
@@ -785,7 +771,7 @@ pub fn validate_capabilities_cardinalities_narrowing<CAP: Capability<'static>>(
                     get_label_or_concept_read_err(snapshot, root_capability.interface())?,
                     get_opt_label_or_concept_read_err(
                         snapshot,
-                        specializing_capabilities.iter().next().map(|cap| cap.object()),
+                        specialising_capabilities.iter().next().map(|cap| cap.object()),
                     )?,
                     *root_cardinality,
                     inheriting_cardinality,
