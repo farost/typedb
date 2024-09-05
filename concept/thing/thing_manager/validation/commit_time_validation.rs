@@ -45,10 +45,10 @@ macro_rules! validate_capability_cardinality_constraint {
 
                 let source_interface_type = constraint.source().interface();
                 let sub_interface_types = source_interface_type.get_subtypes_transitive(snapshot, thing_manager.type_manager())?;
-                let count = TypeAPI::chain_types(source_interface_type, sub_interface_types)
+                let count = TypeAPI::chain_types(source_interface_type.clone(), sub_interface_types)
                     .filter_map(|interface_type| counts.get(&interface_type))
                     .sum();
-                $check_func(snapshot, thing_manager.type_manager(), constraint, &object, constraint.source(), count)?;
+                $check_func(snapshot, thing_manager.type_manager(), constraint, &object, source_interface_type, count)?;
             }
 
             Ok(())

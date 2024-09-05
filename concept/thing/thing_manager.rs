@@ -1302,7 +1302,7 @@ impl ThingManager {
         snapshot: &mut impl WritableSnapshot,
         entity_type: EntityType<'static>,
     ) -> Result<Entity<'a>, ConceptWriteError> {
-        OperationTimeValidation::validate_type_instance_is_not_abstract(snapshot, self, entity_type.clone())
+        OperationTimeValidation::validate_entity_type_is_not_abstract(snapshot, self, entity_type.clone())
             .map_err(|source| ConceptWriteError::DataValidation { source })?;
 
         Ok(Entity::new(self.vertex_generator.create_entity(entity_type.vertex().type_id_(), snapshot)))
@@ -1313,7 +1313,7 @@ impl ThingManager {
         snapshot: &mut impl WritableSnapshot,
         relation_type: RelationType<'static>,
     ) -> Result<Relation<'a>, ConceptWriteError> {
-        OperationTimeValidation::validate_type_instance_is_not_abstract(snapshot, self, relation_type.clone())
+        OperationTimeValidation::validate_relation_type_is_not_abstract(snapshot, self, relation_type.clone())
             .map_err(|source| ConceptWriteError::DataValidation { source })?;
 
         Ok(Relation::new(self.vertex_generator.create_relation(relation_type.vertex().type_id_(), snapshot)))
@@ -1325,7 +1325,7 @@ impl ThingManager {
         attribute_type: AttributeType<'static>,
         value: Value<'_>,
     ) -> Result<Attribute<'a>, ConceptWriteError> {
-        OperationTimeValidation::validate_type_instance_is_not_abstract(snapshot, self, attribute_type.clone())
+        OperationTimeValidation::validate_attribute_type_is_not_abstract(snapshot, self, attribute_type.clone())
             .map_err(|source| ConceptWriteError::DataValidation { source })?;
 
         OperationTimeValidation::validate_value_type_matches_attribute_type_for_write(
@@ -1546,6 +1546,15 @@ impl ThingManager {
             attribute_type.clone(),
             value.value_type(),
         )?;
+
+        OperationTimeValidation::validate_has_unique_constraint(
+            snapshot,
+            self,
+            &owner,
+            attribute.type_(),
+            value.as_reference(),
+        )
+        .map_err(|error| ConceptWriteError::DataValidation { source: error })?;
 
         OperationTimeValidation::validate_has_regex_constraints(snapshot, self, owner, attribute_type.clone(), value.as_reference())
             .map_err(|source| ConceptWriteError::DataValidation { source })?;

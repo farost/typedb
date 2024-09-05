@@ -80,6 +80,14 @@ impl<'a> Plays<'a> {
         Ok(())
     }
 
+    pub fn get_constraint_abstract(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<Option<CapabilityConstraint<Plays<'static>>>, ConceptReadError> {
+        type_manager.get_capability_abstract_constraints(snapshot, self.clone().into_owned())
+    }
+
     pub fn get_default_cardinality() -> AnnotationCardinality {
         Self::DEFAULT_CARDINALITY
     }
@@ -131,7 +139,7 @@ impl<'a> Capability<'a> for Plays<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        let is_abstract = type_manager.get_capability_is_abstract(snapshot, self.clone().into_owned())?;
+        let is_abstract = self.get_constraints_abstract(snapshot, type_manager)?.is_some();
         debug_assert!(!is_abstract, "Abstractness of plays is not implemented! Take care of validation");
         Ok(is_abstract)
     }

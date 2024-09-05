@@ -100,7 +100,7 @@ impl<'a> TypeAPI<'a> for AttributeType<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_type_is_abstract(snapshot, self.clone().into_owned())
+        Ok(self.get_constraints_abstract(snapshot, type_manager)?.is_some())
     }
 
     fn delete(
@@ -276,12 +276,28 @@ impl<'a> AttributeType<'a> {
         type_manager.unset_attribute_type_supertype(snapshot, thing_manager, self.clone().into_owned())
     }
 
-    pub(crate) fn is_independent(
+    pub fn get_constraint_abstract(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<Option<TypeConstraint<AttributeType<'static>>>, ConceptReadError> {
+        type_manager.get_type_abstract_constraint(snapshot, self.clone().into_owned())
+    }
+
+    pub fn get_constraints_independent(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<HashSet<TypeConstraint<AttributeType<'static>>>, ConceptReadError> {
+        type_manager.get_attribute_type_independent_constraints(snapshot, self.clone().into_owned())
+    }
+
+    pub fn is_independent(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_is_independent(snapshot, self.clone().into_owned())
+        Ok(!self.get_constraints_independent(snapshot, type_manager)?.is_empty())
     }
 
     pub fn get_constraints_regex(

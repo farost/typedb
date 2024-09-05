@@ -102,7 +102,7 @@ impl<'a> TypeAPI<'a> for RelationType<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_type_is_abstract(snapshot, self.clone().into_owned())
+        Ok(self.get_constraints_abstract(snapshot, type_manager)?.is_some())
     }
 
     fn delete(
@@ -252,6 +252,14 @@ impl<'a> RelationType<'a> {
         Ok(())
     }
 
+    pub fn get_constraint_abstract(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<Option<TypeConstraint<RelationType<'static>>>, ConceptReadError> {
+        type_manager.get_type_abstract_constraint(snapshot, self.clone().into_owned())
+    }
+
     pub fn create_relates(
         &self,
         snapshot: &mut impl WritableSnapshot,
@@ -313,13 +321,22 @@ impl<'a> RelationType<'a> {
         type_manager.get_type_relates_cardinality_constraints(snapshot, self.clone().into_owned(), role_type)
     }
 
+    pub(crate) fn get_type_relates_constraints_distinct<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        role_type: RoleType<'static>,
+    ) -> Result<HashSet<CapabilityConstraint<Relates<'static>>>, ConceptReadError> {
+        type_manager.get_type_relates_distinct_constraints(snapshot, self.clone().into_owned(), role_type)
+    }
+
     pub(crate) fn is_type_relates_distinct<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
         role_type: RoleType<'static>,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_is_type_relates_distinct(snapshot, self.clone().into_owned(), role_type)
+        Ok(!self.get_type_relates_constraints_distinct(snapshot, type_manager, role_type)?.is_empty())
     }
 
     pub fn get_relates_role(
@@ -477,13 +494,22 @@ impl<'a> OwnerAPI<'a> for RelationType<'a> {
         type_manager.get_type_owns_cardinality_constraints(snapshot, self.clone().into_owned_object_type(), attribute_type)
     }
 
+    fn get_type_owns_constraints_distinct<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        attribute_type: AttributeType<'static>,
+    ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_type_owns_distinct_constraints(snapshot, self.clone().into_owned_object_type(), attribute_type)
+    }
+
     fn is_type_owns_distinct<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
         attribute_type: AttributeType<'static>,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_is_type_owns_distinct(snapshot, self.clone().into_owned_object_type(), attribute_type)
+        Ok(!self.get_type_owns_constraints_distinct(snapshot, type_manager, attribute_type)?.is_empty())
     }
 
     fn get_type_owns_constraints_regex<'m>(

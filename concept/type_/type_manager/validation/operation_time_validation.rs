@@ -64,9 +64,10 @@ use crate::{
         Capability, KindAPI, ObjectTypeAPI, Ordering, TypeAPI,
     },
 };
+use crate::thing::attribute::Attribute;
 use crate::thing::object::Object;
 use crate::thing::thing_manager::validation::validation::DataValidation;
-use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, filter_by_constraint_category, get_abstract_constraint, get_cardinality_constraint, get_cardinality_constraints, get_distinct_constraints, get_independent_constraints, get_range_constraints, get_regex_constraints, get_unique_constraint, get_unique_constraints, get_values_constraints, TypeConstraint};
+use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, filter_by_constraint_category, get_abstract_constraint, get_abstract_constraints, get_cardinality_constraint, get_cardinality_constraints, get_distinct_constraints, get_independent_constraints, get_range_constraints, get_regex_constraints, get_unique_constraint, get_unique_constraints, get_values_constraints, TypeConstraint};
 use crate::type_::{OwnerAPI, PlayerAPI};
 use crate::type_::type_manager::validation::validation::{validate_sibling_owns_ordering_match_for_type, validate_single_cardinality_narrows_inherited_cardinalities};
 
@@ -2769,19 +2770,21 @@ impl OperationTimeValidation {
             return Ok(());
         }
 
-        // TODO: change to this or smth
-        let abstract_constraints_sources: HashSet<Owns<'static>> =
-            filter_by_constraint_category!(constraints.iter(), Abstract)
-                .map(|constraint| constraint.source())
-                .collect();
+        let abstract_constraints = get_abstract_constraints(constraints.iter());
 
-        let is_abstract = compute_abstract(annotations);
-        debug_assert!(is_abstract.is_some(), "At least one constraint should exist otherwise we don't need to iterate");
+        debug_assert!(!abstract_constraints.is_empty(), "At least one constraint should exist otherwise we don't need to iterate");
 
         let mut entity_iterator = thing_manager.get_entities_in(snapshot, entity_type.clone().into_owned());
         if let Some(_) = entity_iterator.next().transpose()? {
-            if is_abstract.is_some() {
-                return Ok(Some(AnnotationCategory::Abstract));
+            for abstract_constraint in abstract_constraints.iter() {
+                debug_assert_eq!(
+                    abstract_constraint.category().validation_mode(),
+                    ConstraintValidationMode::SingleInstanceOfType,
+                    "Reconsider the algorithm if validation mode is changed!");
+                if &abstract_constraint.source() == &entity_type {
+                    return DataValidation::create_data_validation_entity_type_abstractness_error(&abstract_constraint)
+                        .map_err(SchemaValidationError::DataValidation);
+                }
             }
         }
 
@@ -2798,19 +2801,21 @@ impl OperationTimeValidation {
             return Ok(());
         }
 
-        // TODO: change to this or smth
-        let abstract_constraints_sources: HashSet<Owns<'static>> =
-            filter_by_constraint_category!(constraints.iter(), Abstract)
-                .map(|constraint| constraint.source())
-                .collect();
+        let abstract_constraints = get_abstract_constraints(constraints.iter());
 
-        let is_abstract = compute_abstract(annotations);
-        debug_assert!(is_abstract.is_some(), "At least one constraint should exist otherwise we don't need to iterate");
+        debug_assert!(!abstract_constraints.is_empty(), "At least one constraint should exist otherwise we don't need to iterate");
 
         let mut relation_iterator = thing_manager.get_relations_in(snapshot, relation_type.clone().into_owned());
         if let Some(_) = relation_iterator.next().transpose()? {
-            if is_abstract.is_some() {
-                return Ok(Some(AnnotationCategory::Abstract));
+            for abstract_constraint in abstract_constraints.iter() {
+                debug_assert_eq!(
+                    abstract_constraint.category().validation_mode(),
+                    ConstraintValidationMode::SingleInstanceOfType,
+                    "Reconsider the algorithm if validation mode is changed!");
+                if &abstract_constraint.source() == &relation_type {
+                    return DataValidation::create_data_validation_relation_type_abstractness_error(&abstract_constraint)
+                        .map_err(SchemaValidationError::DataValidation);
+                }
             }
         }
 
@@ -2827,16 +2832,12 @@ impl OperationTimeValidation {
             return Ok(());
         }
 
-        // TODO: change to this or smth
-        let abstract_constraints_sources: HashSet<Owns<'static>> =
-            filter_by_constraint_category!(constraints.iter(), Abstract)
-                .map(|constraint| constraint.source())
-                .collect();
+        let abstract_constraints = get_abstract_constraints(constraints.iter());
         let regex_constraints = get_regex_constraints(constraints.iter());
         let range_constraints = get_range_constraints(constraints.iter());
         let values_constraints = get_values_constraints(constraints.iter());
 
-        debug_assert!(!abstract_constraints_sources.is_empty()
+        debug_assert!(!abstract_constraints.is_empty()
                 || !regex_constraints.is_empty()
                 || !range_constraints.is_empty()
                 || !values_constraints.is_empty(),
@@ -2847,8 +2848,15 @@ impl OperationTimeValidation {
         while let Some(attribute) = attribute_iterator.next() {
             let mut attribute = attribute?;
 
-            if is_abstract.is_some() {
-                return Ok(Some(AnnotationCategory::Abstract));
+            for abstract_constraint in abstract_constraints.iter() {
+                debug_assert_eq!(
+                    abstract_constraint.category().validation_mode(),
+                    ConstraintValidationMode::SingleInstanceOfType,
+                    "Reconsider the algorithm if validation mode is changed!");
+                if &abstract_constraint.source() == &attribute_type {
+                    return DataValidation::create_data_validation_attribute_type_abstractness_error(&abstract_constraint)
+                        .map_err(SchemaValidationError::DataValidation);
+                }
             }
 
             let value = attribute.get_value(snapshot, thing_manager)?;
@@ -2926,10 +2934,7 @@ impl OperationTimeValidation {
         }
 
         let cardinality_constraints_iter = filter_by_constraint_category!(constraints.iter(), Cardinality);
-        let abstract_constraints_sources: HashSet<Owns<'static>> =
-            filter_by_constraint_category!(constraints.iter(), Abstract)
-                .map(|constraint| constraint.source())
-                .collect();
+        let abstract_constraints = get_abstract_constraints(constraints.iter());
         let distinct_constraints = get_distinct_constraints(constraints.iter());
         let regex_constraints = get_regex_constraints(constraints.iter());
         let range_constraints = get_range_constraints(constraints.iter());
@@ -2951,7 +2956,7 @@ impl OperationTimeValidation {
 
         debug_assert!(
             cardinality_constraints_iter.count() > 0
-                || !abstract_constraints_sources.is_empty()
+                || !abstract_constraints.is_empty()
                 || !distinct_constraints.is_empty()
                 || !regex_constraints.is_empty()
                 || !range_constraints.is_empty()
@@ -2980,11 +2985,22 @@ impl OperationTimeValidation {
 
                     let owns = object_type.get_owns_attribute(snapshot, type_manager, attribute_type.clone())?.ok_or(ConceptReadError::CorruptFoundHasWithoutOwns)?;
 
-                    if abstract_constraints_sources.contains(&owns) {
-                        return Ok(Some(AnnotationCategory::Abstract)); // TODO: Refactor
+                    for abstract_constraint in abstract_constraints.iter() {
+                        debug_assert_eq!(
+                            abstract_constraint.category().validation_mode(),
+                            ConstraintValidationMode::SingleInstanceOfType,
+                            "Reconsider the algorithm if validation mode is changed!");
+                        if &abstract_constraint.source() == &owns {
+                            return DataValidation::create_data_validation_owns_abstractness_error(&abstract_constraint, object.as_reference())
+                                .map_err(SchemaValidationError::DataValidation);
+                        }
                     }
 
                     for (cardinality_constraint, constraint_counts) in cardinality_constraints_counts.iter_mut() {
+                        debug_assert_eq!(
+                            cardinality_constraint.category().validation_mode(),
+                            ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes,
+                            "Reconsider the algorithm if validation mode is changed!");
                         if cardinality_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
                             || &cardinality_constraint.source().attribute() == &attribute_type
                         {
@@ -2996,9 +3012,12 @@ impl OperationTimeValidation {
                         if distinct_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
                             || &distinct_constraint.source().attribute() == &attribute_type
                         {
-                            if count > 1 {
-                                return Ok(Some(AnnotationCategory::Distinct));
-                            }
+                            DataValidation::validate_owns_distinct_constraint(
+                                distinct_constraint,
+                                object.as_reference(),
+                                attribute.as_reference(),
+                                count,
+                            ).map_err(SchemaValidationError::DataValidation)?;
                             break;
                         }
                     }
@@ -3006,47 +3025,73 @@ impl OperationTimeValidation {
                     let value = attribute.get_value(snapshot, thing_manager)?;
 
                     if let Some(unique_constraint) = &unique_constraint {
+                        debug_assert_eq!(
+                            unique_constraint.category().validation_mode(),
+                            ConstraintValidationMode::AllInstancesOfTypeOrSubtypes,
+                            "Reconsider the algorithm if validation mode is changed!");
                         if unique_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
                             || &unique_constraint.source().attribute() == &attribute_type
                         {
                             let new = unique_values.insert(value.clone().into_owned());
                             if !new {
-                                return Ok(Some({ AnnotationCategory::Unique }));
+                                return Err(DataValidation::create_data_validation_uniqueness_error(
+                                    snapshot,
+                                    type_manager,
+                                    &unique_constraint,
+                                    object,
+                                    attribute_type,
+                                    value,
+                                )).map_err(SchemaValidationError::DataValidation);
                             }
                         }
                     }
 
                     for regex_constraint in regex_constraints.iter() {
+                        debug_assert_eq!(
+                            regex_constraint.category().validation_mode(),
+                            ConstraintValidationMode::SingleInstanceOfTypeOrSubtype,
+                            "Reconsider the algorithm if validation mode is changed!");
                         if regex_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
                             || &regex_constraint.source().attribute() == &attribute_type
                         {
                             DataValidation::validate_owns_regex_constraint(
                                 regex_constraint,
-                                &object,
+                                object.as_reference(),
+                                attribute_type.clone(),
                                 value.as_reference(),
                             ).map_err(SchemaValidationError::DataValidation)?;
                         }
                     }
 
                     for range_constraint in range_constraints.iter() {
+                        debug_assert_eq!(
+                            range_constraint.category().validation_mode(),
+                            ConstraintValidationMode::SingleInstanceOfTypeOrSubtype,
+                            "Reconsider the algorithm if validation mode is changed!");
                         if range_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
                             || &range_constraint.source().attribute() == &attribute_type
                         {
                             DataValidation::validate_owns_range_constraint(
                                 range_constraint,
-                                &object,
+                                object.as_reference(),
+                                attribute_type.clone(),
                                 value.as_reference(),
                             ).map_err(SchemaValidationError::DataValidation)?;
                         }
                     }
 
                     for values_constraint in values_constraints.iter() {
+                        debug_assert_eq!(
+                            values_constraint.category().validation_mode(),
+                            ConstraintValidationMode::SingleInstanceOfTypeOrSubtype,
+                            "Reconsider the algorithm if validation mode is changed!");
                         if values_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
                             || &values_constraint.source().attribute() == &attribute_type
                         {
                             DataValidation::validate_owns_values_constraint(
                                 values_constraint,
-                                &object,
+                                object.as_reference(),
+                                attribute_type.clone(),
                                 value.as_reference(),
                             ).map_err(SchemaValidationError::DataValidation)?;
                         }
@@ -3059,7 +3104,7 @@ impl OperationTimeValidation {
                         type_manager,
                         &cardinality_constraint,
                         &object,
-                        cardinality_constraint.source(),
+                        cardinality_constraint.source().attribute(),
                         constraint_counts,
                     )?;
                 }
@@ -3082,14 +3127,11 @@ impl OperationTimeValidation {
         }
 
         let cardinality_constraints_iter = filter_by_constraint_category!(constraints.iter(), Cardinality);
-        let abstract_constraints_sources: HashSet<Plays<'static>> =
-            filter_by_constraint_category!(constraints.iter(), Abstract)
-                .map(|constraint| constraint.source())
-                .collect();
+        let abstract_constraints = get_abstract_constraints(constraints.iter());
 
         debug_assert!(
             cardinality_constraints_iter.count() > 0
-                || !abstract_constraints_sources.is_empty(),
+                || !abstract_constraints.is_empty(),
             "At least one constraint should exist otherwise we don't need to iterate"
         );
 
@@ -3109,11 +3151,22 @@ impl OperationTimeValidation {
 
                     let plays = object_type.get_plays_role(snapshot, type_manager, role_type.clone())?.ok_or(ConceptReadError::CorruptFoundLinksWithoutPlays)?;
 
-                    if abstract_constraints_sources.contains(&plays) {
-                        return Ok(Some(AnnotationCategory::Abstract)); // TODO: Refactor
+                    for abstract_constraint in abstract_constraints.iter() {
+                        debug_assert_eq!(
+                            abstract_constraint.category().validation_mode(),
+                            ConstraintValidationMode::SingleInstanceOfType,
+                            "Reconsider the algorithm if validation mode is changed!");
+                        if &abstract_constraint.source() == &plays {
+                            return DataValidation::create_data_validation_plays_abstractness_error(&abstract_constraint, object.as_reference())
+                                .map_err(SchemaValidationError::DataValidation);
+                        }
                     }
 
                     for (cardinality_constraint, constraint_counts) in cardinality_constraints_counts.iter_mut() {
+                        debug_assert_eq!(
+                            cardinality_constraint.category().validation_mode(),
+                            ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes,
+                            "Reconsider the algorithm if validation mode is changed!");
                         if cardinality_constraint.source().role().is_supertype_transitive_of(snapshot, type_manager, role_type.clone())?
                             || &cardinality_constraint.source().role() == &role_type
                         {
@@ -3128,7 +3181,7 @@ impl OperationTimeValidation {
                         type_manager,
                         &cardinality_constraint,
                         &object,
-                        cardinality_constraint.source(),
+                        cardinality_constraint.source().role(),
                         constraint_counts,
                     )?;
                 }
@@ -3151,15 +3204,12 @@ impl OperationTimeValidation {
         }
 
         let cardinality_constraints_iter = filter_by_constraint_category!(constraints.iter(), Cardinality);
-        let abstract_constraints_sources: HashSet<Relates<'static>> =
-            filter_by_constraint_category!(constraints.iter(), Abstract)
-                .map(|constraint| constraint.source())
-                .collect();
+        let abstract_constraints = get_abstract_constraints(constraints.iter());
         let distinct_constraints = get_distinct_constraints(constraints.iter());
 
         debug_assert!(
             cardinality_constraints_iter.count() > 0
-                || !abstract_constraints_sources.is_empty()
+                || !abstract_constraints.is_empty()
                 || !distinct_constraints.is_empty(),
             "At least one constraint should exist otherwise we don't need to iterate"
         );
@@ -3182,11 +3232,22 @@ impl OperationTimeValidation {
 
                     let relates = relation_type.get_relates_role(snapshot, type_manager, role_type.clone())?.ok_or(ConceptReadError::CorruptFoundLinksWithoutRelates)?;
 
-                    if abstract_constraints_sources.contains(&relates) {
-                        return Ok(Some(AnnotationCategory::Abstract)); // TODO: Refactor
+                    for abstract_constraint in abstract_constraints.iter() {
+                        debug_assert_eq!(
+                            abstract_constraint.category().validation_mode(),
+                            ConstraintValidationMode::SingleInstanceOfType,
+                            "Reconsider the algorithm if validation mode is changed!");
+                        if &abstract_constraint.source() == &relates {
+                            return DataValidation::create_data_validation_relates_abstractness_error(&abstract_constraint, relation.as_reference())
+                                .map_err(SchemaValidationError::DataValidation);
+                        }
                     }
 
                     for (cardinality_constraint, constraint_counts) in cardinality_constraints_counts.iter_mut() {
+                        debug_assert_eq!(
+                            cardinality_constraint.category().validation_mode(),
+                            ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes,
+                            "Reconsider the algorithm if validation mode is changed!");
                         if cardinality_constraint.source().role().is_supertype_transitive_of(snapshot, type_manager, role_type.clone())?
                             || &cardinality_constraint.source().role() == &role_type
                         {
@@ -3195,12 +3256,20 @@ impl OperationTimeValidation {
                     }
 
                     for distinct_constraint in distinct_constraints.iter() {
+                        debug_assert_eq!(
+                            distinct_constraint.category().validation_mode(),
+                            ConstraintValidationMode::SingleInstanceOfTypeOrSubtype,
+                            "Reconsider the algorithm if validation mode is changed!");
                         if distinct_constraint.source().role().is_supertype_transitive_of(snapshot, type_manager, role_type.clone())?
                             || &distinct_constraint.source().role() == &role_type
                         {
-                            if count > 1 {
-                                return Ok(Some(AnnotationCategory::Distinct));
-                            }
+                            DataValidation::validate_relates_distinct_constraint(
+                                distinct_constraint,
+                                relation.as_reference(),
+                                role_type.clone(),
+                                role_player.as_reference(),
+                                count,
+                            ).map_err(SchemaValidationError::DataValidation)?;
                             break;
                         }
                     }
@@ -3212,7 +3281,7 @@ impl OperationTimeValidation {
                         type_manager,
                         &cardinality_constraint,
                         &relation,
-                        cardinality_constraint.source(),
+                        cardinality_constraint.source().role(),
                         constraint_counts,
                     )?;
                 }

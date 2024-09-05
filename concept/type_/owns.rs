@@ -56,12 +56,28 @@ impl<'a> Owns<'a> {
     }
 
     // TODO: It may be risky to use methods purely on constraints, so maybe we need to remove them and use only is_type_owns_distinct instead!
+    pub fn get_constraint_abstract(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<Option<CapabilityConstraint<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_capability_abstract_constraints(snapshot, self.clone().into_owned())
+    }
+
+    pub fn get_constraints_distinct(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_distinct_constraints(snapshot, self.clone().into_owned())
+    }
+
     pub fn is_distinct(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_is_distinct(snapshot, self.clone().into_owned())
+        Ok(!self.get_constraints_distinct(snapshot, type_manager)?.is_empty())
     }
 
     pub fn get_constraint_unique(
@@ -246,7 +262,7 @@ impl<'a> Capability<'a> for Owns<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        let is_abstract = type_manager.get_capability_is_abstract(snapshot, self.clone().into_owned())?;
+        let is_abstract = self.get_constraints_abstract(snapshot, type_manager)?.is_some();
         debug_assert!(!is_abstract, "Abstractness of owns is not implemented! Take care of validation");
         Ok(is_abstract)
     }

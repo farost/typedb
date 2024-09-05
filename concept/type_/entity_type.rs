@@ -47,6 +47,7 @@ use crate::{
     ConceptAPI,
 };
 use crate::type_::constraint::{CapabilityConstraint, TypeConstraint};
+use crate::type_::object_type::with_object_type;
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct EntityType<'a> {
@@ -95,7 +96,7 @@ impl<'a> TypeAPI<'a> for EntityType<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_type_is_abstract(snapshot, self.clone().into_owned())
+        Ok(self.get_constraints_abstract(snapshot, type_manager)?.is_some())
     }
 
     fn delete(
@@ -240,6 +241,14 @@ impl<'a> EntityType<'a> {
         Ok(())
     }
 
+    pub fn get_constraint_abstract(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<Option<TypeConstraint<EntityType<'static>>>, ConceptReadError> {
+        type_manager.get_type_abstract_constraint(snapshot, self.clone().into_owned())
+    }
+
     pub fn into_owned(self) -> EntityType<'static> {
         EntityType { vertex: self.vertex.into_owned() }
     }
@@ -317,13 +326,22 @@ impl<'a> OwnerAPI<'a> for EntityType<'a> {
         type_manager.get_type_owns_cardinality_constraints(snapshot, self.clone().into_owned_object_type(), attribute_type)
     }
 
+    fn get_type_owns_constraints_distinct<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        attribute_type: AttributeType<'static>,
+    ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_type_owns_distinct_constraints(snapshot, self.clone().into_owned_object_type(), attribute_type)
+    }
+
     fn is_type_owns_distinct<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
         attribute_type: AttributeType<'static>,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_is_type_owns_distinct(snapshot, self.clone().into_owned_object_type(), attribute_type)
+        Ok(!self.get_type_owns_constraints_distinct(snapshot, type_manager, attribute_type)?.is_empty())
     }
 
     fn get_type_owns_constraints_regex<'m>(

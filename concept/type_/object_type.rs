@@ -42,6 +42,7 @@ use crate::{
     type_::ThingTypeAPI,
 };
 use crate::type_::constraint::CapabilityConstraint;
+use crate::type_::relates::Relates;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub enum ObjectType<'a> {
@@ -144,6 +145,15 @@ impl<'a> OwnerAPI<'a> for ObjectType<'a> {
         attribute_type: AttributeType<'static>,
     ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError> {
         with_object_type!(self, |object| { object.get_type_owns_constraints_cardinality(snapshot, type_manager, attribute_type) })
+    }
+
+    fn get_type_owns_constraints_distinct<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        attribute_type: AttributeType<'static>,
+    ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError> {
+        with_object_type!(self, |object| { object.get_type_owns_constraints_distinct(snapshot, type_manager, attribute_type) })
     }
 
     fn is_type_owns_distinct<'m>(

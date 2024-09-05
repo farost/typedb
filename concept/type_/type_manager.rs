@@ -337,39 +337,6 @@ macro_rules! storage_delete_annotation {
     };
 }
 
-macro_rules! get_has_constraint_methods {
-    ($(
-        fn $method_name:ident() -> $type_:ty = $filtering_method:path;
-    )*) => {
-        $(
-            pub(crate) fn $method_name(
-                &self, snapshot: &impl ReadableSnapshot, type_: $type_
-            ) -> Result<bool, ConceptReadError> {
-                let constraints = $filtering_method(type_.get_constraints(snapshot, self)?.into_iter());
-                Ok(!constraints.is_empty())
-            }
-        )*
-    }
-}
-
-macro_rules! get_type_capability_has_constraint_methods {
-    ($(
-        fn $method_name:ident() -> $constrained_type:ident = $get_constraints_method:ident + $filtering_method:path;
-    )*) => {
-        $(
-            pub(crate) fn $method_name(
-                &self,
-                snapshot: &impl ReadableSnapshot,
-                object_type: $constrained_type<'static>::ObjectType,
-                interface_type: $constrained_type<'static>::InterfaceType,
-            ) -> Result<bool, ConceptReadError> {
-                let constraints = $filtering_method(object_type.$get_constraints_method(snapshot, self, interface_type)?.into_iter());
-                Ok(!constraints.is_empty())
-            }
-        )*
-    }
-}
-
 macro_rules! get_filtered_constraints_methods {
     ($(
         fn $method_name:ident() -> $constraint_type:ident<$type_:ty> = $get_constraints_method:ident + $filtering_method:path;
@@ -1099,16 +1066,20 @@ impl TypeManager {
     }
 
     get_filtered_constraints_methods! {
-        fn get_cardinality_constraints() -> CapabilityConstraint<impl Capability<'static>> = get_constraints + get_cardinality_constraints;
-        fn get_owns_regex_constraints() -> CapabilityConstraint<Owns<'static>> = get_constraints + get_regex_constraints;
-        fn get_owns_range_constraints() -> CapabilityConstraint<Owns<'static>> = get_constraints + get_range_constraints;
-        fn get_owns_values_constraints() -> CapabilityConstraint<Owns<'static>> = get_constraints + get_values_constraints;
+        fn get_attribute_type_independent_constraints() -> TypeConstraint<AttributeType<'static>> = get_constraints + get_regex_constraints;
         fn get_attribute_type_regex_constraints() -> TypeConstraint<AttributeType<'static>> = get_constraints + get_regex_constraints;
         fn get_attribute_type_range_constraints() -> TypeConstraint<AttributeType<'static>> = get_constraints + get_range_constraints;
         fn get_attribute_type_values_constraints() -> TypeConstraint<AttributeType<'static>> = get_constraints + get_values_constraints;
+        fn get_cardinality_constraints() -> CapabilityConstraint<impl Capability<'static>> = get_constraints + get_cardinality_constraints;
+        fn get_distinct_constraints() -> CapabilityConstraint<impl Capability<'static>> = get_constraints + get_distinct_constraints;
+        fn get_owns_regex_constraints() -> CapabilityConstraint<Owns<'static>> = get_constraints + get_regex_constraints;
+        fn get_owns_range_constraints() -> CapabilityConstraint<Owns<'static>> = get_constraints + get_range_constraints;
+        fn get_owns_values_constraints() -> CapabilityConstraint<Owns<'static>> = get_constraints + get_values_constraints;
     }
 
     get_type_capability_filtered_constraints_methods! {
+        fn get_type_owns_distinct_constraints() -> Owns = get_type_owns_constraints + get_distinct_constraints;
+        fn get_type_relates_distinct_constraints() -> Relates = get_type_relates_constraints + get_distinct_constraints;
         fn get_type_owns_cardinality_constraints() -> Owns = get_type_owns_constraints + get_cardinality_constraints;
         fn get_type_plays_cardinality_constraints() -> Plays = get_type_plays_constraints + get_cardinality_constraints;
         fn get_type_relates_cardinality_constraints() -> Relates = get_type_relates_constraints + get_cardinality_constraints;
@@ -1117,28 +1088,18 @@ impl TypeManager {
         fn get_type_owns_values_constraints() -> Owns = get_type_owns_constraints + get_values_constraints;
     }
 
-    get_has_constraint_methods! {
-        fn get_is_distinct() -> impl Capability<'static> = get_distinct_constraints;
-        fn get_is_independent() -> AttributeType<'static> = get_independent_constraints;
-    }
-
-    get_type_capability_has_constraint_methods! {
-        fn get_is_type_owns_distinct() -> Owns = get_type_owns_constraints + get_distinct_constraints;
-        fn get_is_type_relates_distinct() -> Relates = get_type_relates_constraints + get_distinct_constraints;
-    }
-
-    pub(crate) fn get_type_is_abstract<T: KindAPI<'static>>(
+    pub(crate) fn get_type_abstract_constraint<T: KindAPI<'static>>(
         &self, snapshot: &impl ReadableSnapshot, type_: T,
-    ) -> Result<bool, ConceptReadError> {
+    ) -> Result<Option<TypeConstraint<T>>, ConceptReadError> {
         let constraints = type_.get_constraints(snapshot, self)?;
-        Ok(get_abstract_constraint(type_, constraints.into_iter()).is_some())
+        Ok(get_abstract_constraint(type_, constraints.into_iter()))
     }
 
-    pub(crate) fn get_capability_is_abstract<CAP: Capability<'static>>(
+    pub(crate) fn get_capability_abstract_constraints<CAP: Capability<'static>>(
         &self, snapshot: &impl ReadableSnapshot, capability: CAP,
-    ) -> Result<bool, ConceptReadError> {
+    ) -> Result<Option<CapabilityConstraint<CAP>>, ConceptReadError> {
         let constraints = capability.get_constraints(snapshot, self)?;
-        Ok(get_abstract_constraint(capability, constraints.into_iter()).is_some())
+        Ok(get_abstract_constraint(capability, constraints.into_iter()))
     }
 
     pub(crate) fn get_unique_constraint(

@@ -50,12 +50,28 @@ impl<'a> Relates<'a> {
     }
 
     // TODO: It may be risky to use methods purely on constraints, so maybe we need to remove them and use only is_type_relates_distinct instead!
+    pub fn get_constraint_abstract(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<Option<CapabilityConstraint<Relates<'static>>>, ConceptReadError> {
+        type_manager.get_capability_abstract_constraints(snapshot, self.clone().into_owned())
+    }
+
+    pub fn get_constraints_distinct(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError> {
+        type_manager.get_distinct_constraints(snapshot, self.clone().into_owned())
+    }
+
     pub fn is_distinct(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_is_distinct(snapshot, self.clone().into_owned())
+        Ok(!self.get_constraints_distinct(snapshot, type_manager)?.is_empty())
     }
 
     pub fn set_specialise(
@@ -86,7 +102,7 @@ impl<'a> Relates<'a> {
     ) -> Result<(), ConceptWriteError> {
         match annotation {
             RelatesAnnotation::Abstract(_) => {
-                type_manager.set_relates_annotation_abstract(snapshot, thing_manager, self.clone().into_owned())?
+                unimplemented!("Manual setting of Abstract annotation for Relates is not supported yet.")
             }
             RelatesAnnotation::Distinct(_) => {
                 type_manager.set_relates_annotation_distinct(snapshot, thing_manager, self.clone().into_owned())?
@@ -112,7 +128,7 @@ impl<'a> Relates<'a> {
             .map_err(|source| ConceptWriteError::Annotation { source })?;
         match relates_annotation {
             RelatesAnnotation::Abstract(_) => {
-                type_manager.unset_relates_annotation_abstract(snapshot, self.clone().into_owned(), true)?
+                unimplemented!("Manual setting of Abstract annotation for Relates is not supported yet.")
             }
             RelatesAnnotation::Distinct(_) => {
                 type_manager.unset_capability_annotation_distinct(snapshot, self.clone().into_owned())?
@@ -185,7 +201,7 @@ impl<'a> Capability<'a> for Relates<'a> {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
     ) -> Result<bool, ConceptReadError> {
-        type_manager.get_capability_is_abstract(snapshot, self.clone().into_owned())
+        Ok(self.get_constraints_abstract(snapshot, type_manager)?.is_some())
     }
 
     // fn get_specialises<'this>(

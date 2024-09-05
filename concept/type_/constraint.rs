@@ -5,32 +5,23 @@
  */
 
 use std::collections::{HashMap, HashSet};
-use std::collections::hash_map::Iter;
 use std::error::Error;
 use std::fmt;
 use std::hash::Hash;
-use std::marker::PhantomData;
 use encoding::value::value::Value;
-use encoding::value::ValueEncodable;
 
-use storage::snapshot::{ReadableSnapshot, WritableSnapshot};
+use storage::snapshot::WritableSnapshot;
 
 use crate::{
-    error::ConceptReadError,
-    thing::thing_manager::ThingManager,
     type_::{
         annotation::{
             Annotation, AnnotationAbstract, AnnotationCardinality, AnnotationCategory,
             AnnotationDistinct, AnnotationError, AnnotationIndependent, AnnotationKey, AnnotationRange,
             AnnotationRegex, AnnotationUnique, AnnotationValues, DefaultFrom,
         },
-        owns::Owns,
-        type_manager::{type_reader::TypeReader, TypeManager},
-        Capability,
+        Capability, KindAPI, TypeAPI,
     },
 };
-use crate::type_::{KindAPI, TypeAPI};
-use crate::type_::annotation::AnnotationCascade;
 
 macro_rules! with_constraint_description {
     ($constraint_description:ident, $target_enum:ident, $default:expr, |$constraint:ident| $expr:expr) => {
@@ -59,7 +50,6 @@ pub enum ConstraintCategory {
     Distinct,
     Independent,
     Unique,
-    Key,
     Cardinality,
     Regex,
     Range,
@@ -220,6 +210,13 @@ pub trait Constraint<T>: Sized + Clone + Hash + PartialEq {
         match values.value_valid(value.as_reference()) {
             true => Ok(()),
             false => Err(ConstraintError::ViolatedValues { values, value: value.into_owned() }),
+        }
+    }
+
+    fn validate_distinct(count: u64) -> Result<(), ConstraintError> {
+        match count > 1 {
+            false => Ok(()),
+            true => Err(ConstraintError::ViolatedDistinct { count: count }),
         }
     }
 }
@@ -440,12 +437,14 @@ pub(crate) fn constraint_validation_mode(
 #[derive(Debug, Clone)]
 pub enum ConstraintError {
     CannotUnwrapConstraint(String),
-    Violated(ConstraintDescription),
     CorruptConstraintIsNotApplicableToValue { description: ConstraintDescription, value: Value<'static>, },
+    ViolatedAbstract,
     ViolatedCardinality { cardinality: AnnotationCardinality, count: u64 },
     ViolatedRegex { regex: AnnotationRegex, value: Value<'static> },
     ViolatedRange { range: AnnotationRange, value: Value<'static> },
     ViolatedValues { values: AnnotationValues, value: Value<'static> },
+    ViolatedUnique { value: Value<'static> },
+    ViolatedDistinct { count: u64 },
 }
 
 impl fmt::Display for ConstraintError {
@@ -458,12 +457,14 @@ impl Error for ConstraintError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::CannotUnwrapConstraint(_) => None,
-            Self::Violated(_) => None,
+            Self::ViolatedAbstract => None,
             Self::CorruptConstraintIsNotApplicableToValue { .. } => None,
             Self::ViolatedCardinality { .. } => None,
             Self::ViolatedRegex { .. } => None,
             Self::ViolatedRange { .. } => None,
             Self::ViolatedValues { .. } => None,
+            Self::ViolatedUnique { .. } => None,
+            Self::ViolatedDistinct { .. } => None,
         }
     }
 }

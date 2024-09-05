@@ -264,6 +264,13 @@ pub trait OwnerAPI<'a>: TypeAPI<'a> {
         interface_type: AttributeType<'static>,
     ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError>;
 
+    fn get_type_owns_constraints_distinct<'m>(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &'m TypeManager,
+        interface_type: AttributeType<'static>,
+    ) -> Result<HashSet<CapabilityConstraint<Owns<'static>>>, ConceptReadError>;
+
     fn is_type_owns_distinct<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,

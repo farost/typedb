@@ -23,6 +23,7 @@ use crate::{
     },
 };
 use crate::type_::constraint::ConstraintError;
+use crate::type_::entity_type::EntityType;
 use crate::type_::relation_type::RelationType;
 
 pub(crate) mod commit_time_validation;
@@ -32,57 +33,51 @@ pub(crate) mod validation;
 #[derive(Debug, Clone)]
 pub enum DataValidationError {
     ConceptRead(ConceptReadError),
-    CannotCreateInstanceOfAbstractType(Label<'static>),
     CannotAddOwnerInstanceForNotOwnedAttributeType(Label<'static>, Label<'static>),
     CannotAddPlayerInstanceForNotPlayedRoleType(Label<'static>, Label<'static>),
     CannotAddPlayerInstanceForNotRelatedRoleType(Label<'static>, Label<'static>),
-    PlayerViolatesDistinctRelatesConstraint {
+    EntityTypeConstraintViolated {
+        entity_type: EntityType<'static>,
+        constraint_source: EntityType<'static>,
+        error_source: ConstraintError,
+    },
+    RelationTypeConstraintViolated {
         relation_type: RelationType<'static>,
-        role_type: RoleType<'static>,
-        player: Object<'static>,
-        count: u64,
-    },
-    AttributeViolatesDistinctOwnsConstraint {
-        object_type: ObjectType<'static>,
-        attribute_type: AttributeType<'static>,
-        attribute: Attribute<'static>,
-        count: u64,
-    },
-    AttributeViolatesRegexConstraint {
-        attribute_type: AttributeType<'static>,
-        value: Value<'static>,
-        regex: AnnotationRegex,
+        constraint_source: RelationType<'static>,
+        error_source: ConstraintError,
     },
     AttributeTypeConstraintViolated {
         attribute_type: AttributeType<'static>,
-        source: ConstraintError,
+        constraint_source: AttributeType<'static>,
+        error_source: ConstraintError,
     },
-    AttributeViolatesValuesConstraint {
+    KeyConstraintViolated {
+        owner: Object<'static>,
         attribute_type: AttributeType<'static>,
-        value: Value<'static>,
-        values: AnnotationValues,
+        attribute: Option<Attribute<'static>>,
+        constraint_source: Owns<'static>,
+        error_source: ConstraintError,
     },
-    HasViolatesRegexConstraint {
-        owns: Owns<'static>,
-        value: Value<'static>,
-        regex: AnnotationRegex,
-    },
-    HasViolatesRangeConstraint {
-        owns: Owns<'static>,
-        value: Value<'static>,
-        range: AnnotationRange,
-    },
-    HasViolatesValuesConstraint {
-        owns: Owns<'static>,
-        value: Value<'static>,
-        values: AnnotationValues,
-    },
-    KeyValueTaken {
-        owner_type: ObjectType<'static>,
+    OwnsConstraintViolated {
+        owner: Object<'static>,
         attribute_type: AttributeType<'static>,
-        taken_owner_type: ObjectType<'static>,
-        taken_attribute_type: AttributeType<'static>,
-        value: Value<'static>,
+        attribute: Option<Attribute<'static>>,
+        constraint_source: Owns<'static>,
+        error_source: ConstraintError,
+    },
+    RelatesConstraintViolated {
+        relation: Relation<'static>,
+        role_type: RoleType<'static>,
+        player: Option<Object<'static>>,
+        constraint_source: Relates<'static>,
+        error_source: ConstraintError,
+    },
+    PlaysConstraintViolated {
+        player: Object<'static>,
+        role_type: RoleType<'static>,
+        relation: Option<Relation<'static>>,
+        constraint_source: Plays<'static>,
+        error_source: ConstraintError,
     },
     UniqueValueTaken {
         owner_type: ObjectType<'static>,
@@ -90,26 +85,6 @@ pub enum DataValidationError {
         taken_owner_type: ObjectType<'static>,
         taken_attribute_type: AttributeType<'static>,
         value: Value<'static>,
-    },
-    KeyConstraintViolated {
-        owner: Object<'static>,
-        owns: Owns<'static>,
-        source: ConstraintError,
-    },
-    OwnsConstraintViolated {
-        owner: Object<'static>,
-        owns: Owns<'static>,
-        source: ConstraintError,
-    },
-    RelatesConstraintViolated {
-        relation: Relation<'static>,
-        relates: Relates<'static>,
-        source: ConstraintError,
-    },
-    PlaysConstraintViolated {
-        player: Object<'static>,
-        plays: Plays<'static>,
-        source: ConstraintError,
     },
     ValueTypeMismatchWithAttributeType {
         attribute_type: AttributeType<'static>,
@@ -144,20 +119,12 @@ impl Error for DataValidationError {
             Self::CannotAddOwnerInstanceForNotOwnedAttributeType(_, _) => None,
             Self::CannotAddPlayerInstanceForNotPlayedRoleType(_, _) => None,
             Self::CannotAddPlayerInstanceForNotRelatedRoleType(_, _) => None,
-            Self::PlayerViolatesDistinctRelatesConstraint { .. } => None,
-            Self::AttributeViolatesDistinctOwnsConstraint { .. } => None,
-            Self::AttributeViolatesRegexConstraint { .. } => None,
             Self::AttributeTypeConstraintViolated { .. } => None,
-            Self::AttributeViolatesValuesConstraint { .. } => None,
-            Self::HasViolatesRegexConstraint { .. } => None,
-            Self::HasViolatesRangeConstraint { .. } => None,
-            Self::HasViolatesValuesConstraint { .. } => None,
-            Self::KeyValueTaken { .. } => None,
-            Self::UniqueValueTaken { .. } => None,
             Self::KeyConstraintViolated { .. } => None,
             Self::OwnsConstraintViolated { .. } => None,
             Self::RelatesConstraintViolated { .. } => None,
             Self::PlaysConstraintViolated { .. } => None,
+            Self::UniqueValueTaken { .. } => None,
             Self::ValueTypeMismatchWithAttributeType { .. } => None,
             Self::SetHasOnDeletedOwner { .. } => None,
             Self::UnsetHasOnDeletedOwner { .. } => None,

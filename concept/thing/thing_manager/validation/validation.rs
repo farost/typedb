@@ -12,16 +12,20 @@ use crate::{
     thing::{object::ObjectAPI, thing_manager::validation::DataValidationError},
     type_::{type_manager::TypeManager, Capability, TypeAPI},
 };
+use crate::thing::attribute::Attribute;
 use crate::thing::object::Object;
 use crate::thing::relation::Relation;
 use crate::thing::thing_manager::ThingManager;
 use crate::type_::annotation::AnnotationCardinality;
 use crate::type_::attribute_type::AttributeType;
-use crate::type_::constraint::{CapabilityConstraint, Constraint, ConstraintDescription, TypeConstraint};
+use crate::type_::constraint::{CapabilityConstraint, Constraint, ConstraintDescription, ConstraintError, TypeConstraint};
+use crate::type_::entity_type::EntityType;
 use crate::type_::OwnerAPI;
 use crate::type_::owns::Owns;
 use crate::type_::plays::Plays;
 use crate::type_::relates::Relates;
+use crate::type_::relation_type::RelationType;
+use crate::type_::role_type::RoleType;
 
 pub(crate) fn get_label_or_data_err<'a>(
     snapshot: &impl ReadableSnapshot,
@@ -34,6 +38,42 @@ pub(crate) fn get_label_or_data_err<'a>(
         .map_err(DataValidationError::ConceptRead)
 }
 
+macro_rules! create_data_validation_type_abstractness_error_methods {
+    ($(
+        fn $method_name:ident($type_decl:ident) -> $error:ident = $type_:ident;
+    )*) => {
+        $(
+            pub(crate) fn $method_name<'a>(
+                constraint: &TypeConstraint<$type_decl<'static>>,
+            ) -> DataValidationError {
+                debug_assert!(constraint.description().unwrap_abstract().is_ok());
+                let constraint_source = constraint.source();
+                let error_source = ConstraintError::ViolatedAbstract;
+                DataValidationError::$error { $type_: $constraint_source, constraint_source, error_source }
+            }
+        )*
+    }
+}
+
+macro_rules! create_data_validation_capability_abstractness_error_methods {
+    ($(
+        fn $method_name:ident($capability_type:ident, $object_decl:ident) -> $error:ident = $object:ident + $interface_type:ident + $interface:ident;
+    )*) => {
+        $(
+            pub(crate) fn $method_name<'a>(
+                constraint: &CapabilityConstraint<$capability_type<'static>>,
+                $object: $object_decl<'a>,
+            ) -> DataValidationError {
+                debug_assert!(constraint.description().unwrap_abstract().is_ok());
+                let constraint_source = constraint.source();
+                let error_source = ConstraintError::ViolatedAbstract;
+                let $interface_type = constraint_source.interface();
+                DataValidationError::$error { $object: $object.into_owned(), $interface_type, $interface: None, constraint_source, error_source }
+            }
+        )*
+    }
+}
+
 pub(crate) struct DataValidation {}
 
 impl DataValidation {
@@ -42,19 +82,20 @@ impl DataValidation {
         type_manager: &TypeManager,
         constraint: &CapabilityConstraint<Owns<'static>>,
         owner: &Object<'a>,
-        owns: Owns<'static>,
+        attribute_type: AttributeType<'static>,
         count: u64,
     ) -> Result<(), DataValidationError> {
-        constraint.validate_cardinality(count).map_err(|source| {
-            let is_key = match owns.is_key(snapshot, type_manager) {
+        constraint.validate_cardinality(count).map_err(|error_source| {
+            let constraint_source = constraint.source();
+            let is_key = match constraint_source.is_key(snapshot, type_manager) {
                 Ok(is_key) => is_key,
                 Err(err) => return DataValidationError::ConceptRead(err),
             };
             let owner = owner.clone().into_owned();
             if is_key {
-                DataValidationError::KeyConstraintViolated { owner, owns, source }
+                DataValidationError::KeyConstraintViolated { owner, attribute_type, attribute: None, constraint_source, error_source }
             } else {
-                DataValidationError::OwnsConstraintViolated { owner, owns, source }
+                DataValidationError::OwnsConstraintViolated { owner, attribute_type, attribute: None, constraint_source, error_source }
             }
         })
     }
@@ -64,12 +105,13 @@ impl DataValidation {
         _type_manager: &TypeManager,
         constraint: &CapabilityConstraint<Plays<'static>>,
         player: &Object<'a>,
-        plays: Plays<'static>,
+        role_type: RoleType<'static>,
         count: u64,
     ) -> Result<(), DataValidationError> {
-        constraint.validate_cardinality(count).map_err(|source| {
+        constraint.validate_cardinality(count).map_err(|error_source| {
+            let constraint_source = constraint.source();
             let player = player.clone().into_owned();
-            DataValidationError::PlaysConstraintViolated { player, plays, source }
+            DataValidationError::PlaysConstraintViolated { player, role_type, relation: None, constraint_source, error_source }
         })
     }
 
@@ -78,12 +120,13 @@ impl DataValidation {
         _type_manager: &TypeManager,
         constraint: &CapabilityConstraint<Relates<'static>>,
         relation: &Relation<'a>,
-        relates: Relates<'static>,
+        role_type: RoleType<'static>,
         count: u64,
     ) -> Result<(), DataValidationError> {
-        constraint.validate_cardinality(count).map_err(|source| {
+        constraint.validate_cardinality(count).map_err(|error_source| {
+            let constraint_source = constraint.source();
             let relation = relation.clone().into_owned();
-            DataValidationError::RelatesConstraintViolated { relation, relates, source }
+            DataValidationError::RelatesConstraintViolated { relation, role_type, player: None, constraint_source, error_source }
         })
     }
 
@@ -92,8 +135,8 @@ impl DataValidation {
         attribute_type: AttributeType<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        constraint.validate_regex(value).map_err(|source| {
-            DataValidationError::AttributeTypeConstraintViolated { attribute_type: attribute_type.clone(), source }
+        constraint.validate_regex(value).map_err(|error_source| {
+            DataValidationError::AttributeTypeConstraintViolated { attribute_type: attribute_type.clone(), error_source }
         })
     }
 
@@ -102,8 +145,8 @@ impl DataValidation {
         attribute_type: AttributeType<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        constraint.validate_range(value).map_err(|source| {
-            DataValidationError::AttributeTypeConstraintViolated { attribute_type: attribute_type.clone(), source }
+        constraint.validate_range(value).map_err(|error_source| {
+            DataValidationError::AttributeTypeConstraintViolated { attribute_type: attribute_type.clone(), error_source }
         })
     }
 
@@ -112,38 +155,101 @@ impl DataValidation {
         attribute_type: AttributeType<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        constraint.validate_values(value).map_err(|source| {
-            DataValidationError::AttributeTypeConstraintViolated { attribute_type: attribute_type.clone(), source }
+        constraint.validate_values(value).map_err(|error_source| {
+            DataValidationError::AttributeTypeConstraintViolated { attribute_type: attribute_type.clone(), error_source }
         })
     }
 
     pub(crate) fn validate_owns_regex_constraint<'a>(
         constraint: &CapabilityConstraint<Owns<'static>>,
-        object: &Object<'a>,
+        owner: Object<'a>,
+        attribute_type: AttributeType<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        constraint.validate_regex(value).map_err(|source| {
-            DataValidationError::OwnsConstraintViolated { owner: object.as_reference().into_owned(), owns: constraint.source(), source }
+        constraint.validate_regex(value).map_err(|error_source| {
+            DataValidationError::OwnsConstraintViolated { owner: owner.into_owned(), attribute_type, attribute: None, constraint_source: constraint.source(), error_source }
         })
     }
 
     pub(crate) fn validate_owns_range_constraint<'a>(
         constraint: &CapabilityConstraint<Owns<'static>>,
-        object: &Object<'a>,
+        owner: Object<'a>,
+        attribute_type: AttributeType<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        constraint.validate_range(value).map_err(|source| {
-            DataValidationError::OwnsConstraintViolated { owner: object.as_reference().into_owned(), owns: constraint.source(), source }
+        constraint.validate_range(value).map_err(|error_source| {
+            DataValidationError::OwnsConstraintViolated { owner: owner.into_owned(), attribute_type, attribute: None, constraint_source: constraint.source(), error_source }
         })
     }
 
     pub(crate) fn validate_owns_values_constraint<'a>(
         constraint: &CapabilityConstraint<Owns<'static>>,
-        object: &Object<'a>,
+        owner: Object<'a>,
+        attribute_type: AttributeType<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        constraint.validate_values(value).map_err(|source| {
-            DataValidationError::OwnsConstraintViolated { owner: object.as_reference().into_owned(), owns: constraint.source(), source }
+        constraint.validate_values(value).map_err(|error_source| {
+            DataValidationError::OwnsConstraintViolated { owner: owner.into_owned(), attribute_type, attribute: None, constraint_source: constraint.source(), error_source }
         })
     }
+
+    pub(crate) fn validate_owns_distinct_constraint<'a>(
+        constraint: &CapabilityConstraint<Owns<'static>>,
+        owner: Object<'a>,
+        attribute: Attribute<'a>,
+        count: u64,
+    ) -> Result<(), DataValidationError> {
+        debug_assert!(constraint.description().unwrap_distinct().is_ok());
+        Constraint::<Owns<'static>>::validate_distinct(count).map_err(|error_source| {
+            DataValidationError::OwnsConstraintViolated { owner: owner.into_owned(), attribute_type: attribute.type_(), attribute: Some(attribute.into_owned()), constraint_source: constraint.source(), error_source }
+        })
+    }
+
+    pub(crate) fn validate_relates_distinct_constraint<'a>(
+        constraint: &CapabilityConstraint<Relates<'static>>,
+        relation: Relation<'a>,
+        role_type: RoleType<'static>,
+        player: Object<'a>,
+        count: u64,
+    ) -> Result<(), DataValidationError> {
+        debug_assert!(constraint.description().unwrap_distinct().is_ok());
+        Constraint::<Relates<'static>>::validate_distinct(count).map_err(|error_source| {
+            DataValidationError::RelatesConstraintViolated { relation: relation.into_owned(), role_type, player: Some(player.into_owned()), constraint_source: constraint.source(), error_source }
+        })
+    }
+
+    create_data_validation_type_abstractness_error_methods! {
+        fn create_data_validation_entity_type_abstractness_error(EntityType) -> EntityTypeConstraintViolated = entity_type;
+        fn create_data_validation_relation_type_abstractness_error(RelationType) -> RelationTypeConstraintViolated = relation_type;
+        fn create_data_validation_attribute_type_abstractness_error(AttributeType) -> AttributeTypeConstraintViolated = attribute_type;
+    }
+
+    create_data_validation_capability_abstractness_error_methods! {
+        fn create_data_validation_owns_abstractness_error(Owns, Object) -> OwnsConstraintViolated = owner + attribute_type + attribute;
+        fn create_data_validation_plays_abstractness_error(Plays, Object) -> PlaysConstraintViolated = player + role_type + relation;
+        fn create_data_validation_relates_abstractness_error(Relates, Relation) -> RelatesConstraintViolated = relation + role_type + player;
+    }
+
+    pub(crate) fn create_data_validation_uniqueness_error<'a>(
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+        constraint: &CapabilityConstraint<Owns<'static>>,
+        owner: Object<'a>,
+        attribute_type: AttributeType<'static>,
+        value: Value<'_>,
+    ) -> DataValidationError {
+        debug_assert!(constraint.description().unwrap_unique().is_ok());
+        let constraint_source = constraint.source();
+        let error_source = ConstraintError::ViolatedUnique { value: value.into_owned() };
+        let is_key = match constraint_source.is_key(snapshot, type_manager) {
+            Ok(is_key) => is_key,
+            Err(err) => return DataValidationError::ConceptRead(err),
+        };
+        if is_key {
+            DataValidationError::KeyConstraintViolated { owner: owner.into_owned(), attribute_type, attribute: None, constraint_source, error_source }
+        } else {
+            DataValidationError::OwnsConstraintViolated { owner: owner.into_owned(), attribute_type, attribute: None, constraint_source, error_source }
+        }
+    }
 }
+

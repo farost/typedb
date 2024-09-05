@@ -38,7 +38,7 @@ use crate::type_::{
     KindAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI,
 };
 use crate::type_::annotation::{Annotation, AnnotationCardinality};
-use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, TypeConstraint};
+use crate::type_::constraint::{CapabilityConstraint, Constraint, ConstraintCategory, ConstraintDescription, TypeConstraint};
 
 // TODO: could/should we slab allocate the schema cache?
 #[derive(Debug)]
@@ -114,8 +114,8 @@ impl TypeCache {
                 if cache
                     .common_type_cache()
                     .constraints
-                    .keys()
-                    .find(|constraint| matches!(constraint.description(), ConstraintDescription::Independent(_)))
+                    .iter().map(|constraint| constraint.category())
+                    .find(|category| category == &ConstraintCategory::Independent)
                     .is_some()
                 {
                     Some(cache.common_type_cache.type_.clone())
