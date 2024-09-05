@@ -65,7 +65,8 @@ use crate::{
 };
 use crate::thing::object::Object;
 use crate::thing::thing_manager::validation::validation::{check_owns_instances_cardinality, check_relates_instances_cardinality};
-use crate::type_::constraint::ConstraintDescription;
+use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, filter_by_constraint_category, get_abstract_constraint, get_cardinality_constraint, get_cardinality_constraints, get_distinct_constraints, get_independent_constraints, get_range_constraints, get_regex_constraints, get_unique_constraint, get_unique_constraints, get_values_constraints, TypeConstraint};
+use crate::type_::{OwnerAPI, PlayerAPI};
 use crate::type_::type_manager::validation::validation::{validate_sibling_owns_ordering_match_for_type, validate_single_cardinality_narrows_inherited_cardinalities};
 
 macro_rules! object_type_match {
@@ -164,14 +165,14 @@ macro_rules! type_or_subtype_without_declared_capability_instances_existence_val
 
 macro_rules! cannot_unset_capability_with_existing_instances_validation {
     ($func_name:ident, $capability_kind:path, $capability_type:ident, $object_type:ident, $interface_type:ident, $existing_instances_validation_func:path) => {
-        pub(crate) fn $func_name<'a>(
+        pub(crate) fn $func_name(
             snapshot: &impl ReadableSnapshot,
             type_manager: &TypeManager,
             thing_manager: &ThingManager,
-            object_type: $object_type<'a>,
-            interface_type: $interface_type<'a>,
+            object_type: $object_type<'static>,
+            interface_type: $interface_type<'static>,
         ) -> Result<(), SchemaValidationError> {
-            if let Some(supertype) = TypeReader::get_supertype(snapshot, object_type.clone().into_owned())
+            if let Some(supertype) = object_type.get_supertype(snapshot, type_manager)
                 .map_err(SchemaValidationError::ConceptRead)?
             {
                 let supertype_capabilities =
@@ -2417,7 +2418,7 @@ impl OperationTimeValidation {
                     annotations,
                 )?;
                 Self::validate_value_type_compatible_with_all_owns_annotations(snapshot, attribute_type.clone(), None)?;
-                Self::validate_no_instances_to_unset_value_type(snapshot, thing_manager, attribute_type)
+                Self::validate_no_instances_to_lose_value_type(snapshot, thing_manager, attribute_type)
             }
             None => Ok(()),
         }
@@ -2916,52 +2917,52 @@ impl OperationTimeValidation {
         }
     }
 
-    fn are_all_abstract<'a>(
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-        types: impl Iterator<Item = &'a impl TypeAPI<'a>>,
-    ) -> Result<bool, ConceptReadError> {
-        let is_abstracts = types.map(|type_| type_.is_abstract(snapshot, type_manager));
-        for is_abstract in is_abstracts {
-            match is_abstract {
-                Err(e) => return Err(e),
-                Ok(false) => return Ok(false),
-                Ok(true) => continue,
-            }
-        }
-        Ok(true)
-    }
-
-    fn get_annotation_constraint_violated_by_instances_of_owns<'a>(
+    fn validate_owns_instances_against_constraints(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
         thing_manager: &ThingManager,
-        object_types: &HashSet<ObjectType<'a>>,
-        attribute_types: &HashSet<AttributeType<'a>>,
-        annotations: &HashSet<Annotation>,
+        object_types: &HashSet<ObjectType<'static>>,
+        attribute_types: &HashSet<AttributeType<'static>>,
+        constraints: &HashSet<CapabilityConstraint<Owns<'static>>>,
     ) -> Result<Option<AnnotationCategory>, ConceptReadError> {
-        if annotations.is_empty() {
+        if constraints.is_empty() {
             return Ok(None);
         }
 
-        let distinct = compute_distinct(annotations, None);
-        let is_key = compute_key(annotations).is_some();
-        let unique = compute_unique(annotations);
-        let cardinality = compute_cardinalities(annotations, None);
-        let regex = compute_regex(annotations);
-        let range = compute_range(annotations);
-        let values = compute_values(annotations);
+        let cardinality_constraints_iter = filter_by_constraint_category!(constraints.iter(), Cardinality);
+        let abstract_constraints_sources: HashSet<Owns<'static>> =
+            filter_by_constraint_category!(constraints.iter(), Abstract)
+                .map(|constraint| constraint.source())
+                .collect();
+        let distinct_constraints = get_distinct_constraints(constraints.iter());
+        let regex_constraints = get_regex_constraints(constraints.iter());
+        let range_constraints = get_range_constraints(constraints.iter());
+        let values_constraints = get_values_constraints(constraints.iter());
+        let unique_constraint = {
+            let mut unique_constraint: Option<CapabilityConstraint<Owns<'static>>> = None;
+            for constraint in filter_by_constraint_category!(constraints.into_iter(), Unique) {
+                match &unique_constraint {
+                    None => unique_constraint = Some(constraint.clone()),
+                    Some(existing_unique_constraint) => {
+                        if constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, existing_unique_constraint.source().attribute())? {
+                            unique_constraint = Some(constraint.clone());
+                        }
+                    }
+                }
+            }
+            unique_constraint
+        };
+
         debug_assert!(
-            cardinality.is_some()
-                || distinct.is_some()
-                || unique.is_some()
-                || regex.is_some()
-                || range.is_some()
-                || values.is_some(),
+            cardinality_constraints_iter.count() > 0
+                || !abstract_constraints_sources.is_empty()
+                || !distinct_constraints.is_empty()
+                || !regex_constraints.is_empty()
+                || !range_constraints.is_empty()
+                || !values_constraints.is_empty()
+                || unique_constraint.is_some(),
             "At least one constraint should exist otherwise we don't need to iterate"
         );
-
-        let only_abstract_types = Self::are_all_abstract(snapshot, type_manager, attribute_types.iter())?;
 
         // TODO #7138: It is EXCEPTIONALLY memory-greedy and should be optimized before a non-alpha release!
         let mut unique_values = HashSet::new();
@@ -2969,7 +2970,7 @@ impl OperationTimeValidation {
         for object_type in object_types {
             let mut object_iterator = thing_manager.get_objects_in(snapshot, object_type.clone().into_owned());
             while let Some(object) = object_iterator.next().transpose()? {
-                let mut real_cardinality = 0;
+                let mut cardinality_constraints_counts: HashMap<CapabilityConstraint<Owns<'static>>, u64> = cardinality_constraints_iter.clone().map(|constraint| (constraint, 0)).collect();
 
                 // We assume that it's cheaper to open an iterator once and skip all the
                 // non-interesting interfaces rather creating multiple iterators
@@ -2981,63 +2982,101 @@ impl OperationTimeValidation {
                         continue;
                     }
 
-                    real_cardinality += count;
+                    let owns = object_type.get_owns_attribute(snapshot, type_manager, attribute_type.clone())?.ok_or(ConceptReadError::CorruptFoundHasWithoutOwns)?;
 
-                    if distinct.is_some() {
-                        if count > 1 {
-                            return Ok(Some(AnnotationCategory::Distinct));
+                    if abstract_constraints_sources.contains(&owns) {
+                        return Ok(Some(AnnotationCategory::Abstract)); // TODO: Refactor
+                    }
+
+                    for (cardinality_constraint, constraint_counts) in cardinality_constraints_counts.iter_mut() {
+                        if cardinality_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
+                            || &cardinality_constraint.source().attribute() == &attribute_type
+                        {
+                            *constraint_counts += count;
+                        }
+                    }
+
+                    for distinct_constraint in distinct_constraints.iter() {
+                        if distinct_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
+                            || &distinct_constraint.source().attribute() == &attribute_type
+                        {
+                            if count > 1 {
+                                return Ok(Some(AnnotationCategory::Distinct));
+                            }
+                            break;
                         }
                     }
 
                     let value = attribute.get_value(snapshot, thing_manager)?;
 
-                    if unique.is_some() {
-                        let new = unique_values.insert(value.clone().into_owned());
-                        if !new {
-                            return Ok(Some(if is_key { AnnotationCategory::Key } else { AnnotationCategory::Unique }));
+                    if let Some(unique_constraint) = &unique_constraint {
+                        if unique_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
+                            || &unique_constraint.source().attribute() == &attribute_type
+                        {
+                            let new = unique_values.insert(value.clone().into_owned());
+                            if !new {
+                                return Ok(Some({ AnnotationCategory::Unique }));
+                            }
                         }
                     }
 
-                    if let Some(regex) = &regex {
-                        match &value {
-                            Value::String(string_value) => {
-                                if !regex.value_valid(&string_value) {
-                                    return Ok(Some(AnnotationCategory::Regex));
+                    for regex_constraint in regex_constraints.iter() {
+                        if regex_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
+                            || &regex_constraint.source().attribute() == &attribute_type
+                        {
+                            let regex = regex_constraint.description().unwrap_regex()?;
+                            match &value {
+                                Value::String(string_value) => {
+                                    if !regex.value_valid(&string_value) {
+                                        return Ok(Some(AnnotationCategory::Regex));
+                                    }
+                                }
+                                _ => {
+                                    return Err(
+                                        ConceptReadError::CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(
+                                            get_label_or_concept_read_err(snapshot, attribute_type)?,
+                                            value.value_type(),
+                                            regex_constraint.description(),
+                                        ),
+                                    );
                                 }
                             }
-                            _ => {
-                                return Err(
-                                    ConceptReadError::CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(
-                                        get_label_or_concept_read_err(snapshot, attribute_type)?,
-                                        value.value_type(),
-                                        Annotation::Regex(regex.clone()),
-                                    ),
-                                );
+                        }
+                    }
+
+                    for range_constraint in range_constraints.iter() {
+                        if range_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
+                            || &range_constraint.source().attribute() == &attribute_type
+                        {
+                            let range = range_constraint.description().unwrap_range()?;
+                            if !range.value_valid(value.clone()) {
+                                return Ok(Some(AnnotationCategory::Range));
                             }
                         }
                     }
 
-                    if let Some(range) = &range {
-                        if !range.value_valid(value.clone()) {
-                            return Ok(Some(AnnotationCategory::Range));
-                        }
-                    }
-
-                    if let Some(values) = &values {
-                        if !values.value_valid(value) {
-                            return Ok(Some(AnnotationCategory::Values));
+                    for values_constraint in values_constraints.iter() {
+                        if values_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
+                            || &values_constraint.source().attribute() == &attribute_type
+                        {
+                            let values = values_constraint.description().unwrap_values()?;
+                            if !values.value_valid(value.clone()) {
+                                return Ok(Some(AnnotationCategory::Values));
+                            }
                         }
                     }
                 }
 
-                // check_owns_instances_cardinality(
-                //     snapshot,
-                //     type_manager,
-                //     object,
-                //     constraint.source(),
-                //     cardinality,
-                //     real_cardinality,
-                // )
+                // for (cardinality_constraint, constraint_counts) in cardinality_constraints_counts.into_iter() {
+                //     check_owns_instances_cardinality(
+                //         snapshot,
+                //         type_manager,
+                //         object,
+                //         cardinality_constraint.source(),
+                //         cardinality_constraint.description().unwrap_cardinality()?,
+                //         constraint_counts,
+                //     )?;
+                // }
 
                 if !Self::check_operation_time_cardinality_constraint(
                     cardinality.clone(),
@@ -3052,27 +3091,34 @@ impl OperationTimeValidation {
         Ok(None)
     }
 
-    fn get_annotation_constraint_violated_by_instances_of_plays<'a>(
+    fn validate_plays_instances_against_constraints<'a>(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
         thing_manager: &ThingManager,
         object_types: &HashSet<ObjectType<'a>>,
         role_types: &HashSet<RoleType<'a>>,
-        annotations: &HashSet<Annotation>,
+        constraints: &HashSet<CapabilityConstraint<Plays<'static>>>,
     ) -> Result<Option<AnnotationCategory>, ConceptReadError> {
-        if annotations.is_empty() {
+        if constraints.is_empty() {
             return Ok(None);
         }
 
-        let cardinality = compute_cardinalities(annotations, None);
-        debug_assert!(cardinality.is_some(), "At least one constraint should exist otherwise we don't need to iterate");
+        let cardinality_constraints_iter = filter_by_constraint_category!(constraints.iter(), Cardinality);
+        let abstract_constraints_sources: HashSet<Plays<'static>> =
+            filter_by_constraint_category!(constraints.iter(), Abstract)
+                .map(|constraint| constraint.source())
+                .collect();
 
-        let only_abstract_types = Self::are_all_abstract(snapshot, type_manager, role_types.iter())?;
+        debug_assert!(
+            cardinality_constraints_iter.count() > 0
+                || !abstract_constraints_sources.is_empty(),
+            "At least one constraint should exist otherwise we don't need to iterate"
+        );
 
         for object_type in object_types {
             let mut object_iterator = thing_manager.get_objects_in(snapshot, object_type.clone().into_owned());
             while let Some(object) = object_iterator.next().transpose()? {
-                let mut real_cardinality = 0;
+                let mut cardinality_constraints_counts: HashMap<CapabilityConstraint<Plays<'static>>, u64> = cardinality_constraints_iter.clone().map(|constraint| (constraint, 0)).collect();
 
                 // We assume that it's cheaper to open an iterator once and skip all the
                 // non-interesting interfaces rather creating multiple iterators
@@ -3083,17 +3129,31 @@ impl OperationTimeValidation {
                         continue;
                     }
 
-                    real_cardinality += count;
+                    let plays = object_type.get_plays_role(snapshot, type_manager, role_type.clone())?.ok_or(ConceptReadError::CorruptFoundLinksWithoutPlays)?;
+
+                    if abstract_constraints_sources.contains(&plays) {
+                        return Ok(Some(AnnotationCategory::Abstract)); // TODO: Refactor
+                    }
+
+                    for (cardinality_constraint, constraint_counts) in cardinality_constraints_counts.iter_mut() {
+                        if cardinality_constraint.source().role().is_supertype_transitive_of(snapshot, type_manager, role_type.clone())?
+                            || &cardinality_constraint.source().role() == &role_type
+                        {
+                            *constraint_counts += count;
+                        }
+                    }
                 }
 
-                // check_plays_instances_cardinality(
-                //     snapshot,
-                //     type_manager,
-                //     object,
-                //     constraint.source(),
-                //     cardinality,
-                //     real_cardinality,
-                // )
+                // for (cardinality_constraint, constraint_counts) in cardinality_constraints_counts.into_iter() {
+                //     check_plays_instances_cardinality(
+                //         snapshot,
+                //         type_manager,
+                //         object,
+                //         cardinality_constraint.source(),
+                //         cardinality_constraint.description().unwrap_cardinality()?,
+                //         constraint_counts,
+                //     )?;
+                // }
 
                 if !Self::check_operation_time_cardinality_constraint(
                     cardinality.clone(),
@@ -3108,31 +3168,36 @@ impl OperationTimeValidation {
         Ok(None)
     }
 
-    fn get_annotation_constraint_violated_by_instances_of_relates<'a>(
+    fn validate_relates_instances_against_constraints<'a>(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
         thing_manager: &ThingManager,
         relation_types: &HashSet<RelationType<'a>>,
         role_types: &HashSet<RoleType<'a>>,
-        annotations: &HashSet<Annotation>,
+        constraints: &HashSet<CapabilityConstraint<Relates<'static>>>,
     ) -> Result<Option<AnnotationCategory>, ConceptReadError> {
-        if annotations.is_empty() {
+        if constraints.is_empty() {
             return Ok(None);
         }
 
-        let distinct = compute_distinct(annotations, None);
-        let cardinality = compute_cardinalities(annotations, None);
+        let cardinality_constraints_iter = filter_by_constraint_category!(constraints.iter(), Cardinality);
+        let abstract_constraints_sources: HashSet<Relates<'static>> =
+            filter_by_constraint_category!(constraints.iter(), Abstract)
+                .map(|constraint| constraint.source())
+                .collect();
+        let distinct_constraints = get_distinct_constraints(constraints.iter());
+
         debug_assert!(
-            cardinality.is_some() || distinct.is_some(),
+            cardinality_constraints_iter.count() > 0
+                || !abstract_constraints_sources.is_empty()
+                || !distinct_constraints.is_empty(),
             "At least one constraint should exist otherwise we don't need to iterate"
         );
-
-        let only_abstract_types = Self::are_all_abstract(snapshot, type_manager, role_types.iter())?;
 
         for relation_type in relation_types {
             let mut relation_iterator = thing_manager.get_relations_in(snapshot, relation_type.clone().into_owned());
             while let Some(relation) = relation_iterator.next().transpose()? {
-                let mut real_cardinality = 0;
+                let mut cardinality_constraints_counts: HashMap<CapabilityConstraint<Relates<'static>>, u64> = cardinality_constraints_iter.clone().map(|constraint| (constraint, 0)).collect();
 
                 // We assume that it's cheaper to open an iterator once and skip all the
                 // non-interesting interfaces rather creating multiple iterators
@@ -3145,11 +3210,28 @@ impl OperationTimeValidation {
                         continue;
                     }
 
-                    real_cardinality += count;
+                    let relates = relation_type.get_relates_role(snapshot, type_manager, role_type.clone())?.ok_or(ConceptReadError::CorruptFoundLinksWithoutRelates)?;
 
-                    if distinct.is_some() {
-                        if count > 1 {
-                            return Ok(Some(AnnotationCategory::Distinct));
+                    if abstract_constraints_sources.contains(&relates) {
+                        return Ok(Some(AnnotationCategory::Abstract)); // TODO: Refactor
+                    }
+
+                    for (cardinality_constraint, constraint_counts) in cardinality_constraints_counts.iter_mut() {
+                        if cardinality_constraint.source().role().is_supertype_transitive_of(snapshot, type_manager, role_type.clone())?
+                            || &cardinality_constraint.source().role() == &role_type
+                        {
+                            *constraint_counts += count;
+                        }
+                    }
+
+                    for distinct_constraint in distinct_constraints.iter() {
+                        if distinct_constraint.source().role().is_supertype_transitive_of(snapshot, type_manager, role_type.clone())?
+                            || &distinct_constraint.source().role() == &role_type
+                        {
+                            if count > 1 {
+                                return Ok(Some(AnnotationCategory::Distinct));
+                            }
+                            break;
                         }
                     }
                 }
@@ -3451,7 +3533,7 @@ impl OperationTimeValidation {
         Ok(())
     }
 
-    fn validate_no_instances_to_unset_value_type<'a>(
+    fn validate_no_instances_to_lose_value_type<'a>(
         snapshot: &impl ReadableSnapshot,
         thing_manager: &ThingManager,
         attribute_type: AttributeType<'a>,
@@ -3919,7 +4001,7 @@ impl OperationTimeValidation {
     );
 
     cannot_unset_capability_with_existing_instances_validation!(
-        validate_no_instances_to_unset_owns,
+        validate_no_corrupted_instances_to_unset_owns,
         CapabilityKind::Owns,
         Owns,
         ObjectType,
@@ -3927,7 +4009,7 @@ impl OperationTimeValidation {
         Self::type_or_subtype_without_declared_capability_that_has_instances_of_owns
     );
     cannot_unset_capability_with_existing_instances_validation!(
-        validate_no_instances_to_unset_plays,
+        validate_no_corrupted_instances_to_unset_plays,
         CapabilityKind::Plays,
         Plays,
         ObjectType,
@@ -3935,7 +4017,7 @@ impl OperationTimeValidation {
         Self::type_or_subtype_without_declared_capability_that_has_instances_of_plays
     );
     cannot_unset_capability_with_existing_instances_validation!(
-        validate_no_instances_to_unset_relates,
+        validate_no_corrupted_instances_to_unset_relates,
         CapabilityKind::Relates,
         Relates,
         RelationType,
@@ -3992,21 +4074,21 @@ impl OperationTimeValidation {
         Owns,
         ObjectType,
         AttributeType,
-        Self::get_annotation_constraint_violated_by_instances_of_owns
+        Self::validate_owns_instances_against_constraints
     );
     capability_or_its_overriding_capability_with_violated_new_annotation_constraints!(
         get_plays_or_its_overriding_plays_with_violated_new_annotation_constraints,
         Plays,
         ObjectType,
         RoleType,
-        Self::get_annotation_constraint_violated_by_instances_of_plays
+        Self::validate_plays_instances_against_constraints
     );
     capability_or_its_overriding_capability_with_violated_new_annotation_constraints!(
         get_relates_or_its_overriding_relates_with_violated_new_annotation_constraints,
         Relates,
         RelationType,
         RoleType,
-        Self::get_annotation_constraint_violated_by_instances_of_relates
+        Self::validate_relates_instances_against_constraints
     );
 
     new_acquired_capability_instances_validation!(

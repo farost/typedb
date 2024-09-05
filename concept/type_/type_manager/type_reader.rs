@@ -701,6 +701,13 @@ impl TypeReader {
         interface_type: CAP::InterfaceType,
     ) -> Result<HashSet<CapabilityConstraint<CAP>>, ConceptReadError> {
         let mut all_constraints: HashSet<CapabilityConstraint<CAP>> = HashSet::new();
+        let object_capability_opt = TypeReader::get_capabilities::<CAP>(snapshot, object_type.clone(), false)?.into_iter().find(|capability| &capability.interface() == &interface_type);
+        let object_capability: CAP = if let Some(object_capability) = object_capability_opt {
+            object_capability
+        } else {
+            return Ok(all_constraints);
+        };
+
         let affecting_interface_types = CAP::InterfaceType::chain_types(interface_type.clone(), TypeReader::get_supertypes_transitive(snapshot, interface_type)?.into_iter());
         let capabilities: HashSet<CAP> = TypeReader::get_capabilities(snapshot, object_type.clone(), true)?;
         let capabilities_for_interface_type: HashSet<CAP> = capabilities.into_iter().filter(|capability| affecting_interface_types.clone().contains(&capability.interface())).collect();
@@ -708,8 +715,8 @@ impl TypeReader {
         for current_capability in capabilities_for_interface_type {
             for constraint in TypeReader::get_capability_constraints(snapshot, current_capability)? {
                 match constraint.validation_mode() {
-                    ConstraintValidationMode::SingleInstanceOfType => {
-                        if &constraint.source().interface() != &interface_type {
+                    ConstraintValidationMode::SingleInstanceOfType => { // is checked only for source, no need to carry it
+                        if &constraint.source() != &object_capability {
                             continue
                         }
                     },

@@ -44,7 +44,7 @@ macro_rules! unwrap_constraint_description_methods {
         fn $method_name:ident() -> $return_type:ident = $target_enum:ident;
     )*) => {
         $(
-            pub fn $method_name(self) -> Result<$return_type>, ConceptReadError> {
+            pub(crate) fn $method_name(self) -> Result<$return_type>, ConceptReadError> {
                 with_constraint_description!(self, $target_enum, || Err(ConceptReadError::Constraint { source: ConstraintError::CannotUnwrapConstraint(stringify!($target_enum)) }), |constraint| Ok(constraint))
             }
         )*
@@ -77,7 +77,7 @@ pub enum ConstraintDescription {
 }
 
 impl ConstraintDescription {
-    pub fn from_annotation(annotation: Annotation) -> &'static [Self] {
+    pub(crate) fn from_annotation(annotation: Annotation) -> &'static [Self] {
         match annotation {
             Annotation::Abstract(annotation) => &[ConstraintDescription::Abstract(annotation)],
             Annotation::Distinct(annotation) => &[ConstraintDescription::Distinct(annotation)],
@@ -94,7 +94,7 @@ impl ConstraintDescription {
         }
     }
 
-    pub fn category(&self) -> ConstraintCategory {
+    pub(crate) fn category(&self) -> ConstraintCategory {
         match self {
             ConstraintDescription::Abstract(_) => ConstraintCategory::Abstract,
             ConstraintDescription::Distinct(_) => ConstraintCategory::Distinct,
@@ -107,7 +107,7 @@ impl ConstraintDescription {
         }
     }
 
-    pub fn validation_mode(&self) -> ConstraintValidationMode {
+    pub(crate) fn validation_mode(&self) -> ConstraintValidationMode {
         match self {
             ConstraintDescription::Abstract(_) => ConstraintValidationMode::SingleInstanceOfType,
 
@@ -123,18 +123,18 @@ impl ConstraintDescription {
         }
     }
 
-    pub fn unchecked(&self) -> bool {
+    pub(crate) fn unchecked(&self) -> bool {
         match self {
             ConstraintDescription::Cardinality(cardinality) => cardinality == &AnnotationCardinality::unchecked(),
             _ => false,
         }
     }
 
-    pub fn narrowed_correctly_by_same_type(&self, other: &ConstraintDescription) -> bool {
+    pub(crate) fn narrowed_correctly_by_same_type(&self, other: &ConstraintDescription) -> bool {
         self.narrowed_correctly_by(other, false)
     }
 
-    pub fn narrowed_correctly_by_any_type(&self, other: &ConstraintDescription) -> bool {
+    pub(crate) fn narrowed_correctly_by_any_type(&self, other: &ConstraintDescription) -> bool {
         self.narrowed_correctly_by(other, true)
     }
 
@@ -189,7 +189,7 @@ pub struct TypeConstraint<T: KindAPI<'static>> {
 }
 
 impl<T: KindAPI<'static>> TypeConstraint<T> {
-    pub fn new(description: ConstraintDescription, source: T) -> Self {
+    pub(crate) fn new(description: ConstraintDescription, source: T) -> Self {
         Self { description, source }
     }
 }
@@ -211,7 +211,7 @@ pub struct CapabilityConstraint<CAP: Capability<'static>> {
 }
 
 impl<CAP: Capability<'static>> CapabilityConstraint<CAP> {
-    pub fn new(description: ConstraintDescription, source: CAP) -> Self {
+    pub(crate) fn new(description: ConstraintDescription, source: CAP) -> Self {
         Self { description, source }
     }
 }
@@ -254,39 +254,44 @@ macro_rules! filter_by_constraint_category {
 }
 pub use filter_by_constraint_category;
 
-pub fn get_cardinality_constraints<'a, CAP: Capability<'a>>(
-    constraints: impl IntoIterator<Item = &CapabilityConstraint<CAP>>,
-) -> HashSet<CapabilityConstraint<CAP>> {
+pub(crate) fn get_cardinality_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
+    constraints: impl IntoIterator<Item = &C>,
+) -> HashSet<C> {
     filter_by_constraint_category!(constraints.into_iter(), Cardinality).collect()
 }
 
-pub(crate) fn get_cardinality_constraint_opt<'a, CAP: Capability<'a>>(
-    capability: CAP,
-    constraints: impl IntoIterator<Item = &CapabilityConstraint<CAP>>,
-) -> Option<CapabilityConstraint<CAP>> {
+pub(crate) fn get_cardinality_constraint_opt<'a, C: Constraint<T>, T: Hash + PartialEq>(
+    source: T,
+    constraints: impl IntoIterator<Item = &C>,
+) -> Option<C> {
     filter_by_constraint_category!(constraints.into_iter(), Cardinality)
-        .filter_map(|constraint| match &constraint.source == &capability {
+        .filter_map(|constraint| match &constraint.source() == &source {
             true => Some(constraint.clone()),
             false => None,
         })
         .next()
 }
 
-pub fn get_cardinality_constraint<'a, CAP: Capability<'a>>(
+pub(crate) fn get_cardinality_constraint<'a, CAP: Capability<'a>>(
     capability: CAP,
     constraints: impl IntoIterator<Item = &CapabilityConstraint<CAP>>,
 ) -> CapabilityConstraint<CAP> {
     get_cardinality_constraint_opt(capability, constraints).expect("Expected a cardinality constraint for each capability")
 }
 
-pub fn get_abstract_constraint<'a, C: Constraint<T>, T: Hash + PartialEq>(
+pub(crate) fn get_abstract_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
+    constraints: impl IntoIterator<Item = &C>,
+) -> HashSet<C> {
+    filter_by_constraint_category!(constraints.into_iter(), Abstract).collect()
+}
+
+pub(crate) fn get_abstract_constraint<'a, C: Constraint<T>, T: Hash + PartialEq>(
     source: T,
     constraints: impl IntoIterator<Item = &C>,
 ) -> Option<C> {
     let abstracts = filter_by_constraint_category!(constraints.into_iter(), Abstract);
     debug_assert!(abstracts.is_empty() || abstracts.len() == 1, "Cannot have Abstract constraints hashed in different buckets");
     abstracts
-        .into_iter()
         .filter(|constraint| {
             debug_assert_eq!(constraint.source(), source, "Expected not to inherit Abstract constraints");
             match &constraint.source() == &source {
@@ -297,11 +302,17 @@ pub fn get_abstract_constraint<'a, C: Constraint<T>, T: Hash + PartialEq>(
         .next()
 }
 
-pub fn get_unique_constraint<'a, C: Constraint<T>, T: Hash + PartialEq>(
+pub(crate) fn get_unique_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
+    constraints: impl IntoIterator<Item = &C>,
+) -> HashSet<C> {
+    filter_by_constraint_category!(constraints.into_iter(), Unique).collect()
+}
+
+pub(crate) fn get_unique_constraint<'a, C: Constraint<T>, T: Hash + PartialEq>(
     constraints: impl IntoIterator<Item = &C>,
 ) -> Option<C> {
     let uniques = filter_by_constraint_category!(constraints.into_iter(), Unique);
-    debug_assert_eq!(uniques.is_empty() || uniques.len() == 1, "Cannot have Unique constraints hashed in different buckets");
+    debug_assert_eq!(uniques.is_empty() || uniques.len() == 1, "Expected to inherit only one unique constraint from its root source");
 
     if let Some(constraint) = uniques.into_iter().next() {
         Some(constraint.clone())
@@ -310,31 +321,31 @@ pub fn get_unique_constraint<'a, C: Constraint<T>, T: Hash + PartialEq>(
     }
 }
 
-pub fn get_distinct_constraints<'a, CAP: Capability<'a>>(
-    constraints: impl IntoIterator<Item = &CapabilityConstraint<CAP>>,
-) -> HashSet<CapabilityConstraint<CAP>> {
+pub(crate) fn get_distinct_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
+    constraints: impl IntoIterator<Item = &C>,
+) -> HashSet<C> {
     filter_by_constraint_category!(constraints.into_iter(), Distinct).collect()
 }
 
-pub fn get_independent_constraints<'a, T: TypeAPI<'a>>(
-    constraints: impl IntoIterator<Item = &TypeConstraint<T>>,
-) -> HashSet<TypeConstraint<T>> {
+pub(crate) fn get_independent_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
+    constraints: impl IntoIterator<Item = &C>,
+) -> HashSet<C> {
     filter_by_constraint_category!(constraints.into_iter(), Independent).collect()
 }
 
-pub fn get_regex_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
+pub(crate) fn get_regex_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
     constraints: impl IntoIterator<Item = &C>,
 ) -> HashSet<C> {
     filter_by_constraint_category!(constraints.into_iter(), Regex).collect()
 }
 
-pub fn get_range_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
+pub(crate) fn get_range_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
     constraints: impl IntoIterator<Item = &C>,
 ) -> HashSet<C> {
     filter_by_constraint_category!(constraints.into_iter(), Range).collect()
 }
 
-pub fn get_values_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
+pub(crate) fn get_values_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
     constraints: impl IntoIterator<Item = &C>,
 ) -> HashSet<C> {
     filter_by_constraint_category!(constraints.into_iter(), Values).collect()

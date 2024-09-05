@@ -1495,7 +1495,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_no_instances_to_unset_relates(
+        OperationTimeValidation::validate_no_corrupted_instances_to_unset_relates(
             snapshot,
             self,
             thing_manager,
@@ -2177,7 +2177,7 @@ impl TypeManager {
             )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-            OperationTimeValidation::validate_no_instances_to_unset_owns(
+            OperationTimeValidation::validate_no_corrupted_instances_to_unset_owns(
                 snapshot,
                 self,
                 thing_manager,
@@ -2246,7 +2246,7 @@ impl TypeManager {
             )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-            OperationTimeValidation::validate_no_instances_to_unset_plays(
+            OperationTimeValidation::validate_no_corrupted_instances_to_unset_plays(
                 snapshot,
                 self,
                 thing_manager,
