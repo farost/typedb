@@ -5,6 +5,7 @@
  */
 
 use std::collections::{HashMap, HashSet};
+use std::default;
 use itertools::Itertools;
 
 use bytes::Bytes;
@@ -47,7 +48,7 @@ use crate::{
         Capability, EdgeAbstract, KindAPI, Ordering, TypeAPI,
     },
 };
-use crate::type_::constraint::{CapabilityConstraint, Constraint, ConstraintDescription, ConstraintValidationMode, get_cardinality_constraint_opt, get_distinct_constraints, TypeConstraint};
+use crate::type_::constraint::{CapabilityConstraint, Constraint, ConstraintDescription, ConstraintValidationMode, get_cardinality_constraint_opt, get_distinct_constraints, get_owns_default_constraints, get_plays_default_constraints, get_relates_default_constraints, TypeConstraint};
 use crate::type_::plays::Plays;
 
 pub struct TypeReader {}
@@ -745,64 +746,34 @@ impl TypeReader {
     fn add_capability_default_constraints_if_not_declared<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         capability: CAP,
-        out_constraints: &mut HashMap<CapabilityConstraint<CAP>, HashSet<CAP>>,
+        out_constraints: &mut HashSet<CapabilityConstraint<CAP>>,
     ) -> Result<(), ConceptReadError> {
         match CAP::KIND {
             CapabilityKind::Relates => {
                 let relates = Relates::new(RelationType::new(capability.canonical_from().into_vertex()), RoleType::new(capability.canonical_to().into_vertex()));
                 let role_ordering = Self::get_type_ordering(snapshot, relates.role())?;
 
-                if get_cardinality_constraint_opt(capability.clone(), out_constraints)?.is_none() {
-                    let cardinality_sources = out_constraints
-                        .entry(CapabilityConstraint::new(
-                            ConstraintDescription::Cardinality(Relates::get_default_cardinality(role_ordering)), capability.clone()
-                        ))
-                        .or_insert(HashSet::new());
-                    cardinality_sources.insert(capability.clone());
-                }
-
-                if let Some(default_distinct) = Relates::get_default_distinct(role_ordering)? {
-                    if get_distinct_constraints(out_constraints)?.is_empty() {
-                        let distinct_sources = out_constraints
-                            .entry(CapabilityConstraint::new(
-                                ConstraintDescription::Distinct(default_distinct), capability.clone()
-                            ))
-                            .or_insert(HashSet::new());
-                        distinct_sources.insert(capability.clone());
+                for default_constraint in get_relates_default_constraints(capability, role_ordering) {
+                    if !out_constraints.iter().any(|set_constraint| set_constraint.category() == default_constraint.category()) {
+                        out_constraints.insert(default_constraint);
                     }
                 }
+
             }
             CapabilityKind::Plays => {
-                if get_cardinality_constraint_opt(capability.clone(), out_constraints)?.is_none() {
-                    let cardinality_sources = out_constraints
-                        .entry(CapabilityConstraint::new(
-                            ConstraintDescription::Cardinality(Plays::get_default_cardinality()), capability.clone()
-                        ))
-                        .or_insert(HashSet::new());
-                    cardinality_sources.insert(capability.clone());
+                for default_constraint in get_plays_default_constraints(capability) {
+                    if !out_constraints.iter().any(|set_constraint| set_constraint.category() == default_constraint.category()) {
+                        out_constraints.insert(default_constraint);
+                    }
                 }
             }
             CapabilityKind::Owns => {
                 let owns = Owns::new(ObjectType::new(capability.canonical_from().into_vertex()), AttributeType::new(capability.canonical_to().into_vertex()));
                 let ordering = Self::get_capability_ordering(snapshot, owns.clone())?;
 
-                if get_cardinality_constraint_opt(capability.clone(), out_constraints)?.is_none() {
-                    let cardinality_sources = out_constraints
-                        .entry(CapabilityConstraint::new(
-                            ConstraintDescription::Cardinality(Owns::get_default_cardinality(ordering)), capability.clone()
-                        ))
-                        .or_insert(HashSet::new());
-                    cardinality_sources.insert(capability.clone());
-                }
-
-                if let Some(default_distinct) = Owns::get_default_distinct(ordering)? {
-                    if get_distinct_constraints(out_constraints)?.is_empty() {
-                        let distinct_sources = out_constraints
-                            .entry(CapabilityConstraint::new(
-                                ConstraintDescription::Distinct(default_distinct), capability.clone()
-                            ))
-                            .or_insert(HashSet::new());
-                        distinct_sources.insert(capability.clone());
+                for default_constraint in get_owns_default_constraints(capability, ordering) {
+                    if !out_constraints.iter().any(|set_constraint| set_constraint.category() == default_constraint.category()) {
+                        out_constraints.insert(default_constraint);
                     }
                 }
             }

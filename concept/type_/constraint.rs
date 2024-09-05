@@ -294,6 +294,10 @@ macro_rules! filter_by_constraint_category {
 pub use filter_by_constraint_category;
 use crate::thing::thing_manager::validation::DataValidationError;
 use crate::thing::thing_manager::validation::validation::get_label_or_data_err;
+use crate::type_::Ordering;
+use crate::type_::owns::Owns;
+use crate::type_::plays::Plays;
+use crate::type_::relates::Relates;
 
 pub(crate) fn get_cardinality_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
     constraints: impl IntoIterator<Item = &C>,
@@ -390,6 +394,45 @@ pub(crate) fn get_values_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
     constraints: impl IntoIterator<Item = &C>,
 ) -> HashSet<C> {
     filter_by_constraint_category!(constraints.into_iter(), Values).collect()
+}
+
+
+pub(crate) fn get_owns_default_constraints<CAP: Capability<'static>>(
+    source: CAP,
+    ordering: Ordering
+) -> HashSet<CapabilityConstraint<CAP>> {
+    let mut constraints = HashSet::from([
+        CapabilityConstraint::new(ConstraintDescription::Cardinality(Owns::get_default_cardinality(ordering)), source.clone()),
+    ]);
+
+    if let Some(default_distinct) = Owns::get_default_distinct(ordering)? {
+        constraints.insert(CapabilityConstraint::new(ConstraintDescription::Distinct(default_distinct), source));
+    }
+
+    constraints
+}
+
+pub(crate) fn get_plays_default_constraints<CAP: Capability<'static>>(
+    source: CAP,
+) -> HashSet<CapabilityConstraint<CAP>> {
+    HashSet::from([
+        CapabilityConstraint::new(ConstraintDescription::Cardinality(Plays::get_default_cardinality()), source.clone()),
+    ])
+}
+
+pub(crate) fn get_relates_default_constraints<CAP: Capability<'static>>(
+    source: CAP,
+    role_ordering: Ordering
+) -> HashSet<CapabilityConstraint<CAP>> {
+    let mut constraints = HashSet::from([
+        CapabilityConstraint::new(ConstraintDescription::Cardinality(Relates::get_default_cardinality(role_ordering)), source.clone()),
+    ]);
+
+    if let Some(default_distinct) = Relates::get_default_distinct(role_ordering)? {
+        constraints.insert(CapabilityConstraint::new(ConstraintDescription::Distinct(default_distinct), source));
+    }
+
+    constraints
 }
 
 // TODO: Use constraints!

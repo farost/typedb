@@ -56,7 +56,7 @@ use crate::{
         Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI,
     },
 };
-use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, get_abstract_constraint, get_cardinality_constraint, get_cardinality_constraints, get_distinct_constraints, get_independent_constraints, get_range_constraints, get_regex_constraints, get_unique_constraint, get_values_constraints, TypeConstraint};
+use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, get_abstract_constraint, get_cardinality_constraint, get_cardinality_constraints, get_distinct_constraints, get_independent_constraints, get_owns_default_constraints, get_plays_default_constraints, get_range_constraints, get_regex_constraints, get_relates_default_constraints, get_unique_constraint, get_values_constraints, TypeConstraint};
 
 pub mod type_cache;
 pub mod type_reader;
@@ -1330,7 +1330,7 @@ impl TypeManager {
                 self,
                 thing_manager,
                 relates.clone().into_owned(),
-                HashSet::from([Annotation::Cardinality(Relates::get_default_cardinality(ordering))]),
+                get_relates_default_constraints(relates.clone(), ordering),
             )
                 .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
         }
@@ -2102,14 +2102,12 @@ impl TypeManager {
             )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-            let initial_annotations =
-                HashSet::from([Annotation::Cardinality(Owns::get_default_cardinality(ordering))]);
             OperationTimeValidation::validate_new_acquired_owns_compatible_with_instances(
                 snapshot,
                 self,
                 thing_manager,
                 owns.clone().into_owned(),
-                initial_annotations,
+                get_owns_default_constraints(owns.clone(), ordering),
             )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
         }
@@ -2173,13 +2171,12 @@ impl TypeManager {
             )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-            let initial_annotations = HashSet::from([Annotation::Cardinality(Plays::get_default_cardinality())]);
             OperationTimeValidation::validate_new_acquired_plays_compatible_with_instances(
                 snapshot,
                 self,
                 thing_manager,
                 plays.clone().into_owned(),
-                initial_annotations,
+                get_plays_default_constraints(plays.clone()),
             )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
         }

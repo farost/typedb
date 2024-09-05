@@ -66,6 +66,7 @@ use crate::{
 };
 use crate::thing::attribute::Attribute;
 use crate::thing::object::Object;
+use crate::thing::thing_manager::validation::DataValidationError;
 use crate::thing::thing_manager::validation::validation::DataValidation;
 use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, filter_by_constraint_category, get_abstract_constraint, get_abstract_constraints, get_cardinality_constraint, get_cardinality_constraints, get_distinct_constraints, get_independent_constraints, get_range_constraints, get_regex_constraints, get_unique_constraint, get_unique_constraints, get_values_constraints, TypeConstraint};
 use crate::type_::{OwnerAPI, PlayerAPI};
@@ -280,7 +281,7 @@ macro_rules! cannot_change_supertype_as_capability_with_existing_instances_is_lo
     };
 }
 
-macro_rules! capability_or_its_overriding_capability_with_violated_new_annotation_constraints {
+macro_rules! new_constraints_capability_instances_validation {
     ($func_name:ident, $capability_type:ident, $object_type:ident, $interface_type:ident, $existing_instances_validation_func:path) => {
         paste! {
             fn $func_name<'a>(
@@ -579,18 +580,15 @@ macro_rules! new_acquired_capability_instances_validation {
             type_manager: &TypeManager,
             thing_manager: &ThingManager,
             capability: $capability_type<'static>,
-            annotations: HashSet<Annotation>,
+            constraints: HashSet<CapabilityConstraint<$capability_type<'static>>,
         ) -> Result<(), SchemaValidationError> {
-            let sorted_annotations = Constraint::annotations_by_validation_modes(annotations)
-                .map_err(|source| SchemaValidationError::ConceptRead(ConceptReadError::Annotation { source }))?;
-
             let violation = $validation_func(
                 snapshot,
                 type_manager,
                 thing_manager,
                 capability.object(),
                 capability.clone(),
-                sorted_annotations,
+                constraints,
             )
             .map_err(SchemaValidationError::ConceptRead)?;
 
@@ -787,7 +785,7 @@ macro_rules! updated_annotations_compatible_with_capability_and_overriding_capab
     };
 }
 
-macro_rules! type_or_its_subtype_with_violated_new_annotation_constraints {
+macro_rules! new_constraints_type_instances_validation {
     ($func_name:ident, $type_:ident, $existing_instances_validation_func:path) => {
         paste! {
             pub(crate) fn $func_name<'a>(
@@ -2765,7 +2763,7 @@ impl OperationTimeValidation {
         thing_manager: &ThingManager,
         entity_type: EntityType<'a>,
         constraints: &HashSet<TypeConstraint<EntityType<'static>>>,
-    ) -> Result<(), SchemaValidationError> {
+    ) -> Result<(), DataValidationError> {
         if constraints.is_empty() {
             return Ok(());
         }
@@ -2775,15 +2773,14 @@ impl OperationTimeValidation {
         debug_assert!(!abstract_constraints.is_empty(), "At least one constraint should exist otherwise we don't need to iterate");
 
         let mut entity_iterator = thing_manager.get_entities_in(snapshot, entity_type.clone().into_owned());
-        if let Some(_) = entity_iterator.next().transpose()? {
+        if let Some(_) = entity_iterator.next().transpose().map_err(DataValidationError::ConceptRead).map_err(DataValidationError::ConceptRead)? {
             for abstract_constraint in abstract_constraints.iter() {
                 debug_assert_eq!(
                     abstract_constraint.category().validation_mode(),
                     ConstraintValidationMode::SingleInstanceOfType,
                     "Reconsider the algorithm if validation mode is changed!");
                 if &abstract_constraint.source() == &entity_type {
-                    return DataValidation::create_data_validation_entity_type_abstractness_error(&abstract_constraint)
-                        .map_err(SchemaValidationError::DataValidation);
+                    return DataValidation::create_data_validation_entity_type_abstractness_error(&abstract_constraint);
                 }
             }
         }
@@ -2796,7 +2793,7 @@ impl OperationTimeValidation {
         thing_manager: &ThingManager,
         relation_type: RelationType<'a>,
         constraints: &HashSet<TypeConstraint<RelationType<'static>>>,
-    ) -> Result<(), SchemaValidationError> {
+    ) -> Result<(), DataValidationError> {
         if constraints.is_empty() {
             return Ok(());
         }
@@ -2806,15 +2803,14 @@ impl OperationTimeValidation {
         debug_assert!(!abstract_constraints.is_empty(), "At least one constraint should exist otherwise we don't need to iterate");
 
         let mut relation_iterator = thing_manager.get_relations_in(snapshot, relation_type.clone().into_owned());
-        if let Some(_) = relation_iterator.next().transpose()? {
+        if let Some(_) = relation_iterator.next().transpose().map_err(DataValidationError::ConceptRead)? {
             for abstract_constraint in abstract_constraints.iter() {
                 debug_assert_eq!(
                     abstract_constraint.category().validation_mode(),
                     ConstraintValidationMode::SingleInstanceOfType,
                     "Reconsider the algorithm if validation mode is changed!");
                 if &abstract_constraint.source() == &relation_type {
-                    return DataValidation::create_data_validation_relation_type_abstractness_error(&abstract_constraint)
-                        .map_err(SchemaValidationError::DataValidation);
+                    return DataValidation::create_data_validation_relation_type_abstractness_error(&abstract_constraint);
                 }
             }
         }
@@ -2827,7 +2823,7 @@ impl OperationTimeValidation {
         thing_manager: &ThingManager,
         attribute_type: AttributeType<'a>,
         constraints: &HashSet<TypeConstraint<AttributeType<'static>>>,
-    ) -> Result<(), SchemaValidationError> {
+    ) -> Result<(), DataValidationError> {
         if constraints.is_empty() {
             return Ok(());
         }
@@ -2844,9 +2840,9 @@ impl OperationTimeValidation {
             "At least one constraint should exist otherwise we don't need to iterate"
         );
 
-        let mut attribute_iterator = thing_manager.get_attributes_in(snapshot, attribute_type.clone().into_owned())?;
+        let mut attribute_iterator = thing_manager.get_attributes_in(snapshot, attribute_type.clone().into_owned()).map_err(DataValidationError::ConceptRead)?;
         while let Some(attribute) = attribute_iterator.next() {
-            let mut attribute = attribute?;
+            let mut attribute = attribute.map_err(DataValidationError::ConceptRead)?;
 
             for abstract_constraint in abstract_constraints.iter() {
                 debug_assert_eq!(
@@ -2854,19 +2850,18 @@ impl OperationTimeValidation {
                     ConstraintValidationMode::SingleInstanceOfType,
                     "Reconsider the algorithm if validation mode is changed!");
                 if &abstract_constraint.source() == &attribute_type {
-                    return DataValidation::create_data_validation_attribute_type_abstractness_error(&abstract_constraint)
-                        .map_err(SchemaValidationError::DataValidation);
+                    return DataValidation::create_data_validation_attribute_type_abstractness_error(&abstract_constraint);
                 }
             }
 
-            let value = attribute.get_value(snapshot, thing_manager)?;
+            let value = attribute.get_value(snapshot, thing_manager).map_err(DataValidationError::ConceptRead)?;
 
             for regex_constraint in regex_constraints.iter() {
                 DataValidation::validate_attribute_regex_constraint(
                     regex_constraint,
                     attribute_type.clone(),
                     value.as_reference(),
-                ).map_err(SchemaValidationError::DataValidation)?;
+                )?;
             }
 
             for range_constraint in range_constraints.iter() {
@@ -2874,7 +2869,7 @@ impl OperationTimeValidation {
                     range_constraint,
                     attribute_type.clone(),
                     value.as_reference(),
-                ).map_err(SchemaValidationError::DataValidation)?;
+                )?;
             }
 
             for values_constraint in values_constraints.iter() {
@@ -2882,7 +2877,7 @@ impl OperationTimeValidation {
                     values_constraint,
                     attribute_type.clone(),
                     value.as_reference(),
-                ).map_err(SchemaValidationError::DataValidation)?;
+                )?;
             }
         }
 
@@ -2895,7 +2890,7 @@ impl OperationTimeValidation {
         role_type: RoleType<'a>,
         annotations: &HashSet<Annotation>,
         constraints: &HashSet<TypeConstraint<RoleType<'static>>>,
-    ) -> Result<(), SchemaValidationError> {
+    ) -> Result<(), DataValidationError> {
         if constraints.is_empty() {
             return Ok(());
         }
@@ -2928,7 +2923,7 @@ impl OperationTimeValidation {
         object_types: &HashSet<ObjectType<'static>>,
         attribute_types: &HashSet<AttributeType<'static>>,
         constraints: &HashSet<CapabilityConstraint<Owns<'static>>>,
-    ) -> Result<(), SchemaValidationError> {
+    ) -> Result<(), DataValidationError> {
         if constraints.is_empty() {
             return Ok(());
         }
@@ -2945,7 +2940,7 @@ impl OperationTimeValidation {
                 match &unique_constraint {
                     None => unique_constraint = Some(constraint.clone()),
                     Some(existing_unique_constraint) => {
-                        if constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, existing_unique_constraint.source().attribute())? {
+                        if constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, existing_unique_constraint.source().attribute()).map_err(DataValidationError::ConceptRead)? {
                             unique_constraint = Some(constraint.clone());
                         }
                     }
@@ -2970,20 +2965,20 @@ impl OperationTimeValidation {
 
         for object_type in object_types {
             let mut object_iterator = thing_manager.get_objects_in(snapshot, object_type.clone().into_owned());
-            while let Some(object) = object_iterator.next().transpose()? {
+            while let Some(object) = object_iterator.next().transpose().map_err(DataValidationError::ConceptRead)? {
                 let mut cardinality_constraints_counts: HashMap<CapabilityConstraint<Owns<'static>>, u64> = cardinality_constraints_iter.clone().map(|constraint| (constraint, 0)).collect();
 
                 // We assume that it's cheaper to open an iterator once and skip all the
                 // non-interesting interfaces rather creating multiple iterators
                 let mut has_attribute_iterator = object.get_has_unordered(snapshot, thing_manager);
                 while let Some(attribute) = has_attribute_iterator.next() {
-                    let (mut attribute, count) = attribute?;
+                    let (mut attribute, count) = attribute.map_err(DataValidationError::ConceptRead)?;
                     let attribute_type = attribute.type_();
                     if !attribute_types.contains(&attribute_type) {
                         continue;
                     }
 
-                    let owns = object_type.get_owns_attribute(snapshot, type_manager, attribute_type.clone())?.ok_or(ConceptReadError::CorruptFoundHasWithoutOwns)?;
+                    let owns = object_type.get_owns_attribute(snapshot, type_manager, attribute_type.clone()).map_err(DataValidationError::ConceptRead)?.ok_or(ConceptReadError::CorruptFoundHasWithoutOwns).map_err(DataValidationError::ConceptRead)?;
 
                     for abstract_constraint in abstract_constraints.iter() {
                         debug_assert_eq!(
@@ -2991,8 +2986,7 @@ impl OperationTimeValidation {
                             ConstraintValidationMode::SingleInstanceOfType,
                             "Reconsider the algorithm if validation mode is changed!");
                         if &abstract_constraint.source() == &owns {
-                            return DataValidation::create_data_validation_owns_abstractness_error(&abstract_constraint, object.as_reference())
-                                .map_err(SchemaValidationError::DataValidation);
+                            return DataValidation::create_data_validation_owns_abstractness_error(&abstract_constraint, object.as_reference());
                         }
                     }
 
@@ -3001,7 +2995,7 @@ impl OperationTimeValidation {
                             cardinality_constraint.category().validation_mode(),
                             ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes,
                             "Reconsider the algorithm if validation mode is changed!");
-                        if cardinality_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
+                        if cardinality_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone()).map_err(DataValidationError::ConceptRead)?
                             || &cardinality_constraint.source().attribute() == &attribute_type
                         {
                             *constraint_counts += count;
@@ -3009,7 +3003,7 @@ impl OperationTimeValidation {
                     }
 
                     for distinct_constraint in distinct_constraints.iter() {
-                        if distinct_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
+                        if distinct_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone()).map_err(DataValidationError::ConceptRead)?
                             || &distinct_constraint.source().attribute() == &attribute_type
                         {
                             DataValidation::validate_owns_distinct_constraint(
@@ -3017,19 +3011,19 @@ impl OperationTimeValidation {
                                 object.as_reference(),
                                 attribute.as_reference(),
                                 count,
-                            ).map_err(SchemaValidationError::DataValidation)?;
+                            )?;
                             break;
                         }
                     }
 
-                    let value = attribute.get_value(snapshot, thing_manager)?;
+                    let value = attribute.get_value(snapshot, thing_manager).map_err(DataValidationError::ConceptRead)?;
 
                     if let Some(unique_constraint) = &unique_constraint {
                         debug_assert_eq!(
                             unique_constraint.category().validation_mode(),
                             ConstraintValidationMode::AllInstancesOfTypeOrSubtypes,
                             "Reconsider the algorithm if validation mode is changed!");
-                        if unique_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
+                        if unique_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone()).map_err(DataValidationError::ConceptRead)?
                             || &unique_constraint.source().attribute() == &attribute_type
                         {
                             let new = unique_values.insert(value.clone().into_owned());
@@ -3041,7 +3035,7 @@ impl OperationTimeValidation {
                                     object,
                                     attribute_type,
                                     value,
-                                )).map_err(SchemaValidationError::DataValidation);
+                                ));
                             }
                         }
                     }
@@ -3051,7 +3045,7 @@ impl OperationTimeValidation {
                             regex_constraint.category().validation_mode(),
                             ConstraintValidationMode::SingleInstanceOfTypeOrSubtype,
                             "Reconsider the algorithm if validation mode is changed!");
-                        if regex_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
+                        if regex_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone()).map_err(DataValidationError::ConceptRead)?
                             || &regex_constraint.source().attribute() == &attribute_type
                         {
                             DataValidation::validate_owns_regex_constraint(
@@ -3059,7 +3053,7 @@ impl OperationTimeValidation {
                                 object.as_reference(),
                                 attribute_type.clone(),
                                 value.as_reference(),
-                            ).map_err(SchemaValidationError::DataValidation)?;
+                            )?;
                         }
                     }
 
@@ -3068,7 +3062,7 @@ impl OperationTimeValidation {
                             range_constraint.category().validation_mode(),
                             ConstraintValidationMode::SingleInstanceOfTypeOrSubtype,
                             "Reconsider the algorithm if validation mode is changed!");
-                        if range_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
+                        if range_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone()).map_err(DataValidationError::ConceptRead)?
                             || &range_constraint.source().attribute() == &attribute_type
                         {
                             DataValidation::validate_owns_range_constraint(
@@ -3076,7 +3070,7 @@ impl OperationTimeValidation {
                                 object.as_reference(),
                                 attribute_type.clone(),
                                 value.as_reference(),
-                            ).map_err(SchemaValidationError::DataValidation)?;
+                            )?;
                         }
                     }
 
@@ -3085,7 +3079,7 @@ impl OperationTimeValidation {
                             values_constraint.category().validation_mode(),
                             ConstraintValidationMode::SingleInstanceOfTypeOrSubtype,
                             "Reconsider the algorithm if validation mode is changed!");
-                        if values_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
+                        if values_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone()).map_err(DataValidationError::ConceptRead)?
                             || &values_constraint.source().attribute() == &attribute_type
                         {
                             DataValidation::validate_owns_values_constraint(
@@ -3093,7 +3087,7 @@ impl OperationTimeValidation {
                                 object.as_reference(),
                                 attribute_type.clone(),
                                 value.as_reference(),
-                            ).map_err(SchemaValidationError::DataValidation)?;
+                            )?;
                         }
                     }
                 }
@@ -3121,7 +3115,7 @@ impl OperationTimeValidation {
         object_types: &HashSet<ObjectType<'a>>,
         role_types: &HashSet<RoleType<'a>>,
         constraints: &HashSet<CapabilityConstraint<Plays<'static>>>,
-    ) -> Result<(), SchemaValidationError> {
+    ) -> Result<(), DataValidationError> {
         if constraints.is_empty() {
             return Ok(());
         }
@@ -3137,19 +3131,19 @@ impl OperationTimeValidation {
 
         for object_type in object_types {
             let mut object_iterator = thing_manager.get_objects_in(snapshot, object_type.clone().into_owned());
-            while let Some(object) = object_iterator.next().transpose()? {
+            while let Some(object) = object_iterator.next().transpose().map_err(DataValidationError::ConceptRead)? {
                 let mut cardinality_constraints_counts: HashMap<CapabilityConstraint<Plays<'static>>, u64> = cardinality_constraints_iter.clone().map(|constraint| (constraint, 0)).collect();
 
                 // We assume that it's cheaper to open an iterator once and skip all the
                 // non-interesting interfaces rather creating multiple iterators
                 let mut relations_iterator = object.get_relations_roles(snapshot, thing_manager);
                 while let Some(relation) = relations_iterator.next() {
-                    let (_, role_type, count) = relation?;
+                    let (_, role_type, count) = relation.map_err(DataValidationError::ConceptRead)?;
                     if !role_types.contains(&role_type) {
                         continue;
                     }
 
-                    let plays = object_type.get_plays_role(snapshot, type_manager, role_type.clone())?.ok_or(ConceptReadError::CorruptFoundLinksWithoutPlays)?;
+                    let plays = object_type.get_plays_role(snapshot, type_manager, role_type.clone()).map_err(DataValidationError::ConceptRead)?.ok_or(ConceptReadError::CorruptFoundLinksWithoutPlays).map_err(DataValidationError::ConceptRead)?;
 
                     for abstract_constraint in abstract_constraints.iter() {
                         debug_assert_eq!(
@@ -3157,8 +3151,7 @@ impl OperationTimeValidation {
                             ConstraintValidationMode::SingleInstanceOfType,
                             "Reconsider the algorithm if validation mode is changed!");
                         if &abstract_constraint.source() == &plays {
-                            return DataValidation::create_data_validation_plays_abstractness_error(&abstract_constraint, object.as_reference())
-                                .map_err(SchemaValidationError::DataValidation);
+                            return DataValidation::create_data_validation_plays_abstractness_error(&abstract_constraint, object.as_reference());
                         }
                     }
 
@@ -3167,7 +3160,7 @@ impl OperationTimeValidation {
                             cardinality_constraint.category().validation_mode(),
                             ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes,
                             "Reconsider the algorithm if validation mode is changed!");
-                        if cardinality_constraint.source().role().is_supertype_transitive_of(snapshot, type_manager, role_type.clone())?
+                        if cardinality_constraint.source().role().is_supertype_transitive_of(snapshot, type_manager, role_type.clone()).map_err(DataValidationError::ConceptRead)?
                             || &cardinality_constraint.source().role() == &role_type
                         {
                             *constraint_counts += count;
@@ -3198,7 +3191,7 @@ impl OperationTimeValidation {
         relation_types: &HashSet<RelationType<'a>>,
         role_types: &HashSet<RoleType<'a>>,
         constraints: &HashSet<CapabilityConstraint<Relates<'static>>>,
-    ) -> Result<(), SchemaValidationError> {
+    ) -> Result<(), DataValidationError> {
         if constraints.is_empty() {
             return Ok(());
         }
@@ -3216,7 +3209,7 @@ impl OperationTimeValidation {
 
         for relation_type in relation_types {
             let mut relation_iterator = thing_manager.get_relations_in(snapshot, relation_type.clone().into_owned());
-            while let Some(relation) = relation_iterator.next().transpose()? {
+            while let Some(relation) = relation_iterator.next().transpose().map_err(DataValidationError::ConceptRead)? {
                 let mut cardinality_constraints_counts: HashMap<CapabilityConstraint<Relates<'static>>, u64> = cardinality_constraints_iter.clone().map(|constraint| (constraint, 0)).collect();
 
                 // We assume that it's cheaper to open an iterator once and skip all the
@@ -3224,13 +3217,13 @@ impl OperationTimeValidation {
                 let mut role_players_iterator = relation.get_players(snapshot, thing_manager);
 
                 while let Some(role_players) = role_players_iterator.next() {
-                    let (role_player, count) = role_players?;
+                    let (role_player, count) = role_players.map_err(DataValidationError::ConceptRead)?;
                     let role_type = role_player.role_type();
                     if !role_types.contains(&role_type) {
                         continue;
                     }
 
-                    let relates = relation_type.get_relates_role(snapshot, type_manager, role_type.clone())?.ok_or(ConceptReadError::CorruptFoundLinksWithoutRelates)?;
+                    let relates = relation_type.get_relates_role(snapshot, type_manager, role_type.clone()).map_err(DataValidationError::ConceptRead)?.ok_or(ConceptReadError::CorruptFoundLinksWithoutRelates).map_err(DataValidationError::ConceptRead)?;
 
                     for abstract_constraint in abstract_constraints.iter() {
                         debug_assert_eq!(
@@ -3238,8 +3231,7 @@ impl OperationTimeValidation {
                             ConstraintValidationMode::SingleInstanceOfType,
                             "Reconsider the algorithm if validation mode is changed!");
                         if &abstract_constraint.source() == &relates {
-                            return DataValidation::create_data_validation_relates_abstractness_error(&abstract_constraint, relation.as_reference())
-                                .map_err(SchemaValidationError::DataValidation);
+                            return DataValidation::create_data_validation_relates_abstractness_error(&abstract_constraint, relation.as_reference());
                         }
                     }
 
@@ -3248,7 +3240,7 @@ impl OperationTimeValidation {
                             cardinality_constraint.category().validation_mode(),
                             ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes,
                             "Reconsider the algorithm if validation mode is changed!");
-                        if cardinality_constraint.source().role().is_supertype_transitive_of(snapshot, type_manager, role_type.clone())?
+                        if cardinality_constraint.source().role().is_supertype_transitive_of(snapshot, type_manager, role_type.clone()).map_err(DataValidationError::ConceptRead)?
                             || &cardinality_constraint.source().role() == &role_type
                         {
                             *constraint_counts += count;
@@ -3260,7 +3252,7 @@ impl OperationTimeValidation {
                             distinct_constraint.category().validation_mode(),
                             ConstraintValidationMode::SingleInstanceOfTypeOrSubtype,
                             "Reconsider the algorithm if validation mode is changed!");
-                        if distinct_constraint.source().role().is_supertype_transitive_of(snapshot, type_manager, role_type.clone())?
+                        if distinct_constraint.source().role().is_supertype_transitive_of(snapshot, type_manager, role_type.clone()).map_err(DataValidationError::ConceptRead)?
                             || &distinct_constraint.source().role() == &role_type
                         {
                             DataValidation::validate_relates_distinct_constraint(
@@ -3269,7 +3261,7 @@ impl OperationTimeValidation {
                                 role_type.clone(),
                                 role_player.as_reference(),
                                 count,
-                            ).map_err(SchemaValidationError::DataValidation)?;
+                            )?;
                             break;
                         }
                     }
@@ -4102,22 +4094,22 @@ impl OperationTimeValidation {
         Self::type_or_subtype_without_declared_capability_that_has_instances_of_relates
     );
 
-    capability_or_its_overriding_capability_with_violated_new_annotation_constraints!(
-        get_owns_or_its_overriding_owns_with_violated_new_annotation_constraints,
+    new_constraints_capability_instances_validation!(
+        validate_owns_instances_against_new_constraints,
         Owns,
         ObjectType,
         AttributeType,
         Self::validate_owns_instances_against_constraints
     );
-    capability_or_its_overriding_capability_with_violated_new_annotation_constraints!(
-        get_plays_or_its_overriding_plays_with_violated_new_annotation_constraints,
+    new_constraints_capability_instances_validation!(
+        validate_plays_instances_against_new_constraints,
         Plays,
         ObjectType,
         RoleType,
         Self::validate_plays_instances_against_constraints
     );
-    capability_or_its_overriding_capability_with_violated_new_annotation_constraints!(
-        get_relates_or_its_overriding_relates_with_violated_new_annotation_constraints,
+    new_constraints_capability_instances_validation!(
+        validate_relates_instances_against_new_constraints,
         Relates,
         RelationType,
         RoleType,
@@ -4128,57 +4120,57 @@ impl OperationTimeValidation {
         validate_new_acquired_owns_compatible_with_instances,
         CapabilityKind::Owns,
         Owns,
-        Self::get_owns_or_its_overriding_owns_with_violated_new_annotation_constraints
+        Self::validate_owns_instances_against_new_constraints
     );
     new_acquired_capability_instances_validation!(
         validate_new_acquired_plays_compatible_with_instances,
         CapabilityKind::Plays,
         Plays,
-        Self::get_plays_or_its_overriding_plays_with_violated_new_annotation_constraints
+        Self::validate_plays_instances_against_new_constraints
     );
     new_acquired_capability_instances_validation!(
         validate_new_acquired_relates_compatible_with_instances,
         CapabilityKind::Relates,
         Relates,
-        Self::get_relates_or_its_overriding_relates_with_violated_new_annotation_constraints
+        Self::validate_relates_instances_against_new_constraints
     );
 
     new_annotation_compatible_with_capability_and_overriding_capabilities_instances_validation!(
         validate_new_annotation_compatible_with_owns_and_overriding_owns_instances,
         CapabilityKind::Owns,
         Owns,
-        Self::get_owns_or_its_overriding_owns_with_violated_new_annotation_constraints
+        Self::validate_owns_instances_against_new_constraints
     );
     new_annotation_compatible_with_capability_and_overriding_capabilities_instances_validation!(
         validate_new_annotation_compatible_with_plays_and_overriding_plays_instances,
         CapabilityKind::Plays,
         Plays,
-        Self::get_plays_or_its_overriding_plays_with_violated_new_annotation_constraints
+        Self::validate_plays_instances_against_new_constraints
     );
     new_annotation_compatible_with_capability_and_overriding_capabilities_instances_validation!(
         validate_new_annotation_compatible_with_relates_and_overriding_relates_instances,
         CapabilityKind::Relates,
         Relates,
-        Self::get_relates_or_its_overriding_relates_with_violated_new_annotation_constraints
+        Self::validate_relates_instances_against_new_constraints
     );
 
     updated_annotations_compatible_with_capability_and_specialising_capabilities_instances_on_interface_supertype_change_validation!(
         validate_updated_annotations_compatible_with_owns_and_specialising_owns_instances_on_attribute_supertype_change,
         CapabilityKind::Owns,
         Owns,
-        Self::get_owns_or_its_overriding_owns_with_violated_new_annotation_constraints
+        Self::validate_owns_instances_against_new_constraints
     );
     updated_annotations_compatible_with_capability_and_specialising_capabilities_instances_on_interface_supertype_change_validation!(
         validate_updated_annotations_compatible_with_plays_and_specialising_plays_instances_on_role_supertype_change,
         CapabilityKind::Plays,
         Plays,
-        Self::get_plays_or_its_overriding_plays_with_violated_new_annotation_constraints
+        Self::validate_plays_instances_against_new_constraints
     );
     updated_annotations_compatible_with_capability_and_specialising_capabilities_instances_on_interface_supertype_change_validation!(
         validate_updated_annotations_compatible_with_relates_and_specialising_relates_instances_on_role_supertype_change,
         CapabilityKind::Relates,
         Relates,
-        Self::get_relates_or_its_overriding_relates_with_violated_new_annotation_constraints
+        Self::validate_relates_instances_against_new_constraints
     );
 
     updated_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_object_supertype_change_validation!(
@@ -4186,40 +4178,40 @@ impl OperationTimeValidation {
         CapabilityKind::Owns,
         Owns,
         ObjectType,
-        Self::get_owns_or_its_overriding_owns_with_violated_new_annotation_constraints
+        Self::validate_owns_instances_against_new_constraints
     );
     updated_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_object_supertype_change_validation!(
         validate_updated_annotations_compatible_with_plays_and_overriding_plays_instances_on_object_supertype_change,
         CapabilityKind::Plays,
         Plays,
         ObjectType,
-        Self::get_plays_or_its_overriding_plays_with_violated_new_annotation_constraints
+        Self::validate_plays_instances_against_new_constraints
     );
     updated_annotations_compatible_with_capability_and_overriding_capabilities_instances_on_object_supertype_change_validation!(
         validate_updated_annotations_compatible_with_relates_and_overriding_relates_instances_on_relation_supertype_change,
         CapabilityKind::Relates,
         Relates,
         RelationType,
-        Self::get_relates_or_its_overriding_relates_with_violated_new_annotation_constraints
+        Self::validate_relates_instances_against_new_constraints
     );
 
-    type_or_its_subtype_with_violated_new_annotation_constraints!(
-        get_entity_type_or_its_subtype_with_violated_new_annotation_constraints,
+    new_constraints_type_instances_validation!(
+        validate_entity_type_instances_against_new_constraints,
         EntityType,
         Self::validate_entity_type_instances_against_constraints
     );
-    type_or_its_subtype_with_violated_new_annotation_constraints!(
-        get_relation_type_or_its_subtype_with_violated_new_annotation_constraints,
+    new_constraints_type_instances_validation!(
+        validate_relation_type_instances_against_new_constraints,
         RelationType,
         Self::validate_relation_type_instances_against_constraints
     );
-    type_or_its_subtype_with_violated_new_annotation_constraints!(
-        get_attribute_type_or_its_subtype_with_violated_new_annotation_constraints,
+    new_constraints_type_instances_validation!(
+        validate_attribute_type_instances_against_new_constraints,
         AttributeType,
         Self::validate_attribute_type_instances_against_constraints
     );
-    type_or_its_subtype_with_violated_new_annotation_constraints!(
-        get_role_type_or_its_subtype_with_violated_new_annotation_constraints,
+    new_constraints_type_instances_validation!(
+        validate_role_type_instances_against_new_constraints,
         RoleType,
         Self::validate_role_type_instances_against_constraints
     );
@@ -4227,37 +4219,37 @@ impl OperationTimeValidation {
     new_annotation_compatible_with_type_and_subtypes_instances_validation!(
         validate_new_annotation_compatible_with_entity_type_and_subtypes_instances,
         EntityType,
-        Self::get_entity_type_or_its_subtype_with_violated_new_annotation_constraints
+        Self::validate_entity_type_instances_against_new_constraints
     );
     new_annotation_compatible_with_type_and_subtypes_instances_validation!(
         validate_new_annotation_compatible_with_relation_type_and_subtypes_instances,
         RelationType,
-        Self::get_relation_type_or_its_subtype_with_violated_new_annotation_constraints
+        Self::validate_relation_type_instances_against_new_constraints
     );
     new_annotation_compatible_with_type_and_subtypes_instances_validation!(
         validate_new_annotation_compatible_with_attribute_type_and_subtypes_instances,
         AttributeType,
-        Self::get_attribute_type_or_its_subtype_with_violated_new_annotation_constraints
+        Self::validate_attribute_type_instances_against_new_constraints
     );
 
     updated_annotations_compatible_with_type_and_subtypes_instances_on_supertype_change_validation!(
         validate_updated_annotations_compatible_with_entity_type_and_subtypes_instances_on_supertype_change,
         EntityType,
-        Self::get_entity_type_or_its_subtype_with_violated_new_annotation_constraints
+        Self::validate_entity_type_instances_against_new_constraints
     );
     updated_annotations_compatible_with_type_and_subtypes_instances_on_supertype_change_validation!(
         validate_updated_annotations_compatible_with_relation_type_and_subtypes_instances_on_supertype_change,
         RelationType,
-        Self::get_relation_type_or_its_subtype_with_violated_new_annotation_constraints
+        Self::validate_relation_type_instances_against_new_constraints
     );
     updated_annotations_compatible_with_type_and_subtypes_instances_on_supertype_change_validation!(
         validate_updated_annotations_compatible_with_attribute_type_and_subtypes_instances_on_supertype_change,
         AttributeType,
-        Self::get_attribute_type_or_its_subtype_with_violated_new_annotation_constraints
+        Self::validate_attribute_type_instances_against_new_constraints
     );
     updated_annotations_compatible_with_type_and_subtypes_instances_on_supertype_change_validation!(
         validate_updated_annotations_compatible_with_role_type_and_subtypes_instances_on_supertype_change,
         RoleType,
-        Self::get_role_type_or_its_subtype_with_violated_new_annotation_constraints
+        Self::validate_role_type_instances_against_new_constraints
     );
 }
