@@ -93,6 +93,10 @@ impl AnnotationCardinality {
         Self::new(0, None)
     }
 
+    pub fn is_unchecked(&self) -> bool {
+        self == &Self::unchecked()
+    }
+
     pub fn valid(&self) -> bool {
         match self.end_inclusive {
             Some(end_inclusive) if self.start_inclusive > end_inclusive => false,

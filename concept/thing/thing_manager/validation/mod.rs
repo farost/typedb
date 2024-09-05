@@ -22,6 +22,7 @@ use crate::{
         Ordering,
     },
 };
+use crate::type_::constraint::ConstraintError;
 use crate::type_::relation_type::RelationType;
 
 pub(crate) mod commit_time_validation;
@@ -52,10 +53,9 @@ pub enum DataValidationError {
         value: Value<'static>,
         regex: AnnotationRegex,
     },
-    AttributeViolatesRangeConstraint {
+    AttributeTypeConstraintViolated {
         attribute_type: AttributeType<'static>,
-        value: Value<'static>,
-        range: AnnotationRange,
+        source: ConstraintError,
     },
     AttributeViolatesValuesConstraint {
         attribute_type: AttributeType<'static>,
@@ -91,28 +91,25 @@ pub enum DataValidationError {
         taken_attribute_type: AttributeType<'static>,
         value: Value<'static>,
     },
-    KeyCardinalityViolated {
+    KeyConstraintViolated {
         owner: Object<'static>,
         owns: Owns<'static>,
-        count: u64,
+        source: ConstraintError,
     },
-    OwnsCardinalityViolated {
+    OwnsConstraintViolated {
         owner: Object<'static>,
         owns: Owns<'static>,
-        count: u64,
-        cardinality: AnnotationCardinality,
+        source: ConstraintError,
     },
-    RelatesCardinalityViolated {
+    RelatesConstraintViolated {
         relation: Relation<'static>,
         relates: Relates<'static>,
-        count: u64,
-        cardinality: AnnotationCardinality,
+        source: ConstraintError,
     },
-    PlaysCardinalityViolated {
+    PlaysConstraintViolated {
         player: Object<'static>,
         plays: Plays<'static>,
-        count: u64,
-        cardinality: AnnotationCardinality,
+        source: ConstraintError,
     },
     ValueTypeMismatchWithAttributeType {
         attribute_type: AttributeType<'static>,
@@ -150,17 +147,17 @@ impl Error for DataValidationError {
             Self::PlayerViolatesDistinctRelatesConstraint { .. } => None,
             Self::AttributeViolatesDistinctOwnsConstraint { .. } => None,
             Self::AttributeViolatesRegexConstraint { .. } => None,
-            Self::AttributeViolatesRangeConstraint { .. } => None,
+            Self::AttributeTypeConstraintViolated { .. } => None,
             Self::AttributeViolatesValuesConstraint { .. } => None,
             Self::HasViolatesRegexConstraint { .. } => None,
             Self::HasViolatesRangeConstraint { .. } => None,
             Self::HasViolatesValuesConstraint { .. } => None,
             Self::KeyValueTaken { .. } => None,
             Self::UniqueValueTaken { .. } => None,
-            Self::KeyCardinalityViolated { .. } => None,
-            Self::OwnsCardinalityViolated { .. } => None,
-            Self::RelatesCardinalityViolated { .. } => None,
-            Self::PlaysCardinalityViolated { .. } => None,
+            Self::KeyConstraintViolated { .. } => None,
+            Self::OwnsConstraintViolated { .. } => None,
+            Self::RelatesConstraintViolated { .. } => None,
+            Self::PlaysConstraintViolated { .. } => None,
             Self::ValueTypeMismatchWithAttributeType { .. } => None,
             Self::SetHasOnDeletedOwner { .. } => None,
             Self::UnsetHasOnDeletedOwner { .. } => None,

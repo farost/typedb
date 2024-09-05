@@ -17,6 +17,7 @@ use encoding::{
 use itertools::Itertools;
 use lending_iterator::LendingIterator;
 use paste::paste;
+use encoding::EncodingKeyspace::Schema;
 use storage::snapshot::ReadableSnapshot;
 
 use crate::{
@@ -64,7 +65,7 @@ use crate::{
     },
 };
 use crate::thing::object::Object;
-use crate::thing::thing_manager::validation::validation::{check_owns_instances_cardinality, check_relates_instances_cardinality};
+use crate::thing::thing_manager::validation::validation::DataValidation;
 use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, filter_by_constraint_category, get_abstract_constraint, get_cardinality_constraint, get_cardinality_constraints, get_distinct_constraints, get_independent_constraints, get_range_constraints, get_regex_constraints, get_unique_constraint, get_unique_constraints, get_values_constraints, TypeConstraint};
 use crate::type_::{OwnerAPI, PlayerAPI};
 use crate::type_::type_manager::validation::validation::{validate_sibling_owns_ordering_match_for_type, validate_single_cardinality_narrows_inherited_cardinalities};
@@ -2758,15 +2759,21 @@ impl OperationTimeValidation {
         Ok(())
     }
 
-    fn get_annotation_constraint_violated_by_entity_instances<'a>(
+    fn validate_entity_type_instances_against_constraints<'a>(
         snapshot: &impl ReadableSnapshot,
         thing_manager: &ThingManager,
         entity_type: EntityType<'a>,
-        annotations: &HashSet<Annotation>,
-    ) -> Result<Option<AnnotationCategory>, ConceptReadError> {
-        if annotations.is_empty() {
-            return Ok(None);
+        constraints: &HashSet<TypeConstraint<EntityType<'static>>>,
+    ) -> Result<(), SchemaValidationError> {
+        if constraints.is_empty() {
+            return Ok(());
         }
+
+        // TODO: change to this or smth
+        let abstract_constraints_sources: HashSet<Owns<'static>> =
+            filter_by_constraint_category!(constraints.iter(), Abstract)
+                .map(|constraint| constraint.source())
+                .collect();
 
         let is_abstract = compute_abstract(annotations);
         debug_assert!(is_abstract.is_some(), "At least one constraint should exist otherwise we don't need to iterate");
@@ -2778,18 +2785,24 @@ impl OperationTimeValidation {
             }
         }
 
-        Ok(None)
+        Ok(())
     }
 
-    fn get_annotation_constraint_violated_by_relation_instances<'a>(
+    fn validate_relation_type_instances_against_constraints<'a>(
         snapshot: &impl ReadableSnapshot,
         thing_manager: &ThingManager,
         relation_type: RelationType<'a>,
-        annotations: &HashSet<Annotation>,
-    ) -> Result<Option<AnnotationCategory>, ConceptReadError> {
-        if annotations.is_empty() {
-            return Ok(None);
+        constraints: &HashSet<TypeConstraint<RelationType<'static>>>,
+    ) -> Result<(), SchemaValidationError> {
+        if constraints.is_empty() {
+            return Ok(());
         }
+
+        // TODO: change to this or smth
+        let abstract_constraints_sources: HashSet<Owns<'static>> =
+            filter_by_constraint_category!(constraints.iter(), Abstract)
+                .map(|constraint| constraint.source())
+                .collect();
 
         let is_abstract = compute_abstract(annotations);
         debug_assert!(is_abstract.is_some(), "At least one constraint should exist otherwise we don't need to iterate");
@@ -2801,25 +2814,32 @@ impl OperationTimeValidation {
             }
         }
 
-        Ok(None)
+        Ok(())
     }
 
-    fn get_annotation_constraint_violated_by_attribute_instances<'a>(
+    fn validate_attribute_type_instances_against_constraints<'a>(
         snapshot: &impl ReadableSnapshot,
         thing_manager: &ThingManager,
         attribute_type: AttributeType<'a>,
-        annotations: &HashSet<Annotation>,
-    ) -> Result<Option<AnnotationCategory>, ConceptReadError> {
-        if annotations.is_empty() {
-            return Ok(None);
+        constraints: &HashSet<TypeConstraint<AttributeType<'static>>>,
+    ) -> Result<(), SchemaValidationError> {
+        if constraints.is_empty() {
+            return Ok(());
         }
 
-        let is_abstract = compute_abstract(annotations);
-        let regex = compute_regex(annotations);
-        let range = compute_range(annotations);
-        let values = compute_values(annotations);
-        debug_assert!(
-            is_abstract.is_some() || regex.is_some() || range.is_some() || values.is_some(),
+        // TODO: change to this or smth
+        let abstract_constraints_sources: HashSet<Owns<'static>> =
+            filter_by_constraint_category!(constraints.iter(), Abstract)
+                .map(|constraint| constraint.source())
+                .collect();
+        let regex_constraints = get_regex_constraints(constraints.iter());
+        let range_constraints = get_range_constraints(constraints.iter());
+        let values_constraints = get_values_constraints(constraints.iter());
+
+        debug_assert!(!abstract_constraints_sources.is_empty()
+                || !regex_constraints.is_empty()
+                || !range_constraints.is_empty()
+                || !values_constraints.is_empty(),
             "At least one constraint should exist otherwise we don't need to iterate"
         );
 
@@ -2833,51 +2853,49 @@ impl OperationTimeValidation {
 
             let value = attribute.get_value(snapshot, thing_manager)?;
 
-            if let Some(regex) = &regex {
-                match &value {
-                    Value::String(string_value) => {
-                        if !regex.value_valid(&string_value) {
-                            return Ok(Some(AnnotationCategory::Regex));
-                        }
-                    }
-                    _ => {
-                        return Err(ConceptReadError::CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(
-                            get_label_or_concept_read_err(snapshot, attribute_type)?,
-                            value.value_type(),
-                            Annotation::Regex(regex.clone()),
-                        ))
-                    }
-                }
+            for regex_constraint in regex_constraints.iter() {
+                DataValidation::validate_attribute_regex_constraint(
+                    regex_constraint,
+                    attribute_type.clone(),
+                    value.as_reference(),
+                ).map_err(SchemaValidationError::DataValidation)?;
             }
 
-            if let Some(range) = &range {
-                if !range.value_valid(value.clone()) {
-                    return Ok(Some(AnnotationCategory::Range));
-                }
+            for range_constraint in range_constraints.iter() {
+                DataValidation::validate_attribute_range_constraint(
+                    range_constraint,
+                    attribute_type.clone(),
+                    value.as_reference(),
+                ).map_err(SchemaValidationError::DataValidation)?;
             }
 
-            if let Some(values) = &values {
-                if !values.value_valid(value) {
-                    return Ok(Some(AnnotationCategory::Values));
-                }
+            for values_constraint in values_constraints.iter() {
+                DataValidation::validate_attribute_values_constraint(
+                    values_constraint,
+                    attribute_type.clone(),
+                    value.as_reference(),
+                ).map_err(SchemaValidationError::DataValidation)?;
             }
         }
 
-        Ok(None)
+        Ok(())
     }
 
-    fn get_annotation_constraint_violated_by_role_instances<'a>(
+    fn validate_role_type_instances_against_constraints<'a>(
         snapshot: &impl ReadableSnapshot,
         thing_manager: &ThingManager,
         role_type: RoleType<'a>,
         annotations: &HashSet<Annotation>,
-    ) -> Result<Option<AnnotationCategory>, ConceptReadError> {
-        if annotations.is_empty() {
-            return Ok(None);
+        constraints: &HashSet<TypeConstraint<RoleType<'static>>>,
+    ) -> Result<(), SchemaValidationError> {
+        if constraints.is_empty() {
+            return Ok(());
         }
 
-        let is_abstract = compute_abstract(annotations);
-        debug_assert!(is_abstract.is_some(), "At least one constraint should exist otherwise we don't need to iterate");
+        unreachable!("Role Types do not have annotations and thus constraints! Revalidate the logic below when it changes.");
+
+        // Filter your constraints here
+        debug_assert!(/*insert your constraints here*/, "At least one constraint should exist otherwise we don't need to iterate");
 
         let role_type = role_type.clone().into_owned();
         let all_relates = TypeReader::get_object_types_with_capabilities_for_interface::<Relates<'static>>(snapshot, role_type.clone())?;
@@ -2887,34 +2905,12 @@ impl OperationTimeValidation {
                 let mut role_player_iterator =
                     thing_manager.get_role_players_role(snapshot, relation, role_type.clone());
                 if let Some(_) = role_player_iterator.next().transpose()? {
-                    if is_abstract.is_some() {
-                        return Ok(Some(AnnotationCategory::Abstract));
-                    }
+                    // insert your constraints validations here
                 }
             }
         }
 
-        Ok(None)
-    }
-
-    fn check_operation_time_cardinality_constraint(
-        cardinality_constraint: Option<AnnotationCardinality>,
-        real_cardinality: u64,
-        only_abstract_types: bool,
-    ) -> bool {
-        match cardinality_constraint {
-            None => true,
-            Some(cardinality) => match cardinality.value_valid(real_cardinality) {
-                true => true,
-                // We check that all capabilities of abstract types are overridden only on commit time,
-                // so card of only abstract interface types can be skipped here.
-                // If this abstract type (where the cardinality comes from) is not overridden,
-                // it will be a commit time violation.
-                // If this abstract type is overridden, the concrete types will inherit the updated
-                // cardinality and revalidate it against themselves in this function if needed.
-                false => real_cardinality == 0 && only_abstract_types,
-            },
-        }
+        Ok(())
     }
 
     fn validate_owns_instances_against_constraints(
@@ -2924,9 +2920,9 @@ impl OperationTimeValidation {
         object_types: &HashSet<ObjectType<'static>>,
         attribute_types: &HashSet<AttributeType<'static>>,
         constraints: &HashSet<CapabilityConstraint<Owns<'static>>>,
-    ) -> Result<Option<AnnotationCategory>, ConceptReadError> {
+    ) -> Result<(), SchemaValidationError> {
         if constraints.is_empty() {
-            return Ok(None);
+            return Ok(());
         }
 
         let cardinality_constraints_iter = filter_by_constraint_category!(constraints.iter(), Cardinality);
@@ -3024,23 +3020,11 @@ impl OperationTimeValidation {
                         if regex_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
                             || &regex_constraint.source().attribute() == &attribute_type
                         {
-                            let regex = regex_constraint.description().unwrap_regex()?;
-                            match &value {
-                                Value::String(string_value) => {
-                                    if !regex.value_valid(&string_value) {
-                                        return Ok(Some(AnnotationCategory::Regex));
-                                    }
-                                }
-                                _ => {
-                                    return Err(
-                                        ConceptReadError::CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(
-                                            get_label_or_concept_read_err(snapshot, attribute_type)?,
-                                            value.value_type(),
-                                            regex_constraint.description(),
-                                        ),
-                                    );
-                                }
-                            }
+                            DataValidation::validate_owns_regex_constraint(
+                                regex_constraint,
+                                &object,
+                                value.as_reference(),
+                            ).map_err(SchemaValidationError::DataValidation)?;
                         }
                     }
 
@@ -3048,10 +3032,11 @@ impl OperationTimeValidation {
                         if range_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
                             || &range_constraint.source().attribute() == &attribute_type
                         {
-                            let range = range_constraint.description().unwrap_range()?;
-                            if !range.value_valid(value.clone()) {
-                                return Ok(Some(AnnotationCategory::Range));
-                            }
+                            DataValidation::validate_owns_range_constraint(
+                                range_constraint,
+                                &object,
+                                value.as_reference(),
+                            ).map_err(SchemaValidationError::DataValidation)?;
                         }
                     }
 
@@ -3059,36 +3044,29 @@ impl OperationTimeValidation {
                         if values_constraint.source().attribute().is_supertype_transitive_of(snapshot, type_manager, attribute_type.clone())?
                             || &values_constraint.source().attribute() == &attribute_type
                         {
-                            let values = values_constraint.description().unwrap_values()?;
-                            if !values.value_valid(value.clone()) {
-                                return Ok(Some(AnnotationCategory::Values));
-                            }
+                            DataValidation::validate_owns_values_constraint(
+                                values_constraint,
+                                &object,
+                                value.as_reference(),
+                            ).map_err(SchemaValidationError::DataValidation)?;
                         }
                     }
                 }
 
-                // for (cardinality_constraint, constraint_counts) in cardinality_constraints_counts.into_iter() {
-                //     check_owns_instances_cardinality(
-                //         snapshot,
-                //         type_manager,
-                //         object,
-                //         cardinality_constraint.source(),
-                //         cardinality_constraint.description().unwrap_cardinality()?,
-                //         constraint_counts,
-                //     )?;
-                // }
-
-                if !Self::check_operation_time_cardinality_constraint(
-                    cardinality.clone(),
-                    real_cardinality,
-                    only_abstract_types,
-                ) {
-                    return Ok(Some(if is_key { AnnotationCategory::Key } else { AnnotationCategory::Cardinality }));
+                for (cardinality_constraint, constraint_counts) in cardinality_constraints_counts.into_iter() {
+                    DataValidation::validate_owns_instances_cardinality_constraint(
+                        snapshot,
+                        type_manager,
+                        &cardinality_constraint,
+                        &object,
+                        cardinality_constraint.source(),
+                        constraint_counts,
+                    )?;
                 }
             }
         }
 
-        Ok(None)
+        Ok(())
     }
 
     fn validate_plays_instances_against_constraints<'a>(
@@ -3098,9 +3076,9 @@ impl OperationTimeValidation {
         object_types: &HashSet<ObjectType<'a>>,
         role_types: &HashSet<RoleType<'a>>,
         constraints: &HashSet<CapabilityConstraint<Plays<'static>>>,
-    ) -> Result<Option<AnnotationCategory>, ConceptReadError> {
+    ) -> Result<(), SchemaValidationError> {
         if constraints.is_empty() {
-            return Ok(None);
+            return Ok(());
         }
 
         let cardinality_constraints_iter = filter_by_constraint_category!(constraints.iter(), Cardinality);
@@ -3144,28 +3122,20 @@ impl OperationTimeValidation {
                     }
                 }
 
-                // for (cardinality_constraint, constraint_counts) in cardinality_constraints_counts.into_iter() {
-                //     check_plays_instances_cardinality(
-                //         snapshot,
-                //         type_manager,
-                //         object,
-                //         cardinality_constraint.source(),
-                //         cardinality_constraint.description().unwrap_cardinality()?,
-                //         constraint_counts,
-                //     )?;
-                // }
-
-                if !Self::check_operation_time_cardinality_constraint(
-                    cardinality.clone(),
-                    real_cardinality,
-                    only_abstract_types,
-                ) {
-                    return Ok(Some(AnnotationCategory::Cardinality));
+                for (cardinality_constraint, constraint_counts) in cardinality_constraints_counts.into_iter() {
+                    DataValidation::validate_plays_instances_cardinality_constraint(
+                        snapshot,
+                        type_manager,
+                        &cardinality_constraint,
+                        &object,
+                        cardinality_constraint.source(),
+                        constraint_counts,
+                    )?;
                 }
             }
         }
 
-        Ok(None)
+        Ok(())
     }
 
     fn validate_relates_instances_against_constraints<'a>(
@@ -3175,9 +3145,9 @@ impl OperationTimeValidation {
         relation_types: &HashSet<RelationType<'a>>,
         role_types: &HashSet<RoleType<'a>>,
         constraints: &HashSet<CapabilityConstraint<Relates<'static>>>,
-    ) -> Result<Option<AnnotationCategory>, ConceptReadError> {
+    ) -> Result<(), SchemaValidationError> {
         if constraints.is_empty() {
-            return Ok(None);
+            return Ok(());
         }
 
         let cardinality_constraints_iter = filter_by_constraint_category!(constraints.iter(), Cardinality);
@@ -3236,26 +3206,20 @@ impl OperationTimeValidation {
                     }
                 }
 
-                // check_relates_instances_cardinality(
-                //     snapshot,
-                //     type_manager,
-                //     relation,
-                //     constraint.source(),
-                //     cardinality,
-                //     real_cardinality,
-                // )
-
-                if !Self::check_operation_time_cardinality_constraint(
-                    cardinality.clone(),
-                    real_cardinality,
-                    only_abstract_types,
-                ) {
-                    return Ok(Some(AnnotationCategory::Cardinality));
+                for (cardinality_constraint, constraint_counts) in cardinality_constraints_counts.into_iter() {
+                    DataValidation::validate_relates_instances_cardinality_constraint(
+                        snapshot,
+                        type_manager,
+                        &cardinality_constraint,
+                        &relation,
+                        cardinality_constraint.source(),
+                        constraint_counts,
+                    )?;
                 }
             }
         }
 
-        Ok(None)
+        Ok(())
     }
 
     pub(crate) fn validate_declared_capability_annotation_is_compatible_with_declared_annotations<CAP>(
@@ -4173,22 +4137,22 @@ impl OperationTimeValidation {
     type_or_its_subtype_with_violated_new_annotation_constraints!(
         get_entity_type_or_its_subtype_with_violated_new_annotation_constraints,
         EntityType,
-        Self::get_annotation_constraint_violated_by_entity_instances
+        Self::validate_entity_type_instances_against_constraints
     );
     type_or_its_subtype_with_violated_new_annotation_constraints!(
         get_relation_type_or_its_subtype_with_violated_new_annotation_constraints,
         RelationType,
-        Self::get_annotation_constraint_violated_by_relation_instances
+        Self::validate_relation_type_instances_against_constraints
     );
     type_or_its_subtype_with_violated_new_annotation_constraints!(
         get_attribute_type_or_its_subtype_with_violated_new_annotation_constraints,
         AttributeType,
-        Self::get_annotation_constraint_violated_by_attribute_instances
+        Self::validate_attribute_type_instances_against_constraints
     );
     type_or_its_subtype_with_violated_new_annotation_constraints!(
         get_role_type_or_its_subtype_with_violated_new_annotation_constraints,
         RoleType,
-        Self::get_annotation_constraint_violated_by_role_instances
+        Self::validate_role_type_instances_against_constraints
     );
 
     new_annotation_compatible_with_type_and_subtypes_instances_validation!(

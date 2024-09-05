@@ -24,6 +24,7 @@ use crate::{
         Ordering,
     },
 };
+use crate::thing::thing_manager::validation::DataValidationError;
 use crate::type_::constraint::ConstraintDescription;
 use crate::type_::relates::Relates;
 
@@ -35,6 +36,7 @@ pub(crate) mod validation;
 pub enum SchemaValidationError {
     // TODO: Should probably send types themselves instead of labels here... Not sure how we are going to parse errors!
     ConceptRead(ConceptReadError),
+    DataValidation(DataValidationError),
     LabelShouldBeUnique {
         label: Label<'static>,
         existing_kind: Kind,
@@ -267,6 +269,7 @@ impl Error for SchemaValidationError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::ConceptRead(source) => Some(source),
+            Self::DataValidation(source) => Some(source),
             Self::LabelShouldBeUnique { .. } => None,
             Self::StructNameShouldBeUnique(_) => None,
             Self::StructShouldHaveAtLeastOneField(_) => None,

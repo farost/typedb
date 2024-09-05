@@ -13,11 +13,11 @@ use crate::{
     thing::{
         object::{Object, ObjectAPI},
         relation::Relation,
-        thing_manager::{validation::DataValidationError, ThingManager},
+        thing_manager::{validation::{validation::DataValidation, DataValidationError}, ThingManager},
     },
     type_::{
-        annotation::AnnotationCardinality, attribute_type::AttributeType, owns::Owns, plays::Plays, relates::Relates,
-        role_type::RoleType, Capability, OwnerAPI, PlayerAPI, TypeAPI,
+        attribute_type::AttributeType, owns::Owns, plays::Plays, relates::Relates,
+        role_type::RoleType, Capability, OwnerAPI, PlayerAPI, TypeAPI, constraint::CapabilityConstraint,
     },
 };
 
@@ -39,8 +39,7 @@ macro_rules! validate_capability_cardinality_constraint {
             }
 
             for constraint in cardinality_constraints {
-                let cardinality = constraint.description().unwrap_cardinality();
-                if cardinality == AnnotationCardinality::unchecked() {
+                if constraint.description().unwrap_cardinality().map_err(|source| ConceptReadError::Constraint { source }).map_err(DataValidationError::ConceptRead).is_unchecked() {
                     continue;
                 }
 
@@ -49,7 +48,7 @@ macro_rules! validate_capability_cardinality_constraint {
                 let count = TypeAPI::chain_types(source_interface_type, sub_interface_types)
                     .filter_map(|interface_type| counts.get(&interface_type))
                     .sum();
-                $check_func(snapshot, thing_manager.type_manager(), &object, constraint.source(), cardinality, count)?;
+                $check_func(snapshot, thing_manager.type_manager(), constraint, &object, constraint.source(), count)?;
             }
 
             Ok(())
@@ -72,8 +71,6 @@ macro_rules! collect_errors {
 }
 
 pub(crate) use collect_errors;
-use crate::thing::thing_manager::validation::validation::{check_owns_instances_cardinality, check_plays_instances_cardinality, check_relates_instances_cardinality};
-use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription};
 
 pub struct CommitTimeValidation {}
 
@@ -135,7 +132,7 @@ impl CommitTimeValidation {
         Object,
         get_type_owns_constraints_cardinality,
         get_has_counts,
-        check_owns_instances_cardinality
+        DataValidation::validate_owns_instances_cardinality_constraint
     );
     validate_capability_cardinality_constraint!(
         validate_plays_cardinality_constraint,
@@ -143,7 +140,7 @@ impl CommitTimeValidation {
         Object,
         get_type_plays_constraints_cardinality,
         get_played_roles_counts,
-        check_plays_instances_cardinality
+        DataValidation::validate_plays_instances_cardinality_constraint
     );
     validate_capability_cardinality_constraint!(
         validate_relates_cardinality_constraint,
@@ -151,6 +148,6 @@ impl CommitTimeValidation {
         Relation,
         get_type_relates_constraints_cardinality,
         get_player_counts,
-        check_relates_instances_cardinality
+        DataValidation::validate_relates_instances_cardinality_constraint
     );
 }

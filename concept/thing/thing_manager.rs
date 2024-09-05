@@ -86,7 +86,7 @@ use crate::{
         relation_type::RelationType,
         role_type::RoleType,
         type_manager::TypeManager,
-        Capability, EdgeAbstract, ObjectTypeAPI, OwnerAPI, PlayerAPI, TypeAPI,
+        Capability, ObjectTypeAPI, OwnerAPI, PlayerAPI, TypeAPI,
     },
     ConceptStatus,
 };
@@ -1335,7 +1335,7 @@ impl ThingManager {
             value.value_type(),
         )?;
 
-        OperationTimeValidation::validate_attribute_regex_constraint(
+        OperationTimeValidation::validate_attribute_regex_constraints(
             snapshot,
             self,
             attribute_type.clone(),
@@ -1343,7 +1343,7 @@ impl ThingManager {
         )
         .map_err(|source| ConceptWriteError::DataValidation { source })?;
 
-        OperationTimeValidation::validate_attribute_range_constraint(
+        OperationTimeValidation::validate_attribute_range_constraints(
             snapshot,
             self,
             attribute_type.clone(),
@@ -1351,7 +1351,7 @@ impl ThingManager {
         )
         .map_err(|source| ConceptWriteError::DataValidation { source })?;
 
-        OperationTimeValidation::validate_attribute_values_constraint(
+        OperationTimeValidation::validate_attribute_values_constraints(
             snapshot,
             self,
             attribute_type.clone(),
@@ -1547,13 +1547,13 @@ impl ThingManager {
             value.value_type(),
         )?;
 
-        OperationTimeValidation::validate_has_regex_constraint(snapshot, self, owner.type_(), attribute_type.clone(), value.as_reference())
+        OperationTimeValidation::validate_has_regex_constraints(snapshot, self, owner, attribute_type.clone(), value.as_reference())
             .map_err(|source| ConceptWriteError::DataValidation { source })?;
 
-        OperationTimeValidation::validate_has_range_constraint(snapshot, self, owner.type_(), attribute_type.clone(), value.as_reference())
+        OperationTimeValidation::validate_has_range_constraints(snapshot, self, owner, attribute_type.clone(), value.as_reference())
             .map_err(|source| ConceptWriteError::DataValidation { source })?;
 
-        OperationTimeValidation::validate_has_values_constraint(snapshot, self, owner.type_(), attribute_type.clone(), value.as_reference())
+        OperationTimeValidation::validate_has_values_constraints(snapshot, self, owner, attribute_type.clone(), value.as_reference())
             .map_err(|source| ConceptWriteError::DataValidation { source })?;
 
         let has = ThingEdgeHas::build(owner.vertex(), attribute.vertex());

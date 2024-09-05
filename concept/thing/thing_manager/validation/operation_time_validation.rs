@@ -18,7 +18,7 @@ use crate::{
         object::{Object, ObjectAPI},
         relation::Relation,
         thing_manager::{
-            validation::{validation::get_label_or_data_err, DataValidationError},
+            validation::{validation::{get_label_or_data_err, DataValidation}, DataValidationError},
             ThingManager,
         },
     },
@@ -163,7 +163,7 @@ impl OperationTimeValidation {
         }
     }
 
-    pub(crate) fn validate_attribute_regex_constraint(
+    pub(crate) fn validate_attribute_regex_constraints(
         snapshot: &impl ReadableSnapshot,
         thing_manager: &ThingManager,
         attribute_type: AttributeType<'static>,
@@ -173,29 +173,16 @@ impl OperationTimeValidation {
             .get_constraints_regex(snapshot, thing_manager.type_manager())
             .map_err(DataValidationError::ConceptRead)?
         {
-            match &value {
-                Value::String(string_value) => {
-                    if !constraint.description().unwrap_regex()?.value_valid(&string_value) {
-                        return Err(DataValidationError::AttributeViolatesRegexConstraint {
-                            attribute_type,
-                            value: value.into_owned(),
-                            regex,
-                        });
-                    }
-                }
-                _ => return Err(DataValidationError::ConceptRead(
-                    ConceptReadError::CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(
-                        get_label_or_data_err(snapshot, thing_manager.type_manager(), attribute_type)?,
-                        value.value_type(),
-                        constraint.description(),
-                    ),
-                )),
-            }
+            DataValidation::validate_attribute_regex_constraint(
+                constraint,
+                attribute_type.clone(),
+                value.as_reference(),
+            )?;
         }
         Ok(())
     }
 
-    pub(crate) fn validate_attribute_range_constraint(
+    pub(crate) fn validate_attribute_range_constraints(
         snapshot: &impl ReadableSnapshot,
         thing_manager: &ThingManager,
         attribute_type: AttributeType<'static>,
@@ -205,19 +192,16 @@ impl OperationTimeValidation {
             .get_constraints_range(snapshot, thing_manager.type_manager())
             .map_err(DataValidationError::ConceptRead)?
         {
-            let range = constraint.description().unwrap_range()?;
-            if !range.value_valid(value.clone()) {
-                return Err(DataValidationError::AttributeViolatesRangeConstraint {
-                    attribute_type,
-                    value: value.into_owned(),
-                    range,
-                });
-            }
+            DataValidation::validate_attribute_range_constraint(
+                constraint,
+                attribute_type.clone(),
+                value.as_reference(),
+            )?;
         }
         Ok(())
     }
 
-    pub(crate) fn validate_attribute_values_constraint(
+    pub(crate) fn validate_attribute_values_constraints(
         snapshot: &impl ReadableSnapshot,
         thing_manager: &ThingManager,
         attribute_type: AttributeType<'static>,
@@ -227,81 +211,71 @@ impl OperationTimeValidation {
             .get_constraints_values(snapshot, thing_manager.type_manager())
             .map_err(DataValidationError::ConceptRead)?
         {
-            let values = constraint.description().unwrap_values()?;
-            if !values.value_valid(value.clone()) {
-                return Err(DataValidationError::AttributeViolatesValuesConstraint {
-                    attribute_type,
-                    value: value.into_owned(),
-                    values,
-                });
-            }
+            DataValidation::validate_attribute_values_constraint(
+                constraint,
+                attribute_type.clone(),
+                value.as_reference(),
+            )?;
         }
         Ok(())
     }
 
-    pub(crate) fn validate_has_regex_constraint(
+    pub(crate) fn validate_has_regex_constraints<'a>(
         snapshot: &impl ReadableSnapshot,
         thing_manager: &ThingManager,
-        object_type: ObjectType<'static>,
+        object: &Object<'a>,
         attribute_type: AttributeType<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        for constraint in object_type
-            .get_type_owns_constraints_regex(snapshot, thing_manager.type_manager(), attribute_type.clone())
-            .map_err(DataValidationError::ConceptRead)?
-        {
-            match &value {
-                Value::String(string_value) => {
-                    if !constraint.description().unwrap_regex()?.value_valid(&string_value) {
-                        return Err(DataValidationError::HasViolatesRegexConstraint { owns, value: value.into_owned(), regex });
-                    }
-                }
-                _ => return Err(DataValidationError::ConceptRead(
-                    ConceptReadError::CorruptAttributeValueTypeDoesntMatchAttributeTypeConstraint(
-                        get_label_or_data_err(snapshot, thing_manager.type_manager(), attribute_type)?,
-                        value.value_type(),
-                        constraint.description()
-                    ),
-                )),
-            }
-        }
-        Ok(())
-    }
-
-    pub(crate) fn validate_has_range_constraint(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
-        object_type: ObjectType<'static>,
-        attribute_type: AttributeType<'static>,
-        value: Value<'_>,
-    ) -> Result<(), DataValidationError> {
-        for constraint in object_type
+        for constraint in object.type_()
             .get_type_owns_constraints_regex(snapshot, thing_manager.type_manager(), attribute_type)
             .map_err(DataValidationError::ConceptRead)?
         {
-            let range = constraint.description().unwrap_range()?;
-            if !range.value_valid(value.clone()) {
-                return Err(DataValidationError::HasViolatesRangeConstraint { owns, value: value.into_owned(), range });
-            }
+            DataValidation::validate_owns_regex_constraint(
+                constraint,
+                object,
+                value.as_reference(),
+            )?;
         }
         Ok(())
     }
 
-    pub(crate) fn validate_has_values_constraint(
+    pub(crate) fn validate_has_range_constraints<'a>(
         snapshot: &impl ReadableSnapshot,
         thing_manager: &ThingManager,
-        object_type: ObjectType<'static>,
+        object: &Object<'a>,
         attribute_type: AttributeType<'static>,
         value: Value<'_>,
     ) -> Result<(), DataValidationError> {
-        for constraint in object_type
-            .get_type_owns_constraints_regex(snapshot, thing_manager.type_manager(), attribute_type)
+        for constraint in object.type_()
+            .get_type_owns_constraints_range(snapshot, thing_manager.type_manager(), attribute_type)
             .map_err(DataValidationError::ConceptRead)?
         {
-            let values = constraint.description().unwrap_values()?;
-            if !values.value_valid(value.clone()) {
-                return Err(DataValidationError::HasViolatesValuesConstraint { owns, value: value.into_owned(), values });
-            }
+            DataValidation::validate_owns_range_constraint(
+                constraint,
+                object,
+                value.as_reference(),
+            )?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_has_values_constraints<'a>(
+        snapshot: &impl ReadableSnapshot,
+        thing_manager: &ThingManager,
+        object: &Object<'a>,
+        attribute_type: AttributeType<'static>,
+        value: Value<'_>,
+    ) -> Result<(), DataValidationError> {
+        for constraint in object.type_()
+            .get_type_owns_constraints_values(snapshot, thing_manager.type_manager(), attribute_type)
+            .map_err(DataValidationError::ConceptRead)?
+        {
+            DataValidation::validate_owns_values_constraint(
+                constraint,
+                object,
+                value.as_reference(),
+            )?;
         }
         Ok(())
     }

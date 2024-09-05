@@ -10,6 +10,8 @@ use std::error::Error;
 use std::fmt;
 use std::hash::Hash;
 use std::marker::PhantomData;
+use encoding::value::value::Value;
+use encoding::value::ValueEncodable;
 
 use storage::snapshot::{ReadableSnapshot, WritableSnapshot};
 
@@ -180,6 +182,46 @@ pub trait Constraint<T>: Sized + Clone + Hash + PartialEq {
     fn validation_mode(&self) -> ConstraintValidationMode {
         self.description().validation_mode()
     }
+
+    fn validate_cardinality(&self, count: u64) -> Result<(), ConstraintError> {
+        let cardinality = self.description().unwrap_cardinality()?;
+        match cardinality.value_valid(count) {
+            true => Ok(()),
+            false => Err(ConstraintError::ViolatedCardinality { cardinality, count }),
+        }
+    }
+
+    fn validate_regex(&self, value: Value<'_>) -> Result<(), ConstraintError> {
+        match &value {
+            Value::String(string_value) => {
+                let regex = self.description().unwrap_regex()?;
+                match regex.value_valid(string_value) {
+                    true => Ok(()),
+                    false => Err(ConstraintError::ViolatedRegex { regex, value: value.into_owned() }),
+                }
+            }
+            _ => Err(ConstraintError::CorruptConstraintIsNotApplicableToValue {
+                description: self.description(),
+                value: value.into_owned(),
+            })
+        }
+    }
+
+    fn validate_range(&self, value: Value<'_>) -> Result<(), ConstraintError> {
+        let range = self.description().unwrap_range()?;
+        match range.value_valid(value.as_reference()) {
+            true => Ok(()),
+            false => Err(ConstraintError::ViolatedRange { range, value: value.into_owned() }),
+        }
+    }
+
+    fn validate_values(&self, value: Value<'_>) -> Result<(), ConstraintError> {
+        let values = self.description().unwrap_values()?;
+        match values.value_valid(value.as_reference()) {
+            true => Ok(()),
+            false => Err(ConstraintError::ViolatedValues { values, value: value.into_owned() }),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -253,6 +295,8 @@ macro_rules! filter_by_constraint_category {
     };
 }
 pub use filter_by_constraint_category;
+use crate::thing::thing_manager::validation::DataValidationError;
+use crate::thing::thing_manager::validation::validation::get_label_or_data_err;
 
 pub(crate) fn get_cardinality_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
     constraints: impl IntoIterator<Item = &C>,
@@ -396,6 +440,12 @@ pub(crate) fn constraint_validation_mode(
 #[derive(Debug, Clone)]
 pub enum ConstraintError {
     CannotUnwrapConstraint(String),
+    Violated(ConstraintDescription),
+    CorruptConstraintIsNotApplicableToValue { description: ConstraintDescription, value: Value<'static>, },
+    ViolatedCardinality { cardinality: AnnotationCardinality, count: u64 },
+    ViolatedRegex { regex: AnnotationRegex, value: Value<'static> },
+    ViolatedRange { range: AnnotationRange, value: Value<'static> },
+    ViolatedValues { values: AnnotationValues, value: Value<'static> },
 }
 
 impl fmt::Display for ConstraintError {
@@ -407,7 +457,13 @@ impl fmt::Display for ConstraintError {
 impl Error for ConstraintError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            ConstraintError::CannotUnwrapConstraint(_) => None,
+            Self::CannotUnwrapConstraint(_) => None,
+            Self::Violated(_) => None,
+            Self::CorruptConstraintIsNotApplicableToValue { .. } => None,
+            Self::ViolatedCardinality { .. } => None,
+            Self::ViolatedRegex { .. } => None,
+            Self::ViolatedRange { .. } => None,
+            Self::ViolatedValues { .. } => None,
         }
     }
 }
