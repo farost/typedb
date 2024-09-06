@@ -90,7 +90,7 @@ use crate::{
     },
     ConceptStatus,
 };
-use crate::type_::constraint::Constraint;
+use crate::type_::constraint::{Constraint, get_checked_constraints};
 
 pub mod validation;
 
@@ -934,8 +934,8 @@ impl ThingManager {
         owner: &Object<'a>,
         attribute_type: AttributeType<'static>,
     ) -> Result<(), ConceptReadError> {
-        let cardinality_constraints = owner.type_().get_type_owns_constraints_cardinality(snapshot, self.type_manager(), attribute_type)?;
-        if cardinality_constraints.iter().all(|constraint| constraint.description().unchecked()) {
+        let cardinality_constraints = get_checked_constraints(owner.type_().get_type_owns_constraints_cardinality(snapshot, self.type_manager(), attribute_type)?.into_iter());
+        if cardinality_constraints.is_empty() {
             return Ok(());
         }
 
@@ -960,8 +960,8 @@ impl ThingManager {
         player: &Object<'a>,
         role_type: RoleType<'static>,
     ) -> Result<(), ConceptReadError> {
-        let cardinality_constraints = player.type_().get_type_plays_constraints_cardinality(snapshot, self.type_manager(), role_type)?;
-        if cardinality_constraints.iter().all(|constraint| constraint.description().unchecked()) {
+        let cardinality_constraints = get_checked_constraints(player.type_().get_type_plays_constraints_cardinality(snapshot, self.type_manager(), role_type)?.into_iter());
+        if cardinality_constraints.is_empty() {
             return Ok(());
         }
 
@@ -986,8 +986,8 @@ impl ThingManager {
         relation: &Relation<'a>,
         role_type: RoleType<'static>,
     ) -> Result<(), ConceptReadError> {
-        let cardinality_constraints = relation.type_().get_type_relates_constraints_cardinality(snapshot, self.type_manager(), role_type)?;
-        if cardinality_constraints.iter().all(|constraint| constraint.description().unchecked()) {
+        let cardinality_constraints = get_checked_constraints(relation.type_().get_type_relates_constraints_cardinality(snapshot, self.type_manager(), role_type)?.into_iter());
+        if cardinality_constraints.is_empty() {
             return Ok(());
         }
 

@@ -1754,7 +1754,7 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_attribute_type_and_subtypes_instances_on_supertype_change(
+        OperationTimeValidation::validate_updated_constraints_compatible_with_attribute_type_and_sub_instances_on_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -1931,7 +1931,7 @@ impl TypeManager {
         subtype: EntityType<'static>,
         supertype: EntityType<'static>,
     ) -> Result<(), ConceptWriteError> {
-        OperationTimeValidation::validate_updated_annotations_compatible_with_entity_type_and_subtypes_instances_on_supertype_change(
+        OperationTimeValidation::validate_updated_constraints_compatible_with_entity_type_and_sub_instances_on_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -1967,7 +1967,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_relation_type_and_subtypes_instances_on_supertype_change(
+        OperationTimeValidation::validate_updated_constraints_compatible_with_relation_type_and_sub_instances_on_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -2263,7 +2263,27 @@ impl TypeManager {
         thing_manager: &ThingManager,
         entity_type: EntityType<'static>,
     ) -> Result<(), ConceptWriteError> {
-        self.set_type_annotation_abstract(snapshot, thing_manager, entity_type)
+        let annotation = Annotation::Abstract(AnnotationAbstract);
+
+        self.validate_set_type_annotation_general(snapshot, entity_type.clone(), annotation.clone())?;
+
+        OperationTimeValidation::validate_type_supertype_abstractness_to_set_abstract_annotation(
+            snapshot,
+            self,
+            entity_type.clone(),
+        )
+            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_entity_type_and_sub_instances(
+            snapshot,
+            self,
+            thing_manager,
+            entity_type.clone(),
+            annotation.clone(),
+        )
+            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+
+        self.set_type_annotation(snapshot, entity_type, annotation)
     }
 
     pub(crate) fn set_relation_type_annotation_abstract(
@@ -2272,7 +2292,27 @@ impl TypeManager {
         thing_manager: &ThingManager,
         relation_type: RelationType<'static>,
     ) -> Result<(), ConceptWriteError> {
-        self.set_type_annotation_abstract(snapshot, thing_manager, relation_type)
+        let annotation = Annotation::Abstract(AnnotationAbstract);
+
+        self.validate_set_type_annotation_general(snapshot, relation_type.clone(), annotation.clone())?;
+
+        OperationTimeValidation::validate_type_supertype_abstractness_to_set_abstract_annotation(
+            snapshot,
+            self,
+            relation_type.clone(),
+        )
+            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_relation_type_and_sub_instances(
+            snapshot,
+            self,
+            thing_manager,
+            relation_type.clone(),
+            annotation.clone(),
+        )
+            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+
+        self.set_type_annotation(snapshot, relation_type, annotation)
     }
 
     pub(crate) fn set_attribute_type_annotation_abstract(
@@ -2281,35 +2321,27 @@ impl TypeManager {
         thing_manager: &ThingManager,
         attribute_type: AttributeType<'static>,
     ) -> Result<(), ConceptWriteError> {
-        self.set_type_annotation_abstract(snapshot, thing_manager, attribute_type)
-    }
-
-    fn set_type_annotation_abstract(
-        &self,
-        snapshot: &mut impl WritableSnapshot,
-        thing_manager: &ThingManager,
-        type_: impl KindAPI<'static>,
-    ) -> Result<(), ConceptWriteError> {
         let annotation = Annotation::Abstract(AnnotationAbstract);
 
-        self.validate_set_type_annotation_general(snapshot, type_.clone(), annotation.clone())?;
+        self.validate_set_type_annotation_general(snapshot, attribute_type.clone(), annotation.clone())?;
 
         OperationTimeValidation::validate_type_supertype_abstractness_to_set_abstract_annotation(
             snapshot,
             self,
-            type_.clone(),
+            attribute_type.clone(),
         )
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_new_abstract_annotation_compatible_with_type_and_subtypes_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_attribute_type_and_sub_instances(
             snapshot,
             self,
             thing_manager,
-            type_.clone(),
+            attribute_type.clone(),
+            annotation.clone(),
         )
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        self.set_type_annotation(snapshot, type_, annotation)
+        self.set_type_annotation(snapshot, attribute_type, annotation)
     }
 
     pub(crate) fn unset_entity_type_annotation_abstract(
@@ -2426,7 +2458,7 @@ impl TypeManager {
         self.validate_set_type_annotation_general(snapshot, attribute_type.clone(), annotation.clone())?;
 
         // It won't validate anything, but placing this call here helps maintain the validation consistency
-        OperationTimeValidation::validate_new_annotation_compatible_with_attribute_type_and_subtypes_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_attribute_type_and_sub_instances(
             snapshot,
             self,
             thing_manager,
@@ -2494,7 +2526,7 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_role_type_and_subtypes_instances_on_supertype_change(
+        OperationTimeValidation::validate_updated_constraints_compatible_with_role_type_and_sub_instances_on_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -2943,7 +2975,7 @@ impl TypeManager {
         OperationTimeValidation::validate_subtypes_narrow_regex(snapshot, self, attribute_type.clone(), regex.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_new_annotation_compatible_with_attribute_type_and_subtypes_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_attribute_type_and_sub_instances(
             snapshot,
             self,
             thing_manager,
@@ -3039,7 +3071,7 @@ impl TypeManager {
         self.validate_set_type_annotation_general(snapshot, relation_type.clone(), annotation.clone())?;
 
         // It won't validate anything, but placing this call here helps maintain the validation consistency
-        OperationTimeValidation::validate_new_annotation_compatible_with_relation_type_and_subtypes_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_relation_type_and_sub_instances(
             snapshot,
             self,
             thing_manager,
@@ -3106,7 +3138,7 @@ impl TypeManager {
 
         // TODO: Maybe for the future: check if compatible with existing VALUES annotation
 
-        OperationTimeValidation::validate_new_annotation_compatible_with_attribute_type_and_subtypes_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_attribute_type_and_sub_instances(
             snapshot,
             self,
             thing_manager,
@@ -3238,7 +3270,7 @@ impl TypeManager {
 
         // TODO: Maybe for the future: check if compatible with existing RANGE annotation
 
-        OperationTimeValidation::validate_new_annotation_compatible_with_attribute_type_and_subtypes_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_attribute_type_and_sub_instances(
             snapshot,
             self,
             thing_manager,

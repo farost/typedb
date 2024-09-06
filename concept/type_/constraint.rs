@@ -99,25 +99,26 @@ impl ConstraintDescription {
         }
     }
 
-    pub(crate) fn validation_mode(&self) -> ConstraintValidationMode {
+    pub(crate) fn scope(&self) -> ConstraintScope {
         match self {
-            ConstraintDescription::Abstract(_) => ConstraintValidationMode::SingleInstanceOfType,
+            ConstraintDescription::Abstract(_) => ConstraintScope::SingleInstanceOfType,
 
             ConstraintDescription::Distinct(_)
             | ConstraintDescription::Independent(_)
             | ConstraintDescription::Regex(_)
             | ConstraintDescription::Range(_)
-            | ConstraintDescription::Values(_) => ConstraintValidationMode::SingleInstanceOfTypeOrSubtype,
+            | ConstraintDescription::Values(_) => ConstraintScope::SingleInstanceOfTypeOrSubtype,
 
-            ConstraintDescription::Cardinality(_) => ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes,
+            ConstraintDescription::Cardinality(_) => ConstraintScope::AllInstancesOfSiblingTypeOrSubtypes,
 
-            ConstraintDescription::Unique(_) => ConstraintValidationMode::AllInstancesOfTypeOrSubtypes,
+            ConstraintDescription::Unique(_) => ConstraintScope::AllInstancesOfTypeOrSubtypes,
         }
     }
 
     pub(crate) fn unchecked(&self) -> bool {
         match self {
             ConstraintDescription::Cardinality(cardinality) => cardinality == &AnnotationCardinality::unchecked(),
+            ConstraintDescription::Independent(_) => true,
             _ => false,
         }
     }
@@ -169,8 +170,12 @@ pub trait Constraint<T>: Sized + Clone + Hash + PartialEq {
         self.description().category()
     }
 
-    fn validation_mode(&self) -> ConstraintValidationMode {
-        self.description().validation_mode()
+    fn scope(&self) -> ConstraintScope {
+        self.description().scope()
+    }
+
+    fn unchecked(&self) -> bool {
+        self.description().unchecked()
     }
 
     fn validate_cardinality(&self, count: u64) -> Result<(), ConstraintError> {
@@ -269,22 +274,12 @@ impl<CAP: Capability<'static>> Constraint<CAP> for CapabilityConstraint<CAP> {
 // of the same object type (e.g. they are owned by the same type, they are played by the same type)
 // with "i1 isa $x; i2 isa $x;"
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum ConstraintValidationMode {
+pub enum ConstraintScope {
     SingleInstanceOfType,
     SingleInstanceOfTypeOrSubtype,
     AllInstancesOfSiblingTypeOrSubtypes,
     AllInstancesOfTypeOrSubtypes,
 }
-
-macro_rules! filter_by_constraint_description_match {
-    ($constraints_iter:expr, $pattern:pat) => {
-        $constraints_iter.filter(|constraint| {
-            let description = constraint.description();
-            matches!(description, $pattern)
-        })
-    };
-}
-pub use filter_by_constraint_description_match;
 
 macro_rules! filter_by_constraint_category {
     ($constraints_iter:expr, $constraint_category:ident) => {
@@ -292,6 +287,15 @@ macro_rules! filter_by_constraint_category {
     };
 }
 pub use filter_by_constraint_category;
+
+macro_rules! filter_out_unchecked_constraints {
+    ($constraints_iter:expr) => {
+        $constraints_iter.filter(|constraint| !constraint.unchecked())
+    };
+}
+pub use filter_out_unchecked_constraints;
+
+
 use crate::thing::thing_manager::validation::DataValidationError;
 use crate::thing::thing_manager::validation::validation::get_label_or_data_err;
 use crate::type_::Ordering;
@@ -397,6 +401,12 @@ pub(crate) fn get_values_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
 }
 
 
+pub(crate) fn get_checked_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
+    constraints: impl IntoIterator<Item = &C>,
+) -> HashSet<C> {
+    filter_out_unchecked_constraints!(constraints.into_iter()).collect()
+}
+
 pub(crate) fn get_owns_default_constraints<CAP: Capability<'static>>(
     source: CAP,
     ordering: Ordering
@@ -433,48 +443,6 @@ pub(crate) fn get_relates_default_constraints<CAP: Capability<'static>>(
     }
 
     constraints
-}
-
-// TODO: Use constraints!
-pub(crate) fn annotations_by_validation_modes<'a, A: Into<Annotation> + Clone + 'a>(
-    annotations: impl IntoIterator<Item = A>,
-) -> Result<HashMap<&'static ConstraintValidationMode, HashSet<Annotation>>, AnnotationError> {
-    let mut map: HashMap<&ConstraintValidationMode, HashSet<Annotation>> = HashMap::new();
-
-    for annotation in annotations.into_iter() {
-        let annotation = annotation.clone().into();
-        let modes = constraint_validation_mode(annotation.category());
-
-        for mode in modes {
-            map.entry(mode).or_insert_with(HashSet::default).insert(annotation.clone());
-        }
-    }
-
-    Ok(map)
-}
-
-// TODO: Use constraints!
-pub(crate) fn constraint_validation_mode(
-    annotation_category: AnnotationCategory,
-) -> &'static [ConstraintValidationMode] {
-    match annotation_category {
-        AnnotationCategory::Abstract => &[ConstraintValidationMode::SingleInstanceOfType],
-        AnnotationCategory::Distinct => &[ConstraintValidationMode::SingleInstanceOfTypeOrSubtype],
-        AnnotationCategory::Unique => &[ConstraintValidationMode::AllInstancesOfTypeOrSubtypes],
-        AnnotationCategory::Cardinality => &[ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes],
-        AnnotationCategory::Key => { // TODO: use ConstraintCategory or something like that not to face Key...
-            // WARNING: must match Unique + Cardinality checks!
-            &[
-                ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes,
-                ConstraintValidationMode::AllInstancesOfTypeOrSubtypes,
-            ]
-        }
-        AnnotationCategory::Regex => &[ConstraintValidationMode::SingleInstanceOfTypeOrSubtype],
-        AnnotationCategory::Range => &[ConstraintValidationMode::SingleInstanceOfTypeOrSubtype],
-        AnnotationCategory::Values => &[ConstraintValidationMode::SingleInstanceOfTypeOrSubtype],
-        AnnotationCategory::Cascade => &[],
-        AnnotationCategory::Independent => &[],
-    }
 }
 
 #[derive(Debug, Clone)]

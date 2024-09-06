@@ -48,7 +48,7 @@ use crate::{
         Capability, EdgeAbstract, KindAPI, Ordering, TypeAPI,
     },
 };
-use crate::type_::constraint::{CapabilityConstraint, Constraint, ConstraintDescription, ConstraintValidationMode, get_cardinality_constraint_opt, get_distinct_constraints, get_owns_default_constraints, get_plays_default_constraints, get_relates_default_constraints, TypeConstraint};
+use crate::type_::constraint::{CapabilityConstraint, Constraint, ConstraintDescription, ConstraintScope, get_cardinality_constraint_opt, get_distinct_constraints, get_owns_default_constraints, get_plays_default_constraints, get_relates_default_constraints, TypeConstraint};
 use crate::type_::plays::Plays;
 
 pub struct TypeReader {}
@@ -604,21 +604,21 @@ impl TypeReader {
             let declared_annotations = Self::get_type_annotations_declared(snapshot, curr_type.clone())?;
             for annotation in declared_annotations {
                 for constraint in annotation.clone().into().into_type_constraints(curr_type.clone()) {
-                    match constraint.validation_mode() {
-                        ConstraintValidationMode::SingleInstanceOfType => {
+                    match constraint.scope() {
+                        ConstraintScope::SingleInstanceOfType => {
                             if &constraint.source() != &type_ {
                                 continue
                             }
                         },
 
-                        ConstraintValidationMode::AllInstancesOfTypeOrSubtypes => {
+                        ConstraintScope::AllInstancesOfTypeOrSubtypes => {
                             if let Some(duplicate) = all_constraints.iter().find(|saved_constraint| saved_constraint.category() == constraint.category()) {
                                 all_constraints.remove(duplicate);
                             }
                         },
 
-                        ConstraintValidationMode::SingleInstanceOfTypeOrSubtype
-                        | ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes => {}
+                        ConstraintScope::SingleInstanceOfTypeOrSubtype
+                        | ConstraintScope::AllInstancesOfSiblingTypeOrSubtypes => {}
                     }
                     all_constraints.insert(constraint);
                 }
@@ -713,14 +713,14 @@ impl TypeReader {
 
         for current_capability in capabilities_for_interface_type {
             for constraint in TypeReader::get_capability_constraints(snapshot, current_capability)? {
-                match constraint.validation_mode() {
-                    ConstraintValidationMode::SingleInstanceOfType => { // is checked only for source, no need to carry it
+                match constraint.scope() {
+                    ConstraintScope::SingleInstanceOfType => { // is checked only for source, no need to carry it
                         if &constraint.source() != &object_capability {
                             continue
                         }
                     },
 
-                    ConstraintValidationMode::AllInstancesOfTypeOrSubtypes => {
+                    ConstraintScope::AllInstancesOfTypeOrSubtypes => {
                         if let Some(duplicate) = all_constraints.iter().find(|saved_constraint| saved_constraint.category() == constraint.category()) {
                             let duplicate_source_supertypes = TypeReader::get_supertypes_transitive(snapshot, duplicate.source().interface())?;
                             if duplicate_source_supertypes.contains(&constraint.source().interface()) {
@@ -731,8 +731,8 @@ impl TypeReader {
                         }
                     },
 
-                    ConstraintValidationMode::SingleInstanceOfTypeOrSubtype
-                    | ConstraintValidationMode::AllInstancesOfSiblingTypeOrSubtypes => {}
+                    ConstraintScope::SingleInstanceOfTypeOrSubtype
+                    | ConstraintScope::AllInstancesOfSiblingTypeOrSubtypes => {}
                 }
                 all_constraints.insert(constraint);
             }
