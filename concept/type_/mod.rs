@@ -244,7 +244,7 @@ pub trait OwnerAPI<'a>: TypeAPI<'a> {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError>;
 
-    fn get_owns_with_hidden<'m>(
+    fn get_owns_with_specialized<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
@@ -396,7 +396,7 @@ pub trait PlayerAPI<'a>: TypeAPI<'a> {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError>;
 
-    fn get_plays_with_hidden<'m>(
+    fn get_plays_with_specialized<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,

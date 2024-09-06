@@ -314,12 +314,12 @@ impl TypeCache {
         &T::get_cache(self, type_).object_cache().owns
     }
 
-    pub(crate) fn get_owns_with_hidden<'a, 'this, T, CACHE>(&'this self, type_: T) -> &HashSet<Owns<'static>>
+    pub(crate) fn get_owns_with_specialized<'a, 'this, T, CACHE>(&'this self, type_: T) -> &HashSet<Owns<'static>>
         where
             T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
             CACHE: HasObjectCache + 'this,
     {
-        &T::get_cache(self, type_).object_cache().owns_with_hidden
+        &T::get_cache(self, type_).object_cache().owns_with_specialized
     }
 
     pub(crate) fn get_role_type_ordering(&self, role_type: RoleType<'_>) -> Ordering {
@@ -345,15 +345,8 @@ impl TypeCache {
         &RelationType::get_cache(self, relation_type).relates
     }
 
-    pub(crate) fn get_relation_type_relates_with_hidden(&self, relation_type: RelationType<'_>) -> &HashSet<Relates<'static>> {
-        &RelationType::get_cache(self, relation_type).relates_with_hidden
-    }
-
-    pub(crate) fn get_relation_types_with_relates<'c>(
-        &'c self,
-        relates: Relates<'c>,
-    ) -> &'c HashSet<RelationType<'static>> {
-        &self.relates.get(&relates).unwrap().common_capability_cache.object_types_with_capability
+    pub(crate) fn get_relation_type_relates_with_specialized(&self, relation_type: RelationType<'_>) -> &HashSet<Relates<'static>> {
+        &RelationType::get_cache(self, relation_type).relates_with_specialized
     }
 
     pub(crate) fn get_relates_annotations_declared<'c>(
@@ -416,12 +409,12 @@ impl TypeCache {
         &T::get_cache(self, type_).object_cache().plays
     }
 
-    pub(crate) fn get_plays_with_hidden<'a, 'this, T, CACHE>(&'this self, type_: T) -> &'this HashSet<Plays<'static>>
+    pub(crate) fn get_plays_with_specialized<'a, 'this, T, CACHE>(&'this self, type_: T) -> &'this HashSet<Plays<'static>>
         where
             T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
             CACHE: HasObjectCache + 'this,
     {
-        &T::get_cache(self, type_).object_cache().plays_with_hidden
+        &T::get_cache(self, type_).object_cache().plays_with_specialized
     }
 
     pub(crate) fn get_plays_specialises<'c>(&'c self, plays: Plays<'c>) -> &'c Option<Plays<'static>> {
@@ -438,13 +431,6 @@ impl TypeCache {
 
     pub(crate) fn get_plays_specialising_transitive<'c>(&'c self, plays: Plays<'c>) -> &'c Vec<Plays<'static>> {
         &self.plays.get(&plays).unwrap().common_capability_cache.specialising_transitive
-    }
-
-    pub(crate) fn get_object_types_with_plays<'c>(
-        &'c self,
-        plays: Plays<'c>,
-    ) -> &'c HashSet<ObjectType<'static>> {
-        &self.plays.get(&plays).unwrap().common_capability_cache.object_types_with_capability
     }
 
     pub(crate) fn get_plays_annotations_declared<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<PlaysAnnotation> {
@@ -470,13 +456,6 @@ impl TypeCache {
         attribute_type: AttributeType<'_>,
     ) -> &Option<(ValueType, AttributeType<'static>)> {
         &AttributeType::get_cache(self, attribute_type).value_type
-    }
-
-    pub(crate) fn get_object_types_with_owns<'c>(
-        &'c self,
-        owns: Owns<'c>,
-    ) -> &'c HashSet<ObjectType<'static>> {
-        &self.owns.get(&owns).unwrap().common_capability_cache.object_types_with_capability
     }
 
     pub(crate) fn get_owns_annotations_declared<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<OwnsAnnotation> {

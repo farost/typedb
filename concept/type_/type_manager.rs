@@ -202,25 +202,6 @@ macro_rules! get_type_label_methods {
     }
 }
 
-macro_rules! get_object_types_with_capability_methods {
-    ($(
-        fn $method_name:ident($capability:ident) -> $object_type:ident = $reader_method:ident | $cache_method:ident;
-    )*) => {
-        $(
-            pub(crate) fn $method_name(
-                &self, snapshot: &impl ReadableSnapshot, capability: $capability<'static>
-            ) -> Result<MaybeOwns<'_, HashSet<$object_type>>, ConceptReadError> {
-                 if let Some(cache) = &self.type_cache {
-                    Ok(MaybeOwns::Borrowed(cache.$cache_method(type_)))
-                } else {
-                    let annotations = TypeReader::$reader_method(snapshot, type_)?;
-                    Ok(MaybeOwns::Owned(annotations))
-                }
-            }
-        )*
-    }
-}
-
 macro_rules! get_annotations_declared_methods {
     ($(
         fn $method_name:ident($type_:ident) -> $annotation_type:ident = $reader_method:ident | $cache_method:ident;
@@ -613,13 +594,13 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_relation_type_relates_with_hidden(
+    pub(crate) fn get_relation_type_relates_with_specialized(
         &self,
         snapshot: &impl ReadableSnapshot,
         relation_type: RelationType<'static>,
     ) -> Result<MaybeOwns<'_, HashSet<Relates<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_relation_type_relates_with_hidden(relation_type)))
+            Ok(MaybeOwns::Borrowed(cache.get_relation_type_relates_with_specialized(relation_type)))
         } else {
             let relates = TypeReader::get_capabilities::<Relates<'static>>(snapshot, relation_type.clone(), true)?;
             Ok(MaybeOwns::Owned(relates))
@@ -704,13 +685,13 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_entity_type_owns_with_hidden(
+    pub(crate) fn get_entity_type_owns_with_specialized(
         &self,
         snapshot: &impl ReadableSnapshot,
         entity_type: EntityType<'static>,
     ) -> Result<MaybeOwns<'_, HashSet<Owns<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_owns_with_hidden(entity_type)))
+            Ok(MaybeOwns::Borrowed(cache.get_owns_with_specialized(entity_type)))
         } else {
             let owns = TypeReader::get_capabilities::<Owns<'static>>(snapshot, entity_type.into_owned_object_type(), true)?;
             Ok(MaybeOwns::Owned(owns))
@@ -730,13 +711,13 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_relation_type_owns_with_hidden(
+    pub(crate) fn get_relation_type_owns_with_specialized(
         &self,
         snapshot: &impl ReadableSnapshot,
         relation_type: RelationType<'static>,
     ) -> Result<MaybeOwns<'_, HashSet<Owns<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_owns_with_hidden(relation_type)))
+            Ok(MaybeOwns::Borrowed(cache.get_owns_with_specialized(relation_type)))
         } else {
             let owns = TypeReader::get_capabilities::<Owns<'static>>(snapshot, relation_type.into_owned_object_type(), true)?;
             Ok(MaybeOwns::Owned(owns))
@@ -787,13 +768,13 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_entity_type_plays_with_hidden(
+    pub(crate) fn get_entity_type_plays_with_specialized(
         &self,
         snapshot: &impl ReadableSnapshot,
         entity_type: EntityType<'static>,
     ) -> Result<MaybeOwns<'_, HashSet<Plays<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_plays_with_hidden(entity_type)))
+            Ok(MaybeOwns::Borrowed(cache.get_plays_with_specialized(entity_type)))
         } else {
             let plays = TypeReader::get_capabilities::<Plays<'static>>(snapshot, entity_type.into_owned_object_type(), true)?;
             Ok(MaybeOwns::Owned(plays))
@@ -827,13 +808,13 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_relation_type_plays_with_hidden(
+    pub(crate) fn get_relation_type_plays_with_specialized(
         &self,
         snapshot: &impl ReadableSnapshot,
         relation_type: RelationType<'static>,
     ) -> Result<MaybeOwns<'_, HashSet<Plays<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_plays_with_hidden(relation_type)))
+            Ok(MaybeOwns::Borrowed(cache.get_plays_with_specialized(relation_type)))
         } else {
             let plays =
                 TypeReader::get_capabilities::<Plays<'static>>(snapshot, relation_type.into_owned_object_type(), true)?;
@@ -1021,12 +1002,6 @@ impl TypeManager {
         } else {
             Ok(MaybeOwns::Owned(TypeReader::get_specialising_capabilities_transitive(snapshot, relates)?))
         }
-    }
-
-    get_object_types_with_capability_methods! {
-        fn get_owns_annotations_declared(Owns) -> ObjectType = get_object_types_with_capability | get_object_types_with_owns;
-        fn get_plays_annotations_declared(Plays) -> ObjectType = get_object_types_with_capability | get_object_types_with_plays;
-        fn get_relates_annotations_declared(Relates) -> RelationType = get_object_types_with_capability | get_relation_types_with_relates;
     }
 
     get_annotations_declared_methods! {
@@ -1788,12 +1763,12 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_owns_and_specialising_owns_instances_on_attribute_supertype_change(
+        OperationTimeValidation::validate_affected_constraints_compatible_with_owns_instances_on_attribute_supertype_change(
             snapshot,
             self,
             thing_manager,
             subtype.clone(),
-            Some(supertype.clone()),
+            supertype.clone(),
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
@@ -1832,12 +1807,11 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_owns_and_specialising_owns_instances_on_attribute_supertype_change(
+        OperationTimeValidation::validate_affected_constraints_compatible_with_owns_instances_on_attribute_supertype_unset(
             snapshot,
             self,
             thing_manager,
             subtype.clone(),
-            None, // supertype is unset
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
@@ -1870,7 +1844,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_owns_and_overriding_owns_instances_on_object_supertype_change(
+        OperationTimeValidation::validate_updated_constraints_compatible_with_owns_instances_on_object_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -1895,7 +1869,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_plays_and_overriding_plays_instances_on_object_supertype_change(
+        OperationTimeValidation::validate_updated_constraints_compatible_with_plays_instances_on_object_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -2025,7 +1999,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_relates_and_overriding_relates_instances_on_relation_supertype_change(
+        OperationTimeValidation::validate_updated_constraints_compatible_with_relates_instances_on_relation_supertype_change(
             snapshot,
             self,
             thing_manager,
@@ -2529,21 +2503,21 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_relates_and_specialising_relates_instances_on_role_supertype_change(
+        OperationTimeValidation::validate_affected_constraints_compatible_with_relates_instances_on_role_supertype_change(
             snapshot,
             self,
             thing_manager,
             subtype.clone(),
-            Some(supertype.clone()),
+            supertype.clone(),
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_plays_and_specialising_plays_instances_on_role_supertype_change(
+        OperationTimeValidation::validate_affected_constraints_compatible_with_plays_instances_on_role_supertype_change(
             snapshot,
             self,
             thing_manager,
             subtype.clone(),
-            Some(supertype.clone()),
+            supertype.clone(),
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
@@ -2585,21 +2559,19 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_relates_and_specialising_relates_instances_on_role_supertype_change(
+        OperationTimeValidation::validate_affected_constraints_compatible_with_relates_instances_on_role_supertype_unset(
             snapshot,
             self,
             thing_manager,
             role_type.clone(),
-            None, // supertype is unset
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_updated_annotations_compatible_with_plays_and_specialising_plays_instances_on_role_supertype_change(
+        OperationTimeValidation::validate_affected_constraints_compatible_with_plays_instances_on_role_supertype_unset(
             snapshot,
             self,
             thing_manager,
             role_type.clone(),
-            None, // supertype is unset
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
@@ -2619,7 +2591,7 @@ impl TypeManager {
         OperationTimeValidation::validate_owns_distinct_constraint_ordering(snapshot, self, owns.clone(), None, Some(true))
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_new_annotation_compatible_with_owns_and_overriding_owns_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_owns_instances(
             snapshot,
             self,
             thing_manager,
@@ -2649,7 +2621,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_new_annotation_compatible_with_relates_and_overriding_relates_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_relates_instances(
             snapshot,
             self,
             thing_manager,
@@ -2687,7 +2659,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_new_annotation_compatible_with_owns_and_overriding_owns_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_owns_instances(
             snapshot,
             self,
             thing_manager,
@@ -2727,7 +2699,7 @@ impl TypeManager {
 
         self.validate_updated_capability_cardinality_against_schema(snapshot, owns.clone(), AnnotationKey::CARDINALITY, true)?;
 
-        OperationTimeValidation::validate_new_annotation_compatible_with_owns_and_overriding_owns_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_owns_instances(
             snapshot,
             self,
             thing_manager,
@@ -2755,7 +2727,7 @@ impl TypeManager {
             if updated_cardinality != owns.get_cardinality(snapshot, self)? {
                 self.validate_updated_capability_cardinality_against_schema(snapshot, owns.clone(), updated_cardinality, false)?;
 
-                OperationTimeValidation::validate_new_annotation_compatible_with_owns_and_overriding_owns_instances(
+                OperationTimeValidation::validate_new_annotation_constraints_compatible_with_owns_instances(
                     snapshot,
                     self,
                     thing_manager,
@@ -2781,7 +2753,7 @@ impl TypeManager {
         self.validate_set_capability_annotation_general(snapshot, owns.clone(), annotation.clone())?;
         self.validate_updated_capability_cardinality_against_schema(snapshot, owns.clone(), cardinality, false)?;
 
-        OperationTimeValidation::validate_new_annotation_compatible_with_owns_and_overriding_owns_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_owns_instances(
             snapshot,
             self,
             thing_manager,
@@ -2809,7 +2781,7 @@ impl TypeManager {
             if updated_cardinality != owns.get_cardinality(snapshot, self)? {
                 self.validate_updated_capability_cardinality_against_schema(snapshot, owns.clone(), updated_cardinality, false)?;
 
-                OperationTimeValidation::validate_new_annotation_compatible_with_owns_and_overriding_owns_instances(
+                OperationTimeValidation::validate_new_annotation_constraints_compatible_with_owns_instances(
                     snapshot,
                     self,
                     thing_manager,
@@ -2835,7 +2807,7 @@ impl TypeManager {
         self.validate_set_capability_annotation_general(snapshot, plays.clone(), annotation.clone())?;
         self.validate_updated_capability_cardinality_against_schema(snapshot, plays.clone(), cardinality, false)?;
 
-        OperationTimeValidation::validate_new_annotation_compatible_with_plays_and_overriding_plays_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_plays_instances(
             snapshot,
             self,
             thing_manager,
@@ -2863,7 +2835,7 @@ impl TypeManager {
             if updated_cardinality != plays.get_cardinality(snapshot, self)? {
                 self.validate_updated_capability_cardinality_against_schema(snapshot, plays.clone(), updated_cardinality, false)?;
 
-                OperationTimeValidation::validate_new_annotation_compatible_with_plays_and_overriding_plays_instances(
+                OperationTimeValidation::validate_new_annotation_constraints_compatible_with_plays_instances(
                     snapshot,
                     self,
                     thing_manager,
@@ -2889,7 +2861,7 @@ impl TypeManager {
         self.validate_set_capability_annotation_general(snapshot, relates.clone(), annotation.clone())?;
         self.validate_updated_capability_cardinality_against_schema(snapshot, relates.clone(), cardinality, false)?;
 
-        OperationTimeValidation::validate_new_annotation_compatible_with_relates_and_overriding_relates_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_relates_instances(
             snapshot,
             self,
             thing_manager,
@@ -2917,7 +2889,7 @@ impl TypeManager {
             if updated_cardinality != relates.get_cardinality(snapshot, self)? {
                 self.validate_updated_capability_cardinality_against_schema(snapshot, relates.clone(), updated_cardinality, false)?;
 
-                OperationTimeValidation::validate_new_annotation_compatible_with_relates_and_overriding_relates_instances(
+                OperationTimeValidation::validate_new_annotation_constraints_compatible_with_relates_instances(
                     snapshot,
                     self,
                     thing_manager,
@@ -3033,7 +3005,7 @@ impl TypeManager {
         OperationTimeValidation::validate_specialising_capabilities_narrow_regex(snapshot, self, owns.clone(), regex.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_new_annotation_compatible_with_owns_and_overriding_owns_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_owns_instances(
             snapshot,
             self,
             thing_manager,
@@ -3200,7 +3172,7 @@ impl TypeManager {
 
         // TODO: Maybe for the future: check if compatible with existing VALUES annotation
 
-        OperationTimeValidation::validate_new_annotation_compatible_with_owns_and_overriding_owns_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_owns_instances(
             snapshot,
             self,
             thing_manager,
@@ -3332,7 +3304,7 @@ impl TypeManager {
 
         // TODO: Maybe for the future: check if compatible with existing RANGE annotation
 
-        OperationTimeValidation::validate_new_annotation_compatible_with_owns_and_overriding_owns_instances(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_owns_instances(
             snapshot,
             self,
             thing_manager,

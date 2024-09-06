@@ -47,7 +47,7 @@ pub(crate) struct RelationTypeCache {
     pub(super) common_type_cache: CommonTypeCache<RelationType<'static>>,
     pub(super) relates_declared: HashSet<Relates<'static>>,
     pub(super) relates: HashSet<Relates<'static>>,
-    pub(super) relates_with_hidden: HashSet<Relates<'static>>,
+    pub(super) relates_with_specialized: HashSet<Relates<'static>>,
     pub(super) object_cache: ObjectCache,
 }
 
@@ -102,7 +102,6 @@ pub(crate) struct CommonTypeCache<T: KindAPI<'static>> {
 #[derive(Debug)]
 pub(crate) struct CommonCapabilityCache<CAP: Capability<'static>> {
     pub(super) capability: CAP,
-    pub(super) object_types_with_capability: HashSet<CAP::ObjectType>,
     pub(super) specialises: Option<CAP>,
     pub(super) specialises_transitive: Vec<CAP>,
     pub(super) specialising: HashSet<CAP>,
@@ -115,10 +114,10 @@ pub(crate) struct CommonCapabilityCache<CAP: Capability<'static>> {
 pub struct ObjectCache {
     pub(super) owns_declared: HashSet<Owns<'static>>,
     pub(super) owns: HashSet<Owns<'static>>,
-    pub(super) owns_with_hidden: HashSet<Owns<'static>>,
+    pub(super) owns_with_specialized: HashSet<Owns<'static>>,
     pub(super) plays_declared: HashSet<Plays<'static>>,
     pub(super) plays: HashSet<Plays<'static>>,
-    pub(super) plays_with_hidden: HashSet<Plays<'static>>,
+    pub(super) plays_with_specialized: HashSet<Plays<'static>>,
 }
 
 impl EntityTypeCache {
@@ -159,7 +158,7 @@ impl RelationTypeCache {
                 relates_declared: TypeReader::get_capabilities_declared::<Relates<'static>>(snapshot, relation.clone())
                     .unwrap(),
                 relates: TypeReader::get_capabilities::<Relates<'static>>(snapshot, relation.clone(), false).unwrap(),
-                relates_with_hidden: TypeReader::get_capabilities::<Relates<'static>>(snapshot, relation.clone(), true).unwrap(),
+                relates_with_specialized: TypeReader::get_capabilities::<Relates<'static>>(snapshot, relation.clone(), true).unwrap(),
             };
             caches[relation.vertex().type_id_().as_u16() as usize] = Some(cache);
         }
@@ -317,7 +316,6 @@ impl<CAP: Capability<'static>> CommonCapabilityCache<CAP> {
         where
             Snapshot: ReadableSnapshot,
     {
-        let object_types_with_capability = TypeReader::get_object_types_with_capability(snapshot, capability.clone()).unwrap();
         let annotations_declared = TypeReader::get_capability_annotations_declared(snapshot, capability.clone()).unwrap();
         let constraints = TypeReader::get_capability_constraints(snapshot, capability.clone()).unwrap();
         let specialises = TypeReader::get_type_capability_specialises(snapshot, capability.clone()).unwrap();
@@ -325,7 +323,6 @@ impl<CAP: Capability<'static>> CommonCapabilityCache<CAP> {
         let specialising = TypeReader::get_specialising_capabilities(snapshot, capability.clone()).unwrap();
         let specialising_transitive = TypeReader::get_specialising_capabilities_transitive(snapshot, capability.clone()).unwrap();
         CommonCapabilityCache {
-            object_types_with_capability,
             capability,
             annotations_declared,
             constraints,
@@ -348,11 +345,11 @@ impl ObjectCache {
             owns_declared: TypeReader::get_capabilities_declared::<Owns<'static>>(snapshot, object_type.clone())
                 .unwrap(),
             owns: TypeReader::get_capabilities::<Owns<'static>>(snapshot, object_type.clone(), false).unwrap(),
-            owns_with_hidden: TypeReader::get_capabilities::<Owns<'static>>(snapshot, object_type.clone(), true).unwrap(),
+            owns_with_specialized: TypeReader::get_capabilities::<Owns<'static>>(snapshot, object_type.clone(), true).unwrap(),
             plays_declared: TypeReader::get_capabilities_declared::<Plays<'static>>(snapshot, object_type.clone())
                 .unwrap(),
             plays: TypeReader::get_capabilities::<Plays<'static>>(snapshot, object_type.clone(), false).unwrap(),
-            plays_with_hidden: TypeReader::get_capabilities::<Plays<'static>>(snapshot, object_type.clone(), true).unwrap(),
+            plays_with_specialized: TypeReader::get_capabilities::<Plays<'static>>(snapshot, object_type.clone(), true).unwrap(),
         }
     }
 }

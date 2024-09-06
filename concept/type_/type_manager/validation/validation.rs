@@ -555,7 +555,7 @@ pub(crate) fn validate_sibling_owns_ordering_match_for_type(
 ) -> Result<(), SchemaValidationError> {
     let mut attribute_types_ordering: HashMap<AttributeType<'static>, (AttributeType<'static>, Ordering)> = HashMap::new();
     let existing_owns = owner_type
-        .get_owns_with_hidden(snapshot, type_manager)
+        .get_owns_with_specialized(snapshot, type_manager)
         .map_err(SchemaValidationError::ConceptRead)?
         .into_iter()
         .filter(|owns| !new_set_owns_orderings.contains_key(*owns))

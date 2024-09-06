@@ -233,7 +233,7 @@ impl TypeReader {
     pub(crate) fn get_supertypes_transitive<T: TypeAPI<'static>>(
         snapshot: &impl ReadableSnapshot,
         subtype: T,
-    ) -> Result<Vec<T>, ConceptReadError> {
+    ) -> Result<Vec<T>, ConceptReadError> { // Attention: it is important to be ordered!
         let mut supertypes: Vec<T> = Vec::new();
         let mut supertype_opt = TypeReader::get_supertype(snapshot, subtype.clone())?;
         while let Some(supertype) = supertype_opt {
@@ -432,7 +432,9 @@ impl TypeReader {
         Ok(capabilities)
     }
 
-    pub(crate) fn get_object_types_with_capability<CAP: Capability<'static>>(
+    // Do not expose this method as there is a risk of misuse (it doesn't search for specialised capabilities).
+    // If needed, make two explicit methods: with_capability and with_capability_including_specialised or smth
+    fn get_object_types_with_capability<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         capability: CAP,
     ) -> Result<HashSet<CAP::ObjectType>, ConceptReadError> {
@@ -440,10 +442,6 @@ impl TypeReader {
 
         let all_subtypes = TypeAPI::chain_types(capability.object(), Self::get_subtypes_transitive(snapshot, capability.object())?.into_iter());
         for object_type in all_subtypes {
-            if object_types.contains(&object_type) {
-                continue;
-            }
-
             let object_type_capabilities = TypeReader::get_capabilities(snapshot, object_type.clone(), false)?;
             if object_type_capabilities.contains(&capability) {
                 object_types.insert(object_type.clone());

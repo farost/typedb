@@ -36,7 +36,6 @@ pub(crate) mod validation;
 pub enum SchemaValidationError {
     // TODO: Should probably send types themselves instead of labels here... Not sure how we are going to parse errors!
     ConceptRead(ConceptReadError),
-    DataValidation(DataValidationError),
     LabelShouldBeUnique {
         label: Label<'static>,
         existing_kind: Kind,
@@ -218,45 +217,19 @@ pub enum SchemaValidationError {
         Label<'static>,
         Label<'static>,
     ),
-    CannotAcquireCapabilityAsExistingInstancesViolateItsConstraint(
-        CapabilityKind,
-        AnnotationCategory,
-        Label<'static>,
-        Label<'static>,
-        Vec<(Label<'static>, Label<'static>)>,
+    CannotAcquireCapabilityAsExistingInstancesViolateItsConstraint(DataValidationError),
+    CannotSetAnnotationForCapabilityAsExistingInstancesViolateItsConstraint(DataValidationError),
+    CannotChangeSupertypeAsUpdatedCapabilityConstraintIsViolatedByExistingInstances(
+        DataValidationError
     ),
-    CannotSetAnnotationForCapabilityAsExistingInstancesViolateItsConstraint(
-        CapabilityKind,
-        AnnotationCategory,
-        Label<'static>,
-        Label<'static>,
-        Vec<(Label<'static>, Label<'static>)>,
+    CannotChangeInterfaceTypeSupertypeAsUpdatedCapabilityConstraintIsViolatedByExistingInstances(
+        DataValidationError
     ),
-    CannotChangeSupertypeAsUpdatedAnnotationsConstraintOnCapabilityOrNewAcquiredCapabilityIsViolatedByExistingInstances(
-        CapabilityKind,
-        AnnotationCategory,
-        Label<'static>,
-        Label<'static>,
-        Label<'static>,
-        Label<'static>,
-        Vec<(Label<'static>, Label<'static>)>,
+    CannotUnsetInterfaceTypeSupertypeAsUpdatedCapabilityConstraintIsViolatedByExistingInstances(
+        DataValidationError
     ),
-    CannotChangeCapabilityOverrideAsUpdatedAnnotationsConstraintIsViolatedByExistingInstances(
-        CapabilityKind,
-        AnnotationCategory,
-        Label<'static>,
-        Label<'static>,
-        Option<Label<'static>>,
-        Option<Label<'static>>,
-        Vec<(Label<'static>, Label<'static>)>,
-    ),
-    CannotSetAnnotationAsExistingInstancesViolateItsConstraint(AnnotationCategory, Label<'static>, Vec<Label<'static>>),
-    CannotChangeSupertypeAsUpdatedAnnotationsConstraintIsViolatedByExistingInstances(
-        AnnotationCategory,
-        Label<'static>,
-        Label<'static>,
-        Vec<Label<'static>>,
-    ),
+    CannotSetAnnotationAsExistingInstancesViolateItsConstraint(DataValidationError),
+    CannotChangeSupertypeAsUpdatedConstraintIsViolatedByExistingInstances(DataValidationError),
 }
 
 impl fmt::Display for SchemaValidationError {
@@ -269,7 +242,6 @@ impl Error for SchemaValidationError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::ConceptRead(source) => Some(source),
-            Self::DataValidation(source) => Some(source),
             Self::LabelShouldBeUnique { .. } => None,
             Self::StructNameShouldBeUnique(_) => None,
             Self::StructShouldHaveAtLeastOneField(_) => None,
@@ -297,7 +269,6 @@ impl Error for SchemaValidationError {
             Self::HiddenPlaysIsNotInheritedByObjectType(_, _) => None,
             Self::CannotSetOwnsBecauseItIsAlreadySetWithDifferentOrdering(_, _, _) => None,
             Self::InvalidOrderingForDistinctConstraint(_) => None,
-            Self::NonAbstractTypeCannotHaveAbstractInterfaceCapability(_, _, _) => None,
             Self::AttributeTypeSupertypeIsNotAbstract(_) => None,
             Self::AbstractTypesSupertypeHasToBeAbstract(_, _) => None,
             Self::CannotUnsetAbstractnessAsItHasDeclaredCapabilityOfAbstractInterface(_, _, _) => None,
@@ -361,30 +332,20 @@ impl Error for SchemaValidationError {
             Self::CannotSetAbstractToTypeWithExistingInstances(_) => None,
             Self::CannotUnsetCapabilityWithExistingInstances(_, _, _, _) => None,
             Self::CannotSetAbstractToCapabilityWithExistingInstances(_, _, _, _) => None,
-            Self::CannotOverrideCapabilityAsItIsOverriddenForSubtype(_, _, _, _, _, _, _) => None,
             Self::CannotChangeSupertypeAsCapabilityIsLostWhileHavingHasInstances(_, _, _, _, _) => None,
-            Self::CannotAcquireCapabilityAsExistingInstancesViolateItsConstraint(_, _, _, _, _) => None,
-            Self::CannotSetAnnotationForCapabilityAsExistingInstancesViolateItsConstraint(_, _, _, _, _) => None,
-            Self::CannotChangeSupertypeAsUpdatedAnnotationsConstraintOnCapabilityOrNewAcquiredCapabilityIsViolatedByExistingInstances(
-                _,
-                _,
-                _,
-                _,
-                _,
-                _,
-                _,
-            ) => None,
-            Self::CannotChangeCapabilityOverrideAsUpdatedAnnotationsConstraintIsViolatedByExistingInstances(
-                _,
-                _,
-                _,
-                _,
-                _,
-                _,
-                _,
-            ) => None,
-            Self::CannotSetAnnotationAsExistingInstancesViolateItsConstraint(_, _, _) => None,
-            Self::CannotChangeSupertypeAsUpdatedAnnotationsConstraintIsViolatedByExistingInstances(_, _, _, _) => None,
+            Self::CannotAcquireCapabilityAsExistingInstancesViolateItsConstraint(source) => Some(source),
+            Self::CannotSetAnnotationForCapabilityAsExistingInstancesViolateItsConstraint(source) => Some(source),
+            Self::CannotChangeSupertypeAsUpdatedCapabilityConstraintIsViolatedByExistingInstances(
+                source,
+            ) => Some(source),
+            Self::CannotChangeInterfaceTypeSupertypeAsUpdatedCapabilityConstraintIsViolatedByExistingInstances(
+                source,
+            ) => Some(source),
+            Self::CannotUnsetInterfaceTypeSupertypeAsUpdatedCapabilityConstraintIsViolatedByExistingInstances(
+                source,
+            ) => Some(source),
+            Self::CannotSetAnnotationAsExistingInstancesViolateItsConstraint(source) => Some(source),
+            Self::CannotChangeSupertypeAsUpdatedConstraintIsViolatedByExistingInstances(source) => Some(source),
         }
     }
 }

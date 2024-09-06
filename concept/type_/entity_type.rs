@@ -300,12 +300,12 @@ impl<'a> OwnerAPI<'a> for EntityType<'a> {
         type_manager.get_entity_type_owns(snapshot, self.clone().into_owned())
     }
 
-    fn get_owns_with_hidden<'m>(
+    fn get_owns_with_specialized<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
-        type_manager.get_entity_type_owns_with_hidden(snapshot, self.clone().into_owned())
+        type_manager.get_entity_type_owns_with_specialized(snapshot, self.clone().into_owned())
     }
 
     fn get_type_owns_constraints<'m>(
@@ -418,12 +418,12 @@ impl<'a> PlayerAPI<'a> for EntityType<'a> {
         type_manager.get_entity_type_plays(snapshot, self.clone().into_owned())
     }
 
-    fn get_plays_with_hidden<'m>(
+    fn get_plays_with_specialized<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError> {
-        type_manager.get_entity_type_plays_with_hidden(snapshot, self.clone().into_owned())
+        type_manager.get_entity_type_plays_with_specialized(snapshot, self.clone().into_owned())
     }
 
     fn get_type_plays_constraints<'m>(
