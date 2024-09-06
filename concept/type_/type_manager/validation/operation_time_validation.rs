@@ -638,6 +638,35 @@ impl OperationTimeValidation {
         }
     }
 
+    pub(crate) fn validate_deleted_struct_is_not_used_in_schema(
+        snapshot: &impl ReadableSnapshot,
+        definition_key: &DefinitionKey<'static>,
+    ) -> Result<(), SchemaValidationError> {
+        let struct_definition = TypeReader::get_struct_definition(snapshot, definition_key.clone())
+            .map_err(SchemaValidationError::ConceptRead)?;
+
+        let usages_in_attribute_types = TypeReader::get_struct_definition_usages_in_attribute_types(snapshot)
+            .map_err(SchemaValidationError::ConceptRead)?;
+        if let Some(owners) = usages_in_attribute_types.get(definition_key) {
+            return Err(SchemaValidationError::StructCannotBeDeletedAsItsUsedAsValueTypeForAttributeTypes(
+                struct_definition.name,
+                owners.len(),
+            ));
+        }
+
+        let usages_in_struct_definition_fields =
+            TypeReader::get_struct_definition_usages_in_struct_definitions(snapshot)
+                .map_err(SchemaValidationError::ConceptRead)?;
+        if let Some(owners) = usages_in_struct_definition_fields.get(definition_key) {
+            return Err(SchemaValidationError::StructCannotBeDeletedAsItsUsedAsValueTypeForStructs(
+                struct_definition.name,
+                owners.len(),
+            ));
+        }
+
+        Ok(())
+    }
+
     pub(crate) fn validate_value_type_is_compatible_with_new_supertypes_value_type_transitive(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
@@ -1807,6 +1836,428 @@ impl OperationTimeValidation {
         Ok(())
     }
 
+    pub(crate) fn validate_declared_capability_annotation_is_compatible_with_declared_annotations<CAP>(
+        snapshot: &impl ReadableSnapshot,
+        edge: CAP,
+        annotation_category: AnnotationCategory,
+    ) -> Result<(), SchemaValidationError>
+    where
+        CAP: Capability<'static>,
+    {
+        let existing_annotations = TypeReader::get_capability_annotations_declared(snapshot, edge.clone())
+            .map_err(SchemaValidationError::ConceptRead)?;
+
+        for existing_annotation in existing_annotations {
+            let existing_annotation_category = existing_annotation.clone().into().category();
+            if !existing_annotation_category.declarable_alongside(annotation_category) {
+                let interface = edge.interface();
+                return Err(SchemaValidationError::AnnotationIsNotCompatibleWithDeclaredAnnotation(
+                    annotation_category,
+                    existing_annotation_category,
+                    get_label_or_schema_err(snapshot, interface)?,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn validate_owns_value_type_compatible_with_unique_annotation_transitive(
+        snapshot: &impl ReadableSnapshot,
+        owns: Owns<'static>,
+    ) -> Result<(), SchemaValidationError> {
+        for_capability_and_specialising_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
+            let value_type = TypeReader::get_value_type(snapshot, current_owns.attribute())
+                .map_err(SchemaValidationError::ConceptRead)?
+                .map(|(value_type, _)| value_type.clone());
+            Self::validate_owns_value_type_compatible_with_unique_annotation(snapshot, current_owns, value_type)
+        });
+        Ok(())
+    }
+
+    fn validate_owns_value_type_compatible_with_unique_annotation(
+        snapshot: &impl ReadableSnapshot,
+        owns: Owns<'static>,
+        value_type: Option<ValueType>,
+    ) -> Result<(), SchemaValidationError> {
+        if Self::is_owns_value_type_keyable(value_type.clone()) {
+            Ok(())
+        } else {
+            let owner = owns.owner();
+            let attribute_type = owns.attribute();
+            Err(SchemaValidationError::ValueTypeIsNotKeyableForUniqueAnnotation(
+                get_label_or_schema_err(snapshot, owner)?,
+                get_label_or_schema_err(snapshot, attribute_type)?,
+                value_type,
+            ))
+        }
+    }
+
+    pub(crate) fn validate_owns_value_type_compatible_with_key_annotation_transitive(
+        snapshot: &impl ReadableSnapshot,
+        owns: Owns<'static>,
+    ) -> Result<(), SchemaValidationError> {
+        for_capability_and_specialising_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
+            let value_type = TypeReader::get_value_type(snapshot, current_owns.attribute())
+                .map_err(SchemaValidationError::ConceptRead)?
+                .map(|(value_type, _)| value_type.clone());
+            Self::validate_owns_value_type_compatible_with_key_annotation(snapshot, current_owns, value_type)
+        });
+        Ok(())
+    }
+
+    fn validate_owns_value_type_compatible_with_key_annotation(
+        snapshot: &impl ReadableSnapshot,
+        owns: Owns<'static>,
+        value_type: Option<ValueType>,
+    ) -> Result<(), SchemaValidationError> {
+        if Self::is_owns_value_type_keyable(value_type.clone()) {
+            Ok(())
+        } else {
+            let owner = owns.owner();
+            let attribute_type = owns.attribute();
+            Err(SchemaValidationError::ValueTypeIsNotKeyableForKeyAnnotation(
+                get_label_or_schema_err(snapshot, owner)?,
+                get_label_or_schema_err(snapshot, attribute_type)?,
+                value_type,
+            ))
+        }
+    }
+
+    pub(crate) fn validate_attribute_type_value_type_compatible_with_annotations_transitive(
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+        attribute_type: AttributeType<'static>,
+        value_type: Option<ValueType>,
+    ) -> Result<(), SchemaValidationError> {
+        for_type_and_subtypes_transitive!(snapshot, type_manager, attribute_type, |type_: AttributeType<'static>| {
+            Self::validate_attribute_type_value_type_compatible_with_annotations_and_arguments(
+                snapshot,
+                type_manager,
+                type_,
+                value_type.clone(),
+            )
+        });
+        Ok(())
+    }
+
+    fn validate_attribute_type_value_type_compatible_with_annotations_and_arguments(
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+        attribute_type: AttributeType<'static>,
+        value_type: Option<ValueType>,
+    ) -> Result<(), SchemaValidationError> {
+        let annotations = attribute_type.get_annotations_declared(snapshot, type_manager)
+            .map_err(SchemaValidationError::ConceptRead)?;
+        for annotation in annotations {
+            match annotation {
+                AttributeTypeAnnotation::Regex(regex) => {
+                    Self::validate_annotation_regex_compatible_value_type(
+                        snapshot,
+                        attribute_type.clone(),
+                        value_type.clone(),
+                    )?;
+                    Self::validate_regex_arguments(regex)?
+                }
+                AttributeTypeAnnotation::Range(range) => {
+                    Self::validate_annotation_range_compatible_value_type(
+                        snapshot,
+                        attribute_type.clone(),
+                        value_type.clone(),
+                    )?;
+                    Self::validate_range_arguments(range, value_type.clone())?
+                }
+                AttributeTypeAnnotation::Values(values) => {
+                    Self::validate_annotation_values_compatible_value_type(
+                        snapshot,
+                        attribute_type.clone(),
+                        value_type.clone(),
+                    )?;
+                    Self::validate_values_arguments(values, value_type.clone())?
+                }
+                | AttributeTypeAnnotation::Abstract(_) | AttributeTypeAnnotation::Independent(_) => {}
+            }
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn validate_value_type_compatible_with_all_owns_annotations_transitive(
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+        attribute_type: AttributeType<'static>,
+        value_type: Option<ValueType>,
+    ) -> Result<(), SchemaValidationError> {
+        for_type_and_subtypes_transitive!(snapshot, type_manager, attribute_type, |type_: AttributeType<'static>| {
+            Self::validate_value_type_compatible_with_all_owns_annotations(snapshot, type_manager, type_, value_type.clone())
+        });
+        Ok(())
+    }
+
+    fn validate_value_type_compatible_with_all_owns_annotations(
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+        attribute_type: AttributeType<'static>,
+        value_type: Option<ValueType>,
+    ) -> Result<(), SchemaValidationError> {
+        let all_owns = attribute_type.get_owns(snapshot, type_manager)
+            .map_err(SchemaValidationError::ConceptRead)?;
+
+        for owns in all_owns.into_iter() {
+            Self::validate_owns_value_type_compatible_with_annotations(snapshot, type_manager, owns.clone(), value_type.clone())?
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate_owns_value_type_compatible_with_annotations(
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+        owns: Owns<'static>,
+        value_type: Option<ValueType>,
+    ) -> Result<(), SchemaValidationError> {
+        let annotations = owns.get_annotations_declared(snapshot, type_manager)
+            .map_err(SchemaValidationError::ConceptRead)?;
+        for annotation in annotations.into_iter() {
+            match annotation {
+                OwnsAnnotation::Unique(_) => Self::validate_owns_value_type_compatible_with_unique_annotation(
+                    snapshot,
+                    owns.clone(),
+                    value_type.clone(),
+                )?,
+                OwnsAnnotation::Key(_) => Self::validate_owns_value_type_compatible_with_key_annotation(
+                    snapshot,
+                    owns.clone(),
+                    value_type.clone(),
+                )?,
+                OwnsAnnotation::Regex(regex) => {
+                    Self::validate_annotation_regex_compatible_value_type(
+                        snapshot,
+                        owns.attribute(),
+                        value_type.clone(),
+                    )?;
+                    Self::validate_regex_arguments(regex)?
+                }
+                OwnsAnnotation::Range(range) => {
+                    Self::validate_annotation_range_compatible_value_type(
+                        snapshot,
+                        owns.attribute(),
+                        value_type.clone(),
+                    )?;
+                    Self::validate_range_arguments(range, value_type.clone())?
+                }
+                OwnsAnnotation::Values(values) => {
+                    Self::validate_annotation_values_compatible_value_type(
+                        snapshot,
+                        owns.attribute(),
+                        value_type.clone(),
+                    )?;
+                    Self::validate_values_arguments(values, value_type.clone())?
+                }
+                | OwnsAnnotation::Distinct(_) | OwnsAnnotation::Cardinality(_) => {}
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn is_owns_value_type_keyable(value_type_opt: Option<ValueType>) -> bool {
+        match value_type_opt {
+            Some(value_type) => value_type.keyable(),
+            None => true,
+        }
+    }
+
+    pub(crate) fn validate_no_instances_to_delete<'a>(
+        snapshot: &impl ReadableSnapshot,
+        thing_manager: &ThingManager,
+        type_: impl KindAPI<'a>,
+    ) -> Result<(), SchemaValidationError> {
+        let has_instances = Self::has_instances_of_type(snapshot, thing_manager, type_.clone())
+            .map_err(SchemaValidationError::ConceptRead)?;
+
+        if has_instances {
+            Err(SchemaValidationError::CannotDeleteTypeWithExistingInstances(get_label_or_schema_err(snapshot, type_)?))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn validate_no_instances_to_change_value_type<'a>(
+        snapshot: &impl ReadableSnapshot,
+        thing_manager: &ThingManager,
+        attribute_type: AttributeType<'static>,
+    ) -> Result<(), SchemaValidationError> {
+        for_type_and_subtypes_transitive!(snapshot, type_manager, attribute_type, |type_: AttributeType<'static>| {
+            let has_instances = Self::has_instances_of_type(snapshot, thing_manager, attribute_type.clone())
+                .map_err(SchemaValidationError::ConceptRead)?;
+
+            if has_instances {
+                Err(SchemaValidationError::CannotChangeValueTypeWithExistingInstances(get_label_or_schema_err(
+                    snapshot, type_,
+                )?))
+            } else {
+                Ok(())
+            }
+        });
+        Ok(())
+    }
+
+    fn validate_no_instances_to_lose_value_type<'a>(
+        snapshot: &impl ReadableSnapshot,
+        thing_manager: &ThingManager,
+        attribute_type: AttributeType<'a>,
+    ) -> Result<(), SchemaValidationError> {
+        let has_instances = Self::has_instances_of_type(snapshot, thing_manager, attribute_type.clone())
+            .map_err(SchemaValidationError::ConceptRead)?;
+
+        if has_instances {
+            Err(SchemaValidationError::CannotUnsetValueTypeWithExistingInstances(get_label_or_schema_err(
+                snapshot,
+                attribute_type,
+            )?))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn validate_no_role_instances_to_set_ordering(
+        snapshot: &impl ReadableSnapshot,
+        thing_manager: &ThingManager,
+        role_type: RoleType<'static>,
+    ) -> Result<(), SchemaValidationError> {
+        let has_instances = Self::has_instances_of_type(snapshot, thing_manager, role_type.clone())
+            .map_err(SchemaValidationError::ConceptRead)?;
+
+        if has_instances {
+            Err(SchemaValidationError::CannotSetRoleOrderingWithExistingInstances(get_label_or_schema_err(
+                snapshot, role_type,
+            )?))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn validate_no_owns_instances_to_set_ordering(
+        snapshot: &impl ReadableSnapshot,
+        thing_manager: &ThingManager,
+        owns: Owns<'static>,
+    ) -> Result<(), SchemaValidationError> {
+        let has_instances = Self::has_instances_of_owns(snapshot, thing_manager, owns.owner(), owns.attribute())
+            .map_err(SchemaValidationError::ConceptRead)?;
+
+        if has_instances {
+            Err(SchemaValidationError::CannotSetOwnsOrderingWithExistingInstances(
+                get_label_or_schema_err(snapshot, owns.owner())?,
+                get_label_or_schema_err(snapshot, owns.attribute())?,
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn has_instances_of_type<'a, T: KindAPI<'a>>(
+        snapshot: &impl ReadableSnapshot,
+        thing_manager: &ThingManager,
+        type_: T,
+    ) -> Result<bool, ConceptReadError> {
+        match T::ROOT_KIND {
+            Kind::Entity => {
+                let entity_type = EntityType::new(type_.vertex().into_owned());
+                let mut iterator = thing_manager.get_entities_in(snapshot, entity_type.clone().into_owned());
+                match iterator.next() {
+                    None => Ok(false),
+                    Some(result) => result.map(|_| true),
+                }
+            }
+            Kind::Attribute => {
+                let attribute_type = AttributeType::new(type_.vertex().into_owned());
+                let mut iterator = thing_manager.get_attributes_in(snapshot, attribute_type.clone().into_owned())?;
+                match iterator.next() {
+                    None => Ok(false),
+                    Some(result) => result.map(|_| true),
+                }
+            }
+            Kind::Relation => {
+                let relation_type = RelationType::new(type_.vertex().into_owned());
+                let mut iterator = thing_manager.get_relations_in(snapshot, relation_type.clone().into_owned());
+                match iterator.next() {
+                    None => Ok(false),
+                    Some(result) => result.map(|_| true),
+                }
+            }
+            Kind::Role => {
+                let role_type = RoleType::new(type_.vertex().into_owned());
+                let relation_type =
+                    TypeReader::get_role_type_relates_declared(snapshot, role_type.clone().into_owned())?.relation();
+                Self::has_instances_of_relates(snapshot, thing_manager, relation_type, role_type)
+            }
+        }
+    }
+
+    fn has_instances_of_owns<'a>(
+        snapshot: &impl ReadableSnapshot,
+        thing_manager: &ThingManager,
+        owner_type: ObjectType<'a>,
+        attribute_type: AttributeType<'a>,
+    ) -> Result<bool, ConceptReadError> {
+        let mut has_instances = false;
+
+        let mut owner_iterator = thing_manager.get_objects_in(snapshot, owner_type.clone().into_owned());
+        while let Some(instance) = owner_iterator.next().transpose()? {
+            let mut iterator =
+                instance.get_has_type_unordered(snapshot, thing_manager, attribute_type.clone().into_owned())?;
+
+            if iterator.next().is_some() {
+                has_instances = true;
+                break;
+            }
+        }
+
+        Ok(has_instances)
+    }
+
+    fn has_instances_of_plays<'a>(
+        snapshot: &impl ReadableSnapshot,
+        thing_manager: &ThingManager,
+        player_type: ObjectType<'a>,
+        role_type: RoleType<'a>,
+    ) -> Result<bool, ConceptReadError> {
+        let mut has_instances = false;
+
+        let mut player_iterator = thing_manager.get_objects_in(snapshot, player_type.clone().into_owned());
+        while let Some(instance) = player_iterator.next().transpose()? {
+            let mut iterator = instance.get_relations_by_role(snapshot, thing_manager, role_type.clone().into_owned());
+
+            if let Some(_) = iterator.next().transpose()? {
+                has_instances = true;
+                break;
+            }
+        }
+
+        Ok(has_instances)
+    }
+
+    fn has_instances_of_relates<'a>(
+        snapshot: &impl ReadableSnapshot,
+        thing_manager: &ThingManager,
+        relation_type: RelationType<'a>,
+        role_type: RoleType<'a>,
+    ) -> Result<bool, ConceptReadError> {
+        let mut has_instances = false;
+
+        let mut relation_iterator = thing_manager.get_relations_in(snapshot, relation_type.clone().into_owned());
+        while let Some(instance) = relation_iterator.next().transpose()? {
+            let mut iterator = instance.get_players_role_type(snapshot, thing_manager, role_type.clone().into_owned());
+
+            if let Some(_) = iterator.next().transpose()? {
+                has_instances = true;
+                break;
+            }
+        }
+
+        Ok(has_instances)
+    }
+
+
     fn validate_entity_type_instances_against_constraints(
         snapshot: &impl ReadableSnapshot,
         thing_manager: &ThingManager,
@@ -1887,10 +2338,10 @@ impl OperationTimeValidation {
         let values_constraints = get_values_constraints(constraints.iter());
 
         debug_assert!(!abstract_constraints.is_empty()
-                || !regex_constraints.is_empty()
-                || !range_constraints.is_empty()
-                || !values_constraints.is_empty(),
-            "At least one constraint should exist otherwise we don't need to iterate"
+                          || !regex_constraints.is_empty()
+                          || !range_constraints.is_empty()
+                          || !values_constraints.is_empty(),
+                      "At least one constraint should exist otherwise we don't need to iterate"
         );
 
         for attribute_type in attribute_types {
@@ -2338,427 +2789,6 @@ impl OperationTimeValidation {
         Ok(())
     }
 
-    pub(crate) fn validate_declared_capability_annotation_is_compatible_with_declared_annotations<CAP>(
-        snapshot: &impl ReadableSnapshot,
-        edge: CAP,
-        annotation_category: AnnotationCategory,
-    ) -> Result<(), SchemaValidationError>
-    where
-        CAP: Capability<'static>,
-    {
-        let existing_annotations = TypeReader::get_capability_annotations_declared(snapshot, edge.clone())
-            .map_err(SchemaValidationError::ConceptRead)?;
-
-        for existing_annotation in existing_annotations {
-            let existing_annotation_category = existing_annotation.clone().into().category();
-            if !existing_annotation_category.declarable_alongside(annotation_category) {
-                let interface = edge.interface();
-                return Err(SchemaValidationError::AnnotationIsNotCompatibleWithDeclaredAnnotation(
-                    annotation_category,
-                    existing_annotation_category,
-                    get_label_or_schema_err(snapshot, interface)?,
-                ));
-            }
-        }
-
-        Ok(())
-    }
-
-    pub(crate) fn validate_owns_value_type_compatible_with_unique_annotation_transitive(
-        snapshot: &impl ReadableSnapshot,
-        owns: Owns<'static>,
-    ) -> Result<(), SchemaValidationError> {
-        for_capability_and_specialising_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
-            let value_type = TypeReader::get_value_type(snapshot, current_owns.attribute())
-                .map_err(SchemaValidationError::ConceptRead)?
-                .map(|(value_type, _)| value_type.clone());
-            Self::validate_owns_value_type_compatible_with_unique_annotation(snapshot, current_owns, value_type)
-        });
-        Ok(())
-    }
-
-    fn validate_owns_value_type_compatible_with_unique_annotation(
-        snapshot: &impl ReadableSnapshot,
-        owns: Owns<'static>,
-        value_type: Option<ValueType>,
-    ) -> Result<(), SchemaValidationError> {
-        if Self::is_owns_value_type_keyable(value_type.clone()) {
-            Ok(())
-        } else {
-            let owner = owns.owner();
-            let attribute_type = owns.attribute();
-            Err(SchemaValidationError::ValueTypeIsNotKeyableForUniqueAnnotation(
-                get_label_or_schema_err(snapshot, owner)?,
-                get_label_or_schema_err(snapshot, attribute_type)?,
-                value_type,
-            ))
-        }
-    }
-
-    pub(crate) fn validate_owns_value_type_compatible_with_key_annotation_transitive(
-        snapshot: &impl ReadableSnapshot,
-        owns: Owns<'static>,
-    ) -> Result<(), SchemaValidationError> {
-        for_capability_and_specialising_capabilities_transitive!(snapshot, owns, |current_owns: Owns<'static>| {
-            let value_type = TypeReader::get_value_type(snapshot, current_owns.attribute())
-                .map_err(SchemaValidationError::ConceptRead)?
-                .map(|(value_type, _)| value_type.clone());
-            Self::validate_owns_value_type_compatible_with_key_annotation(snapshot, current_owns, value_type)
-        });
-        Ok(())
-    }
-
-    fn validate_owns_value_type_compatible_with_key_annotation(
-        snapshot: &impl ReadableSnapshot,
-        owns: Owns<'static>,
-        value_type: Option<ValueType>,
-    ) -> Result<(), SchemaValidationError> {
-        if Self::is_owns_value_type_keyable(value_type.clone()) {
-            Ok(())
-        } else {
-            let owner = owns.owner();
-            let attribute_type = owns.attribute();
-            Err(SchemaValidationError::ValueTypeIsNotKeyableForKeyAnnotation(
-                get_label_or_schema_err(snapshot, owner)?,
-                get_label_or_schema_err(snapshot, attribute_type)?,
-                value_type,
-            ))
-        }
-    }
-
-    pub(crate) fn validate_attribute_type_value_type_compatible_with_annotations_transitive(
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-        attribute_type: AttributeType<'static>,
-        value_type: Option<ValueType>,
-    ) -> Result<(), SchemaValidationError> {
-        for_type_and_subtypes_transitive!(snapshot, type_manager, attribute_type, |type_: AttributeType<'static>| {
-            Self::validate_attribute_type_value_type_compatible_with_annotations_and_arguments(
-                snapshot,
-                type_manager,
-                type_,
-                value_type.clone(),
-            )
-        });
-        Ok(())
-    }
-
-    fn validate_attribute_type_value_type_compatible_with_annotations_and_arguments(
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-        attribute_type: AttributeType<'static>,
-        value_type: Option<ValueType>,
-    ) -> Result<(), SchemaValidationError> {
-        let annotations = attribute_type.get_annotations_declared(snapshot, type_manager)
-            .map_err(SchemaValidationError::ConceptRead)?;
-        for annotation in annotations {
-            match annotation {
-                AttributeTypeAnnotation::Regex(regex) => {
-                    Self::validate_annotation_regex_compatible_value_type(
-                        snapshot,
-                        attribute_type.clone(),
-                        value_type.clone(),
-                    )?;
-                    Self::validate_regex_arguments(regex)?
-                }
-                AttributeTypeAnnotation::Range(range) => {
-                    Self::validate_annotation_range_compatible_value_type(
-                        snapshot,
-                        attribute_type.clone(),
-                        value_type.clone(),
-                    )?;
-                    Self::validate_range_arguments(range, value_type.clone())?
-                }
-                AttributeTypeAnnotation::Values(values) => {
-                    Self::validate_annotation_values_compatible_value_type(
-                        snapshot,
-                        attribute_type.clone(),
-                        value_type.clone(),
-                    )?;
-                    Self::validate_values_arguments(values, value_type.clone())?
-                }
-                | AttributeTypeAnnotation::Abstract(_) | AttributeTypeAnnotation::Independent(_) => {}
-            }
-        }
-
-        Ok(())
-    }
-
-    pub(crate) fn validate_value_type_compatible_with_all_owns_annotations_transitive(
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-        attribute_type: AttributeType<'static>,
-        value_type: Option<ValueType>,
-    ) -> Result<(), SchemaValidationError> {
-        for_type_and_subtypes_transitive!(snapshot, type_manager, attribute_type, |type_: AttributeType<'static>| {
-            Self::validate_value_type_compatible_with_all_owns_annotations(snapshot, type_manager, type_, value_type.clone())
-        });
-        Ok(())
-    }
-
-    fn validate_value_type_compatible_with_all_owns_annotations(
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-        attribute_type: AttributeType<'static>,
-        value_type: Option<ValueType>,
-    ) -> Result<(), SchemaValidationError> {
-        let all_owns = attribute_type.get_owns(snapshot, type_manager)
-            .map_err(SchemaValidationError::ConceptRead)?;
-
-        for owns in all_owns.into_iter() {
-            Self::validate_owns_value_type_compatible_with_annotations(snapshot, type_manager, owns.clone(), value_type.clone())?
-        }
-        Ok(())
-    }
-
-    pub(crate) fn validate_owns_value_type_compatible_with_annotations(
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-        owns: Owns<'static>,
-        value_type: Option<ValueType>,
-    ) -> Result<(), SchemaValidationError> {
-        let annotations = owns.get_annotations_declared(snapshot, type_manager)
-            .map_err(SchemaValidationError::ConceptRead)?;
-        for annotation in annotations.into_iter() {
-            match annotation {
-                OwnsAnnotation::Unique(_) => Self::validate_owns_value_type_compatible_with_unique_annotation(
-                    snapshot,
-                    owns.clone(),
-                    value_type.clone(),
-                )?,
-                OwnsAnnotation::Key(_) => Self::validate_owns_value_type_compatible_with_key_annotation(
-                    snapshot,
-                    owns.clone(),
-                    value_type.clone(),
-                )?,
-                OwnsAnnotation::Regex(regex) => {
-                    Self::validate_annotation_regex_compatible_value_type(
-                        snapshot,
-                        owns.attribute(),
-                        value_type.clone(),
-                    )?;
-                    Self::validate_regex_arguments(regex)?
-                }
-                OwnsAnnotation::Range(range) => {
-                    Self::validate_annotation_range_compatible_value_type(
-                        snapshot,
-                        owns.attribute(),
-                        value_type.clone(),
-                    )?;
-                    Self::validate_range_arguments(range, value_type.clone())?
-                }
-                OwnsAnnotation::Values(values) => {
-                    Self::validate_annotation_values_compatible_value_type(
-                        snapshot,
-                        owns.attribute(),
-                        value_type.clone(),
-                    )?;
-                    Self::validate_values_arguments(values, value_type.clone())?
-                }
-                | OwnsAnnotation::Distinct(_) | OwnsAnnotation::Cardinality(_) => {}
-            }
-        }
-        Ok(())
-    }
-
-    pub(crate) fn is_owns_value_type_keyable(value_type_opt: Option<ValueType>) -> bool {
-        match value_type_opt {
-            Some(value_type) => value_type.keyable(),
-            None => true,
-        }
-    }
-
-    pub(crate) fn validate_no_instances_to_delete<'a>(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
-        type_: impl KindAPI<'a>,
-    ) -> Result<(), SchemaValidationError> {
-        let has_instances = Self::has_instances_of_type(snapshot, thing_manager, type_.clone())
-            .map_err(SchemaValidationError::ConceptRead)?;
-
-        if has_instances {
-            Err(SchemaValidationError::CannotDeleteTypeWithExistingInstances(get_label_or_schema_err(snapshot, type_)?))
-        } else {
-            Ok(())
-        }
-    }
-
-    pub(crate) fn validate_no_instances_to_change_value_type<'a>(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
-        attribute_type: AttributeType<'static>,
-    ) -> Result<(), SchemaValidationError> {
-        for_type_and_subtypes_transitive!(snapshot, type_manager, attribute_type, |type_: AttributeType<'static>| {
-            let has_instances = Self::has_instances_of_type(snapshot, thing_manager, attribute_type.clone())
-                .map_err(SchemaValidationError::ConceptRead)?;
-
-            if has_instances {
-                Err(SchemaValidationError::CannotChangeValueTypeWithExistingInstances(get_label_or_schema_err(
-                    snapshot, type_,
-                )?))
-            } else {
-                Ok(())
-            }
-        });
-        Ok(())
-    }
-
-    fn validate_no_instances_to_lose_value_type<'a>(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
-        attribute_type: AttributeType<'a>,
-    ) -> Result<(), SchemaValidationError> {
-        let has_instances = Self::has_instances_of_type(snapshot, thing_manager, attribute_type.clone())
-            .map_err(SchemaValidationError::ConceptRead)?;
-
-        if has_instances {
-            Err(SchemaValidationError::CannotUnsetValueTypeWithExistingInstances(get_label_or_schema_err(
-                snapshot,
-                attribute_type,
-            )?))
-        } else {
-            Ok(())
-        }
-    }
-
-    pub(crate) fn validate_no_role_instances_to_set_ordering(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
-        role_type: RoleType<'static>,
-    ) -> Result<(), SchemaValidationError> {
-        let has_instances = Self::has_instances_of_type(snapshot, thing_manager, role_type.clone())
-            .map_err(SchemaValidationError::ConceptRead)?;
-
-        if has_instances {
-            Err(SchemaValidationError::CannotSetRoleOrderingWithExistingInstances(get_label_or_schema_err(
-                snapshot, role_type,
-            )?))
-        } else {
-            Ok(())
-        }
-    }
-
-    pub(crate) fn validate_no_owns_instances_to_set_ordering(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
-        owns: Owns<'static>,
-    ) -> Result<(), SchemaValidationError> {
-        let has_instances = Self::has_instances_of_owns(snapshot, thing_manager, owns.owner(), owns.attribute())
-            .map_err(SchemaValidationError::ConceptRead)?;
-
-        if has_instances {
-            Err(SchemaValidationError::CannotSetOwnsOrderingWithExistingInstances(
-                get_label_or_schema_err(snapshot, owns.owner())?,
-                get_label_or_schema_err(snapshot, owns.attribute())?,
-            ))
-        } else {
-            Ok(())
-        }
-    }
-
-    fn has_instances_of_type<'a, T: KindAPI<'a>>(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
-        type_: T,
-    ) -> Result<bool, ConceptReadError> {
-        match T::ROOT_KIND {
-            Kind::Entity => {
-                let entity_type = EntityType::new(type_.vertex().into_owned());
-                let mut iterator = thing_manager.get_entities_in(snapshot, entity_type.clone().into_owned());
-                match iterator.next() {
-                    None => Ok(false),
-                    Some(result) => result.map(|_| true),
-                }
-            }
-            Kind::Attribute => {
-                let attribute_type = AttributeType::new(type_.vertex().into_owned());
-                let mut iterator = thing_manager.get_attributes_in(snapshot, attribute_type.clone().into_owned())?;
-                match iterator.next() {
-                    None => Ok(false),
-                    Some(result) => result.map(|_| true),
-                }
-            }
-            Kind::Relation => {
-                let relation_type = RelationType::new(type_.vertex().into_owned());
-                let mut iterator = thing_manager.get_relations_in(snapshot, relation_type.clone().into_owned());
-                match iterator.next() {
-                    None => Ok(false),
-                    Some(result) => result.map(|_| true),
-                }
-            }
-            Kind::Role => {
-                let role_type = RoleType::new(type_.vertex().into_owned());
-                let relation_type =
-                    TypeReader::get_role_type_relates_declared(snapshot, role_type.clone().into_owned())?.relation();
-                Self::has_instances_of_relates(snapshot, thing_manager, relation_type, role_type)
-            }
-        }
-    }
-
-    fn has_instances_of_owns<'a>(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
-        owner_type: ObjectType<'a>,
-        attribute_type: AttributeType<'a>,
-    ) -> Result<bool, ConceptReadError> {
-        let mut has_instances = false;
-
-        let mut owner_iterator = thing_manager.get_objects_in(snapshot, owner_type.clone().into_owned());
-        while let Some(instance) = owner_iterator.next().transpose()? {
-            let mut iterator =
-                instance.get_has_type_unordered(snapshot, thing_manager, attribute_type.clone().into_owned())?;
-
-            if iterator.next().is_some() {
-                has_instances = true;
-                break;
-            }
-        }
-
-        Ok(has_instances)
-    }
-
-    fn has_instances_of_plays<'a>(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
-        player_type: ObjectType<'a>,
-        role_type: RoleType<'a>,
-    ) -> Result<bool, ConceptReadError> {
-        let mut has_instances = false;
-
-        let mut player_iterator = thing_manager.get_objects_in(snapshot, player_type.clone().into_owned());
-        while let Some(instance) = player_iterator.next().transpose()? {
-            let mut iterator = instance.get_relations_by_role(snapshot, thing_manager, role_type.clone().into_owned());
-
-            if let Some(_) = iterator.next().transpose()? {
-                has_instances = true;
-                break;
-            }
-        }
-
-        Ok(has_instances)
-    }
-
-    fn has_instances_of_relates<'a>(
-        snapshot: &impl ReadableSnapshot,
-        thing_manager: &ThingManager,
-        relation_type: RelationType<'a>,
-        role_type: RoleType<'a>,
-    ) -> Result<bool, ConceptReadError> {
-        let mut has_instances = false;
-
-        let mut relation_iterator = thing_manager.get_relations_in(snapshot, relation_type.clone().into_owned());
-        while let Some(instance) = relation_iterator.next().transpose()? {
-            let mut iterator = instance.get_players_role_type(snapshot, thing_manager, role_type.clone().into_owned());
-
-            if let Some(_) = iterator.next().transpose()? {
-                has_instances = true;
-                break;
-            }
-        }
-
-        Ok(has_instances)
-    }
-
     fn get_lost_capabilities_if_supertype_is_changed<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         type_: CAP::ObjectType,
@@ -2783,35 +2813,6 @@ impl OperationTimeValidation {
             })
             .map(|capability| capability.clone())
             .collect())
-    }
-
-    pub(crate) fn validate_deleted_struct_is_not_used_in_schema(
-        snapshot: &impl ReadableSnapshot,
-        definition_key: &DefinitionKey<'static>,
-    ) -> Result<(), SchemaValidationError> {
-        let struct_definition = TypeReader::get_struct_definition(snapshot, definition_key.clone())
-            .map_err(SchemaValidationError::ConceptRead)?;
-
-        let usages_in_attribute_types = TypeReader::get_struct_definition_usages_in_attribute_types(snapshot)
-            .map_err(SchemaValidationError::ConceptRead)?;
-        if let Some(owners) = usages_in_attribute_types.get(definition_key) {
-            return Err(SchemaValidationError::StructCannotBeDeletedAsItsUsedAsValueTypeForAttributeTypes(
-                struct_definition.name,
-                owners.len(),
-            ));
-        }
-
-        let usages_in_struct_definition_fields =
-            TypeReader::get_struct_definition_usages_in_struct_definitions(snapshot)
-                .map_err(SchemaValidationError::ConceptRead)?;
-        if let Some(owners) = usages_in_struct_definition_fields.get(definition_key) {
-            return Err(SchemaValidationError::StructCannotBeDeletedAsItsUsedAsValueTypeForStructs(
-                struct_definition.name,
-                owners.len(),
-            ));
-        }
-
-        Ok(())
     }
 
     type_or_subtype_without_declared_capability_instances_existence_validation!(
