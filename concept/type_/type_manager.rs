@@ -51,7 +51,7 @@ use crate::{
         relation_type::{RelationType, RelationTypeAnnotation},
         role_type::{RoleType, RoleTypeAnnotation},
         type_manager::{
-            type_reader::TypeReader, validation::validation::capability_get_declared_annotation_by_category,
+            type_reader::TypeReader,
         },
         Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI,
     },
@@ -1420,9 +1420,6 @@ impl TypeManager {
 
         let relates = TypeReader::get_role_type_relates_declared(snapshot, role_type.clone())?;
 
-        OperationTimeValidation::validate_no_overriding_for_relates_unset(snapshot, self, relates.clone())
-            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
         OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_capabilities(
             snapshot,
             self,
@@ -1431,6 +1428,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
+        // Should be the same as in validate_delete_type, but leaving for consistency
         OperationTimeValidation::validate_no_corrupted_instances_to_unset_relates(
             snapshot,
             self,
@@ -1608,6 +1606,7 @@ impl TypeManager {
 
         OperationTimeValidation::validate_value_type_compatible_with_inherited_value_type(
             snapshot,
+            self,
             attribute_type.clone(),
             value_type.clone(),
         )
@@ -1615,6 +1614,7 @@ impl TypeManager {
 
         OperationTimeValidation::validate_subtypes_value_types_compatible_with_new_value_type(
             snapshot,
+            self,
             attribute_type.clone(),
             value_type.clone(),
         )
@@ -1622,6 +1622,7 @@ impl TypeManager {
 
         OperationTimeValidation::validate_attribute_type_value_type_compatible_with_annotations_transitive(
             snapshot,
+            self,
             attribute_type.clone(),
             Some(value_type.clone()),
         )
@@ -1629,6 +1630,7 @@ impl TypeManager {
 
         OperationTimeValidation::validate_value_type_compatible_with_all_owns_annotations_transitive(
             snapshot,
+            self,
             attribute_type.clone(),
             Some(value_type.clone()),
         )
@@ -1685,10 +1687,18 @@ impl TypeManager {
                 OperationTimeValidation::validate_type_exists(snapshot, supertype.clone()).is_ok()
         };
 
-        OperationTimeValidation::validate_sub_does_not_create_cycle(snapshot, subtype.clone(), supertype.clone())
+        OperationTimeValidation::validate_sub_does_not_create_cycle(snapshot, self, subtype.clone(), supertype.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_supertype_annotations_compatibility(
+        OperationTimeValidation::validate_type_supertype_abstractness_to_change_supertype(
+            snapshot,
+            self,
+            subtype.clone(),
+            supertype.clone(),
+        )
+        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+
+        OperationTimeValidation::validate_type_declared_constraints_narrowing_of_supertype_constraints(
             snapshot,
             self,
             subtype.clone(),
@@ -1743,14 +1753,6 @@ impl TypeManager {
             thing_manager,
             subtype.clone(),
             Some(supertype.clone()),
-        )
-            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_capabilities_constraints_compatibility_when_interface_type_supertype_is_set_transitive::<Owns<'static>>(
-            snapshot,
-            self,
-            subtype.clone(),
-            supertype.clone(),
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
@@ -1828,13 +1830,6 @@ impl TypeManager {
         let object_subtype = subtype.clone().into_owned_object_type();
         let object_supertype = supertype.clone().into_owned_object_type();
 
-        OperationTimeValidation::validate_capability_overrides_compatible_with_new_supertype_transitive::<Owns<'static>>(
-            snapshot,
-            object_subtype.clone(),
-            Some(object_supertype.clone()),
-        )
-            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
         OperationTimeValidation::validate_lost_owns_do_not_cause_lost_instances_while_changing_supertype(
             snapshot,
             self,
@@ -1850,13 +1845,6 @@ impl TypeManager {
             thing_manager,
             object_subtype.clone(),
             object_supertype.clone(),
-        )
-            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_capability_overrides_compatible_with_new_supertype_transitive::<Plays<'static>>(
-            snapshot,
-            object_subtype.clone(),
-            Some(object_supertype.clone()),
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
@@ -1889,13 +1877,6 @@ impl TypeManager {
     ) -> Result<(), ConceptWriteError> {
         let object_subtype = subtype.clone().into_owned_object_type();
 
-        OperationTimeValidation::validate_capability_overrides_compatible_with_new_supertype_transitive::<Owns<'static>>(
-            snapshot,
-            object_subtype.clone(),
-            None, // supertype
-        )
-            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
         OperationTimeValidation::validate_lost_owns_do_not_cause_lost_instances_while_changing_supertype(
             snapshot,
             self,
@@ -1904,13 +1885,6 @@ impl TypeManager {
             None, // supertype
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_capability_overrides_compatible_with_new_supertype_transitive::<Plays<'static>>(
-            snapshot,
-            object_subtype.clone(),
-            None, // supertype
-        )
-            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         OperationTimeValidation::validate_lost_plays_do_not_cause_lost_instances_while_changing_supertype(
             snapshot,
@@ -1976,11 +1950,6 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_capability_overrides_compatible_with_new_supertype_transitive::<
-            Relates<'static>,
-        >(snapshot, subtype.clone(), Some(supertype.clone()))
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
         OperationTimeValidation::validate_relation_type_does_not_acquire_cascade_annotation_to_lose_instances_with_new_supertype(
             snapshot,
             self,
@@ -2017,15 +1986,6 @@ impl TypeManager {
         thing_manager: &ThingManager,
         subtype: RelationType<'static>,
     ) -> Result<(), ConceptWriteError> {
-        OperationTimeValidation::validate_capability_overrides_compatible_with_new_supertype_transitive::<
-            Relates<'static>,
-        >(
-            snapshot,
-            subtype.clone(),
-            None, // supertype
-        )
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
         OperationTimeValidation::validate_lost_relates_do_not_cause_lost_instances_while_changing_supertype(
             snapshot,
             self,
@@ -2060,7 +2020,7 @@ impl TypeManager {
             )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
         } else {
-            OperationTimeValidation::validate_updated_owns_does_not_conflict_with_specialising_owns_ordering(
+            OperationTimeValidation::validate_updated_owns_does_not_conflict_with_any_sibling_owns_ordering(
                 snapshot,
                 self,
                 owns.clone(),
@@ -2199,7 +2159,7 @@ impl TypeManager {
         owns: Owns<'static>,
         ordering: Ordering,
     ) -> Result<(), ConceptWriteError> {
-        OperationTimeValidation::validate_updated_owns_does_not_conflict_with_specialising_owns_ordering(
+        OperationTimeValidation::validate_updated_owns_does_not_conflict_with_any_sibling_owns_ordering(
             snapshot,
             self,
             owns.clone(),
@@ -2231,8 +2191,9 @@ impl TypeManager {
         ordering: Ordering,
     ) -> Result<(), ConceptWriteError> {
         let relates = self.get_role_type_relates(snapshot, role_type.clone().into_owned())?;
-        OperationTimeValidation::validate_relates_distinct_annotation_ordering(
+        OperationTimeValidation::validate_relates_distinct_constraint_ordering(
             snapshot,
+            self,
             relates.clone(),
             Some(ordering),
             None,
@@ -2365,7 +2326,7 @@ impl TypeManager {
         snapshot: &mut impl WritableSnapshot,
         attribute_type: AttributeType<'static>,
     ) -> Result<(), ConceptWriteError> {
-        OperationTimeValidation::validate_no_subtypes_for_type_abstractness_unset(snapshot, self, attribute_type.clone())
+        OperationTimeValidation::validate_no_attribute_subtypes_to_unset_abstractness(snapshot, self, attribute_type.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         OperationTimeValidation::validate_value_type_compatible_with_abstractness(
@@ -2386,8 +2347,6 @@ impl TypeManager {
         type_: impl KindAPI<'static>,
     ) -> Result<(), ConceptWriteError> {
         let annotation_category = AnnotationCategory::Abstract;
-
-        self.validate_unset_type_annotation_general(snapshot, type_.clone(), annotation_category.clone())?;
 
         OperationTimeValidation::validate_no_abstract_subtypes_to_unset_abstract_annotation(
             snapshot,
@@ -2416,12 +2375,12 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_no_instances_to_set_relates_abstract(
+        OperationTimeValidation::validate_new_annotation_constraints_compatible_with_relates_instances(
             snapshot,
             self,
             thing_manager,
-            relates.relation(),
-            relates.role(),
+            relates.clone(),
+            annotation.clone(),
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
@@ -2476,7 +2435,6 @@ impl TypeManager {
         type_: impl KindAPI<'static>,
     ) -> Result<(), ConceptWriteError> {
         let annotation_category = AnnotationCategory::Independent;
-        self.validate_unset_type_annotation_general(snapshot, type_.clone(), annotation_category.clone())?;
         self.unset_type_annotation(snapshot, type_, annotation_category)
     }
 
@@ -2487,7 +2445,7 @@ impl TypeManager {
         relates: Relates<'static>,
         specialised: Relates<'static>,
     ) -> Result<(), ConceptWriteError> {
-        OperationTimeValidation::validate_relates_is_inherited(snapshot, relates.relation(), specialised.role())
+        OperationTimeValidation::validate_relates_is_inherited(snapshot, self, relates.relation(), specialised.role())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         self.set_role_type_supertype(snapshot, thing_manager, relates.role(), specialised.role())?;
@@ -2507,22 +2465,6 @@ impl TypeManager {
             subtype.clone(),
             supertype.clone(),
             None,
-        )
-            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_capabilities_constraints_compatibility_when_interface_type_supertype_is_set_transitive::<Relates<'static>>(
-            snapshot,
-            self,
-            subtype.clone(),
-            supertype.clone(),
-        )
-            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_capabilities_constraints_compatibility_when_interface_type_supertype_is_set_transitive::<Plays<'static>>(
-            snapshot,
-            self,
-            subtype.clone(),
-            supertype.clone(),
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
@@ -2645,8 +2587,9 @@ impl TypeManager {
 
         self.validate_set_capability_annotation_general(snapshot, relates.clone(), annotation.clone())?;
 
-        OperationTimeValidation::validate_relates_distinct_annotation_ordering(
+        OperationTimeValidation::validate_relates_distinct_constraint_ordering(
             snapshot,
+            self,
             relates.clone(),
             None,
             Some(true),
@@ -2753,7 +2696,7 @@ impl TypeManager {
 
         self.validate_unset_capability_annotation_general(snapshot, owns.clone(), annotation_category.clone())?;
 
-        if capability_get_declared_annotation_by_category(snapshot, owns.clone(), annotation_category)?.is_some() {
+        if self.get_owns_annotation_declared_by_category(snapshot, owns.clone(), annotation_category)?.is_some() {
             let updated_cardinality = Owns::get_default_cardinality(owns.get_ordering(snapshot, self)?);
 
             if updated_cardinality != owns.get_cardinality(snapshot, self)? {
@@ -2807,7 +2750,7 @@ impl TypeManager {
 
         self.validate_unset_capability_annotation_general(snapshot, owns.clone(), annotation_category.clone())?;
 
-        if capability_get_declared_annotation_by_category(snapshot, owns.clone(), annotation_category)?.is_some() {
+        if self.get_owns_annotation_declared_by_category(snapshot, owns.clone(), annotation_category)?.is_some() {
             let updated_cardinality = Owns::get_default_cardinality(owns.get_ordering(snapshot, self)?);
 
             if updated_cardinality != owns.get_cardinality(snapshot, self)? {
@@ -2861,7 +2804,7 @@ impl TypeManager {
 
         self.validate_unset_capability_annotation_general(snapshot, plays.clone(), annotation_category.clone())?;
 
-        if capability_get_declared_annotation_by_category(snapshot, plays.clone(), annotation_category)?.is_some() {
+        if self.get_plays_annotation_declared_by_category(snapshot, plays.clone(), annotation_category)?.is_some() {
             let updated_cardinality = Plays::get_default_cardinality();
 
             if updated_cardinality != plays.get_cardinality(snapshot, self)? {
@@ -2915,7 +2858,7 @@ impl TypeManager {
 
         self.validate_unset_capability_annotation_general(snapshot, relates.clone(), annotation_category.clone())?;
 
-        if capability_get_declared_annotation_by_category(snapshot, relates.clone(), annotation_category)?.is_some() {
+        if self.get_relates_annotation_declared_by_category(snapshot, relates.clone(), annotation_category)?.is_some() {
             let updated_cardinality = Relates::get_default_cardinality(relates.role().get_ordering(snapshot, self)?);
 
             if updated_cardinality != relates.get_cardinality(snapshot, self)? {
@@ -2964,10 +2907,10 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_type_regex_narrows_inherited_regex(
+        OperationTimeValidation::validate_type_regex_narrows_supertype_constraints(
             snapshot,
+            self,
             attribute_type.clone(),
-            None, // supertype: will be read from storage
             regex.clone(),
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
@@ -2993,7 +2936,6 @@ impl TypeManager {
         type_: AttributeType<'static>,
     ) -> Result<(), ConceptWriteError> {
         let annotation_category = AnnotationCategory::Regex;
-        self.validate_unset_type_annotation_general(snapshot, type_.clone(), annotation_category.clone())?;
         self.unset_type_annotation(snapshot, type_, annotation_category)
     }
 
@@ -3018,7 +2960,7 @@ impl TypeManager {
         OperationTimeValidation::validate_regex_arguments(regex.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_capability_regex_constraint_narrows_interface_type_constraint_transitive(
+        OperationTimeValidation::validate_capability_regex_constraint_narrows_interface_type_constraints(
             snapshot,
             self,
             owns.clone(),
@@ -3033,9 +2975,6 @@ impl TypeManager {
             regex.clone(),
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_specialising_capabilities_narrow_regex(snapshot, self, owns.clone(), regex.clone())
-            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         OperationTimeValidation::validate_new_annotation_constraints_compatible_with_owns_instances(
             snapshot,
@@ -3090,7 +3029,6 @@ impl TypeManager {
     ) -> Result<(), ConceptWriteError> {
         unimplemented!("Cascade is temporarily turned off");
         let annotation_category = AnnotationCategory::Cascade;
-        self.validate_unset_type_annotation_general(snapshot, type_.clone(), annotation_category.clone())?;
         self.unset_type_annotation(snapshot, type_, annotation_category)
     }
 
@@ -3125,10 +3063,10 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_type_range_narrows_inherited_range(
+        OperationTimeValidation::validate_type_range_narrows_supertype_constraints(
             snapshot,
+            self,
             attribute_type.clone(),
-            None, // supertype: will be read from storage
             range.clone(),
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
@@ -3156,7 +3094,6 @@ impl TypeManager {
         type_: impl KindAPI<'static>,
     ) -> Result<(), ConceptWriteError> {
         let annotation_category = AnnotationCategory::Range;
-        self.validate_unset_type_annotation_general(snapshot, type_.clone(), annotation_category.clone())?;
         self.unset_type_annotation(snapshot, type_, annotation_category)
     }
 
@@ -3183,7 +3120,7 @@ impl TypeManager {
         OperationTimeValidation::validate_range_arguments(range.clone(), attribute_value_type)
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_capability_range_constraint_narrows_interface_type_constraint_transitive(
+        OperationTimeValidation::validate_capability_range_constraint_narrows_interface_type_constraints(
             snapshot,
             self,
             owns.clone(),
@@ -3198,9 +3135,6 @@ impl TypeManager {
             range.clone(),
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_specialising_capabilities_narrow_range(snapshot, self, owns.clone(), range.clone())
-            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         // TODO: Maybe for the future: check if compatible with existing VALUES annotation
 
@@ -3257,10 +3191,10 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_type_values_narrows_inherited_values(
+        OperationTimeValidation::validate_type_values_narrows_supertype_constraints(
             snapshot,
+            self,
             attribute_type.clone(),
-            None, // supertype: will be read from storage
             values.clone(),
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
@@ -3288,7 +3222,6 @@ impl TypeManager {
         type_: impl KindAPI<'static>,
     ) -> Result<(), ConceptWriteError> {
         let annotation_category = AnnotationCategory::Values;
-        self.validate_unset_type_annotation_general(snapshot, type_.clone(), annotation_category.clone())?;
         self.unset_type_annotation(snapshot, type_, annotation_category)
     }
 
@@ -3315,7 +3248,7 @@ impl TypeManager {
         OperationTimeValidation::validate_values_arguments(values.clone(), attribute_value_type)
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_capability_values_constraint_narrows_interface_type_constraint_transitive(
+        OperationTimeValidation::validate_capability_values_constraint_narrows_interface_type_constraints(
             snapshot,
             self,
             owns.clone(),
@@ -3330,9 +3263,6 @@ impl TypeManager {
             values.clone(),
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_specialising_capabilities_narrow_values(snapshot, self, owns.clone(), values.clone())
-            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         // TODO: Maybe for the future: check if compatible with existing RANGE annotation
 
@@ -3425,13 +3355,6 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_declared_annotation_is_compatible_with_inherited_annotations(
-            snapshot,
-            type_.clone(),
-            category.clone(),
-        )
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
         OperationTimeValidation::validate_inherited_annotation_is_compatible_with_declared_annotations_of_subtypes(
             snapshot, category, type_,
         )
@@ -3449,18 +3372,6 @@ impl TypeManager {
     ) -> Result<(), ConceptWriteError> {
         OperationTimeValidation::validate_cardinality_arguments(cardinality)
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        // This check can be consumed by validate_cardinality_of_inheritance_line_with_updated_cardinality,
-        // but it seems worthy to notify the user about this special case when even just a single
-        // new cardinality without the interface type's siblings is not valid.
-        OperationTimeValidation::validate_single_cardinality_narrows_inherited_cardinalities(
-            snapshot,
-            self,
-            capability.clone(),
-            cardinality,
-            is_key,
-        )
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         OperationTimeValidation::validate_cardinality_of_inheritance_line_with_updated_cardinality(
             snapshot,
@@ -3488,35 +3399,12 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_declared_capability_annotation_is_compatible_with_inherited_annotations(
-            snapshot,
-            capability.clone(),
-            category.clone(),
-        )
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
         OperationTimeValidation::validate_inherited_annotation_is_compatible_with_declared_annotations_of_overriding_capabilities(
             snapshot,
             category,
             capability,
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        Ok(())
-    }
-
-    fn validate_unset_type_annotation_general(
-        &self,
-        snapshot: &mut impl WritableSnapshot,
-        type_: impl KindAPI<'static>,
-        annotation_category: AnnotationCategory,
-    ) -> Result<(), ConceptWriteError> {
-        OperationTimeValidation::validate_unset_annotation_is_not_inherited(
-            snapshot,
-            type_.clone(),
-            annotation_category,
-        )
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         Ok(())
     }

@@ -123,11 +123,11 @@ impl ConstraintDescription {
         }
     }
 
-    pub(crate) fn narrowed_correctly_by_same_type(&self, other: &ConstraintDescription) -> bool {
+    pub(crate) fn narrowed_by_strictly_same_type(&self, other: &ConstraintDescription) -> bool {
         self.narrowed_correctly_by(other, false)
     }
 
-    pub(crate) fn narrowed_correctly_by_any_type(&self, other: &ConstraintDescription) -> bool {
+    pub(crate) fn narrowed_by_any_type(&self, other: &ConstraintDescription) -> bool {
         self.narrowed_correctly_by(other, true)
     }
 
@@ -176,6 +176,34 @@ pub trait Constraint<T>: Sized + Clone + Hash + PartialEq {
 
     fn unchecked(&self) -> bool {
         self.description().unchecked()
+    }
+
+    fn validate_narrowed_by_strictly_same_type(&self, other: &ConstraintDescription) -> Result<(), ConstraintError> {
+        match self.description().narrowed_by_strictly_same_type(other) {
+            true => Ok(()),
+            false => Err(ConstraintError::IsNotNarrowedBy { first: self.description(), second: other.clone() })
+        }
+    }
+
+    fn validate_narrowed_by_any_type(&self, other: &ConstraintDescription) -> Result<(), ConstraintError> {
+        match self.description().narrowed_by_any_type(other) {
+            true => Ok(()),
+            false => Err(ConstraintError::IsNotNarrowedBy { first: self.description(), second: other.clone() })
+        }
+    }
+
+    fn validate_narrows_strictly_same_type(&self, other: &ConstraintDescription) -> Result<(), ConstraintError> {
+        match other.narrowed_by_strictly_same_type(&self.description()) {
+            true => Ok(()),
+            false => Err(ConstraintError::IsNotNarrowedBy { first: other.clone(), second: self.description() })
+        }
+    }
+
+    fn validate_narrows_any_type(&self, other: &ConstraintDescription) -> Result<(), ConstraintError> {
+        match other.narrowed_by_any_type(&self.description()) {
+            true => Ok(()),
+            false => Err(ConstraintError::IsNotNarrowedBy { first: other.clone(), second: self.description() })
+        }
     }
 
     fn validate_cardinality(&self, count: u64) -> Result<(), ConstraintError> {
@@ -287,6 +315,13 @@ macro_rules! filter_by_constraint_category {
     };
 }
 pub use filter_by_constraint_category;
+
+macro_rules! filter_by_source {
+    ($constraints_iter:expr, $source:ident) => {
+        $constraints_iter.filter(|constraint| &constraint.source() == &source)
+    };
+}
+pub use filter_by_source;
 
 macro_rules! filter_out_unchecked_constraints {
     ($constraints_iter:expr) => {
@@ -449,6 +484,7 @@ pub(crate) fn get_relates_default_constraints<CAP: Capability<'static>>(
 pub enum ConstraintError {
     CannotUnwrapConstraint(String),
     CorruptConstraintIsNotApplicableToValue { description: ConstraintDescription, value: Value<'static>, },
+    IsNotNarrowedBy { first: ConstraintDescription, second: ConstraintDescription },
     ViolatedAbstract,
     ViolatedCardinality { cardinality: AnnotationCardinality, count: u64 },
     ViolatedRegex { regex: AnnotationRegex, value: Value<'static> },

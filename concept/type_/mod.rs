@@ -600,8 +600,4 @@ pub trait Capability<'a>:
     ) -> Result<AnnotationCardinality, ConceptReadError> {
         type_manager.get_capability_cardinality(snapshot, self.clone())
     }
-
-    fn chain_capabilities<C: IntoIterator<Item = &Self>>(first: Self, others: C) -> Chain<Self, C> {
-        iter::once(first).chain(others.into_iter())
-    }
 }

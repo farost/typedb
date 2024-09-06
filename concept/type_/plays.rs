@@ -160,21 +160,21 @@ impl<'a> Capability<'a> for Plays<'a> {
     //     type_manager.get_plays_specialises_transitive(snapshot, self.clone().into_owned())
     // }
 
-    fn get_specialising<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashSet<Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_specialising(snapshot, self.clone().into_owned())
-    }
-
-    fn get_specialising_transitive<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, Vec<Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_specialising_transitive(snapshot, self.clone().into_owned())
-    }
+    // fn get_specialising<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, HashSet<Plays<'static>>>, ConceptReadError> {
+    //     type_manager.get_plays_specialising(snapshot, self.clone().into_owned())
+    // }
+    //
+    // fn get_specialising_transitive<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, Vec<Plays<'static>>>, ConceptReadError> {
+    //     type_manager.get_plays_specialising_transitive(snapshot, self.clone().into_owned())
+    // }
 
     fn get_annotations_declared<'this>(
         &'this self,

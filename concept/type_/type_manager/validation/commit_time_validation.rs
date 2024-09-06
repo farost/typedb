@@ -26,13 +26,9 @@ use crate::{
                 validation::{
                     get_label_or_concept_read_err,
                     is_overridden_interface_object_declared_supertype_or_self, is_type_transitive_supertype_or_same,
-                    validate_capabilities_cardinalities_narrowing,
-                    validate_declared_annotation_is_compatible_with_inherited_annotations,
-                    validate_declared_capability_annotation_is_compatible_with_inherited_annotations,
-                    validate_edge_annotations_narrowing_of_inherited_annotations,
                     validate_role_name_uniqueness_non_transitive,
                     validate_role_type_supertype_ordering_match,
-                    validate_type_annotations_narrowing_of_inherited_annotations,
+                    validate_type_declared_constraints_narrowing_of_supertype_constraints,
                 },
                 SchemaValidationError,
             },
@@ -43,7 +39,7 @@ use crate::{
 };
 use crate::type_::object_type::ObjectType;
 use crate::type_::{Ordering, OwnerAPI};
-use crate::type_::type_manager::validation::validation::validate_sibling_owns_ordering_match_for_type;
+use crate::type_::type_manager::validation::validation::{validate_sibling_owns_ordering_match_for_type, validate_type_supertype_abstractness};
 
 pub struct CommitTimeValidation {}
 
@@ -111,7 +107,7 @@ impl CommitTimeValidation {
         type_: EntityType<'static>,
         validation_errors: &mut Vec<SchemaValidationError>,
     ) -> Result<(), ConceptReadError> {
-        Self::validate_type_annotations(snapshot, type_manager, type_.clone(), validation_errors)?;
+        Self::validate_type_constraints(snapshot, type_manager, type_.clone(), validation_errors)?;
         Self::validate_object_type(snapshot, type_manager, type_.into_owned_object_type(), validation_errors)?;
 
         Ok(())
@@ -123,7 +119,7 @@ impl CommitTimeValidation {
         type_: RelationType<'static>,
         validation_errors: &mut Vec<SchemaValidationError>,
     ) -> Result<(), ConceptReadError> {
-        Self::validate_type_annotations(snapshot, type_manager, type_.clone(), validation_errors)?;
+        Self::validate_type_constraints(snapshot, type_manager, type_.clone(), validation_errors)?;
         Self::validate_object_type(snapshot, type_manager, type_.into_owned_object_type(), validation_errors)?;
 
         Self::validate_relation_type_has_relates(snapshot, type_manager, type_.clone(), validation_errors)?;
@@ -134,15 +130,16 @@ impl CommitTimeValidation {
             Self::validate_relates(snapshot, type_manager, type_.clone(), validation_errors)?
         );
         if !invalid_relates {
-            validate_capabilities_cardinalities_narrowing::<Relates<'static>>(
-                snapshot,
-                type_manager,
-                type_.clone(),
-                &HashMap::new(), // read everything from storage
-                &HashMap::new(), // read everything from storage
-                &HashMap::new(), // read everything from storage
-                validation_errors,
-            )?;
+            // TODO: Capabilities constraints narrowing checks are currently disabled
+            // validate_capabilities_cardinalities_narrowing::<Relates<'static>>(
+            //     snapshot,
+            //     type_manager,
+            //     type_.clone(),
+            //     &HashMap::new(), // read everything from storage
+            //     &HashMap::new(), // read everything from storage
+            //     &HashMap::new(), // read everything from storage
+            //     validation_errors,
+            // )?;
         }
 
         Ok(())
@@ -160,7 +157,7 @@ impl CommitTimeValidation {
         );
 
         if !invalid_value_type {
-            Self::validate_type_annotations(snapshot, type_manager, type_.clone(), validation_errors)?;
+            Self::validate_type_constraints(snapshot, type_manager, type_.clone(), validation_errors)?;
         }
 
         Ok(())
@@ -200,7 +197,7 @@ impl CommitTimeValidation {
                 validation_errors,
             )?;
             Self::validate_type_ordering(snapshot, type_manager, role.clone(), validation_errors)?;
-            Self::validate_type_annotations(snapshot, type_manager, role.clone(), validation_errors)?;
+            Self::validate_type_constraints(snapshot, type_manager, role.clone(), validation_errors)?;
         }
 
         Ok(())
@@ -217,15 +214,16 @@ impl CommitTimeValidation {
             Self::validate_owns(snapshot, type_manager, type_.clone(), validation_errors)?
         );
         if !invalid_owns {
-            validate_capabilities_cardinalities_narrowing::<Owns<'static>>(
-                snapshot,
-                type_manager,
-                type_.clone().into_owned_object_type(),
-                &HashMap::new(), // read everything from storage
-                &HashMap::new(), // read everything from storage
-                &HashMap::new(), // read everything from storage
-                validation_errors,
-            )?;
+            // TODO: Capabilities constraints narrowing checks are currently disabled
+            // validate_capabilities_cardinalities_narrowing::<Owns<'static>>(
+            //     snapshot,
+            //     type_manager,
+            //     type_.clone().into_owned_object_type(),
+            //     &HashMap::new(), // read everything from storage
+            //     &HashMap::new(), // read everything from storage
+            //     &HashMap::new(), // read everything from storage
+            //     validation_errors,
+            // )?;
         }
 
         let invalid_plays = produced_errors!(
@@ -233,15 +231,16 @@ impl CommitTimeValidation {
             Self::validate_plays(snapshot, type_manager, type_.clone(), validation_errors)?
         );
         if !invalid_plays {
-            validate_capabilities_cardinalities_narrowing::<Plays<'static>>(
-                snapshot,
-                type_manager,
-                type_.clone().into_owned_object_type(),
-                &HashMap::new(), // read everything from storage
-                &HashMap::new(), // read everything from storage
-                &HashMap::new(), // read everything from storage
-                validation_errors,
-            )?;
+            // TODO: Capabilities constraints narrowing checks are currently disabled
+            // validate_capabilities_cardinalities_narrowing::<Plays<'static>>(
+            //     snapshot,
+            //     type_manager,
+            //     type_.clone().into_owned_object_type(),
+            //     &HashMap::new(), // read everything from storage
+            //     &HashMap::new(), // read everything from storage
+            //     &HashMap::new(), // read everything from storage
+            //     validation_errors,
+            // )?;
         }
 
         Ok(())
@@ -324,7 +323,7 @@ impl CommitTimeValidation {
         for relates in relates_declared {
             let invalid_overrides = produced_errors!(
                 validation_errors,
-                Self::validate_overridden_relates(snapshot, type_manager, relates.clone(), validation_errors)?
+                Self::validate_specialized_relates(snapshot, type_manager, relates.clone(), validation_errors)?
             );
 
             if !invalid_overrides {
@@ -340,7 +339,8 @@ impl CommitTimeValidation {
         Ok(())
     }
 
-    fn validate_overridden_relates(
+    // TODO: Change this method to check it correctly!
+    fn validate_specialized_relates(
         snapshot: &impl ReadableSnapshot,
         _type_manager: &TypeManager,
         relates: Relates<'static>,
@@ -539,7 +539,7 @@ impl CommitTimeValidation {
         Ok(())
     }
 
-    fn validate_redundant_type_annotations<T: KindAPI<'static>>(
+    fn validate_redundant_type_constraints<T: KindAPI<'static>>(
         snapshot: &impl ReadableSnapshot,
         _type_manager: &TypeManager,
         type_: T,
@@ -641,45 +641,42 @@ impl CommitTimeValidation {
         Ok(())
     }
 
-    fn validate_type_annotations(
+    fn validate_type_constraints(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
         type_: impl KindAPI<'static>,
         validation_errors: &mut Vec<SchemaValidationError>,
     ) -> Result<(), ConceptReadError> {
-        let declared_annotations = TypeReader::get_type_annotations_declared(snapshot, type_.clone())?;
-
-        for annotation in declared_annotations {
-            let annotation_category = annotation.clone().into().category();
-
-            if let Err(err) = validate_declared_annotation_is_compatible_with_inherited_annotations(
-                snapshot,
-                type_.clone(),
-                annotation_category,
+        if let Some(supertype) = TypeReader::get_supertype(snapshot, type_.clone())? {
+            if let Err(err) = validate_type_supertype_abstractness(
+                snapshot: &impl ReadableSnapshot,
+                type_manager: &TypeManager,
+                type_,
+                Some(supertype), // already found the supertype
+                None,            // read abstractness from storage
+                None,            // read abstractness from storage
             ) {
                 validation_errors.push(err);
             }
 
-            if let Some(supertype) = TypeReader::get_supertype(snapshot, type_.clone())? {
-                if let Err(err) = validate_type_annotations_narrowing_of_inherited_annotations(
-                    snapshot,
-                    type_manager,
-                    type_.clone(),
-                    supertype.clone(),
-                    annotation.clone(),
-                ) {
-                    validation_errors.push(err);
-                }
-            }
-
-            Self::validate_redundant_type_annotations(
-                type_manager,
+            if let Err(err) = validate_type_declared_constraints_narrowing_of_supertype_constraints(
                 snapshot,
+                type_manager,
                 type_.clone(),
-                &annotation,
-                validation_errors,
-            )?;
+                supertype.clone(),
+            ) {
+                validation_errors.push(err);
+            }
         }
+
+        // TODO: Just iterate over all constraints and count constraint descriptions without owners... If > 1, error!
+        Self::validate_redundant_type_constraints(
+            type_manager,
+            snapshot,
+            type_.clone(),
+            &annotation,
+            validation_errors,
+        )?;
 
         Ok(())
     }
@@ -693,28 +690,6 @@ impl CommitTimeValidation {
         let declared_annotations = TypeReader::get_capability_annotations_declared(snapshot, edge.clone())?;
 
         for annotation in declared_annotations {
-            let annotation_category = annotation.clone().into().category();
-
-            if let Err(err) = validate_declared_capability_annotation_is_compatible_with_inherited_annotations(
-                snapshot,
-                edge.clone(),
-                annotation_category,
-            ) {
-                validation_errors.push(err);
-            }
-
-            if let Some(overridden_edge) = TypeReader::get_type_capability_specialises(snapshot, edge.clone())? {
-                if let Err(err) = validate_edge_annotations_narrowing_of_inherited_annotations(
-                    snapshot,
-                    type_manager,
-                    edge.clone(),
-                    overridden_edge.clone(),
-                    annotation.clone().into(),
-                ) {
-                    validation_errors.push(err);
-                }
-            }
-
             Self::validate_redundant_edge_annotations(
                 type_manager,
                 snapshot,

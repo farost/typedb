@@ -512,27 +512,6 @@ impl AnnotationCategory {
         }
     }
 
-    pub fn declarable_below(&self, other: AnnotationCategory) -> bool {
-        match self {
-            AnnotationCategory::Unique => match other {
-                AnnotationCategory::Key => false,
-                _ => true,
-            },
-            AnnotationCategory::Cardinality => match other {
-                AnnotationCategory::Key => false,
-                _ => true,
-            },
-            | AnnotationCategory::Abstract
-            | AnnotationCategory::Key
-            | AnnotationCategory::Distinct
-            | AnnotationCategory::Independent
-            | AnnotationCategory::Regex
-            | AnnotationCategory::Cascade
-            | AnnotationCategory::Range
-            | AnnotationCategory::Values => true,
-        }
-    }
-
     // TODO: remove and constraint validation type instead!
     pub fn inheritable(&self) -> bool {
         match self {
