@@ -18,8 +18,7 @@ use encoding::{
 use storage::{sequence_number::SequenceNumber, MVCCStorage, ReadSnapshotOpenError};
 
 use crate::type_::{
-    annotation::AnnotationIndependent,
-    attribute_type::{AttributeType, AttributeTypeAnnotation},
+    attribute_type::AttributeType,
     entity_type::EntityType,
     object_type::ObjectType,
     owns::{Owns, OwnsAnnotation},
@@ -38,6 +37,8 @@ use crate::type_::{
     },
     KindAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI,
 };
+use crate::type_::annotation::{Annotation, AnnotationCardinality};
+use crate::type_::constraint::{CapabilityConstraint, Constraint, ConstraintCategory, ConstraintDescription, TypeConstraint};
 
 // TODO: could/should we slab allocate the schema cache?
 #[derive(Debug)]
@@ -112,8 +113,10 @@ impl TypeCache {
             .filter_map(|cache| {
                 if cache
                     .common_type_cache()
-                    .annotations
-                    .contains_key(&AttributeTypeAnnotation::Independent(AnnotationIndependent {}))
+                    .constraints
+                    .iter().map(|constraint| constraint.category())
+                    .find(|category| category == &ConstraintCategory::Independent)
+                    .is_some()
                 {
                     Some(cache.common_type_cache.type_.clone())
                 } else {
@@ -232,10 +235,10 @@ impl TypeCache {
         T: KindAPI<'a> + CacheGetter<CacheType = CACHE>,
         CACHE: HasCommonTypeCache<T::SelfStatic> + 'this,
     {
-        &T::get_cache(self, type_).common_type_cache().supertypes
+        &T::get_cache(self, type_).common_type_cache().supertypes_transitive
     }
 
-    pub(crate) fn get_subtypes<'a, 'this, T, CACHE>(&'this self, type_: T) -> &'this Vec<T::SelfStatic>
+    pub(crate) fn get_subtypes<'a, 'this, T, CACHE>(&'this self, type_: T) -> &'this HashSet<T::SelfStatic>
     where
         T: KindAPI<'a> + CacheGetter<CacheType = CACHE>,
         CACHE: HasCommonTypeCache<T::SelfStatic> + 'this,
@@ -270,29 +273,29 @@ impl TypeCache {
         &T::get_cache(self, type_).common_type_cache().annotations_declared
     }
 
-    pub(crate) fn get_annotations<'a, 'this, T, CACHE>(
+    pub(crate) fn get_constraints<'a, 'this, T, CACHE>(
         &'this self,
         type_: T,
-    ) -> &HashMap<<<T as TypeAPI<'a>>::SelfStatic as KindAPI<'static>>::AnnotationType, <T as TypeAPI<'a>>::SelfStatic>
+    ) -> &HashSet<TypeConstraint<T>>
     where
-        T: KindAPI<'a> + CacheGetter<CacheType = CACHE>,
+        T: KindAPI<'static> + CacheGetter<CacheType = CACHE>,
         CACHE: HasCommonTypeCache<T::SelfStatic> + 'this,
     {
-        &T::get_cache(self, type_).common_type_cache().annotations
+        &T::get_cache(self, type_).common_type_cache().constraints
     }
 
-    pub(crate) fn get_owns_for_attribute_type_declared(
+    pub(crate) fn get_attribute_type_owns(
         &self,
         attribute_type: AttributeType<'_>,
     ) -> &HashSet<Owns<'static>> {
-        &AttributeType::get_cache(self, attribute_type).owns_declared
+        &AttributeType::get_cache(self, attribute_type).owns
     }
 
-    pub(crate) fn get_owns_for_attribute_type(
+    pub(crate) fn get_attribute_type_owner_types(
         &self,
         attribute_type: AttributeType<'_>,
     ) -> &HashMap<ObjectType<'static>, Owns<'static>> {
-        &AttributeType::get_cache(self, attribute_type).owns
+        &AttributeType::get_cache(self, attribute_type).owner_types
     }
 
     pub(crate) fn get_owns_declared<'a, 'this, T, CACHE>(&'this self, type_: T) -> &HashSet<Owns<'static>>
@@ -304,34 +307,31 @@ impl TypeCache {
     }
 
     pub(crate) fn get_owns<'a, 'this, T, CACHE>(&'this self, type_: T) -> &HashSet<Owns<'static>>
-    where
-        T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
-        CACHE: HasObjectCache + 'this,
+        where
+            T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
+            CACHE: HasObjectCache + 'this,
     {
         &T::get_cache(self, type_).object_cache().owns
     }
 
-    pub(crate) fn get_object_owns_overrides<'a, 'this, T, CACHE>(
-        &'this self,
-        type_: T,
-    ) -> &HashMap<Owns<'static>, Owns<'static>>
-    where
-        T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
-        CACHE: HasObjectCache + 'this,
+    pub(crate) fn get_owns_with_specialised<'a, 'this, T, CACHE>(&'this self, type_: T) -> &HashSet<Owns<'static>>
+        where
+            T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
+            CACHE: HasObjectCache + 'this,
     {
-        &T::get_cache(self, type_).object_cache().owns_overrides
+        &T::get_cache(self, type_).object_cache().owns_with_specialised
     }
 
     pub(crate) fn get_role_type_ordering(&self, role_type: RoleType<'_>) -> Ordering {
         RoleType::get_cache(self, role_type).ordering
     }
 
-    pub(crate) fn get_role_type_relates_declared(&self, role_type: RoleType<'_>) -> &Relates<'static> {
-        &RoleType::get_cache(self, role_type).relates_declared
+    pub(crate) fn get_role_type_relates(&self, role_type: RoleType<'_>) -> &Relates<'static> {
+        &RoleType::get_cache(self, role_type).relates
     }
 
-    pub(crate) fn get_role_type_relates(&self, role_type: RoleType<'_>) -> &HashSet<Relates<'static>> {
-        &RoleType::get_cache(self, role_type).relates
+    pub(crate) fn get_role_type_relation_types(&self, role_type: RoleType<'_>) -> &HashMap<RelationType<'static>, Relates<'static>> {
+        &RoleType::get_cache(self, role_type).relation_types
     }
 
     pub(crate) fn get_relation_type_relates_declared(
@@ -345,44 +345,52 @@ impl TypeCache {
         &RelationType::get_cache(self, relation_type).relates
     }
 
+    pub(crate) fn get_relation_type_relates_with_specialised(&self, relation_type: RelationType<'_>) -> &HashSet<Relates<'static>> {
+        &RelationType::get_cache(self, relation_type).relates_with_specialised
+    }
+
     pub(crate) fn get_relates_annotations_declared<'c>(
         &'c self,
         relates: Relates<'c>,
     ) -> &'c HashSet<RelatesAnnotation> {
-        &self.relates.get(&relates).unwrap().annotations_declared
+        &self.relates.get(&relates).unwrap().common_capability_cache.annotations_declared
     }
 
-    pub(crate) fn get_relates_annotations<'c>(
+    pub(crate) fn get_relates_constraints<'c>(
         &'c self,
         relates: Relates<'c>,
-    ) -> &'c HashMap<RelatesAnnotation, Relates<'static>> {
-        &self.relates.get(&relates).unwrap().annotations
+    ) -> &'c HashSet<CapabilityConstraint<Relates<'static>>> {
+        &self.relates.get(&relates).unwrap().common_capability_cache.constraints
     }
 
-    pub(crate) fn get_relates_override<'c>(&'c self, relates: Relates<'c>) -> &'c Option<Relates<'static>> {
-        &self.relates.get(&relates).unwrap().overrides
+    pub(crate) fn get_relates_specialises<'c>(&'c self, relates: Relates<'c>) -> &'c Option<Relates<'static>> {
+        &self.relates.get(&relates).unwrap().common_capability_cache.specialises
     }
 
-    pub(crate) fn get_relates_overriding<'c>(&'c self, relates: Relates<'c>) -> &'c HashSet<Relates<'static>> {
-        &self.relates.get(&relates).unwrap().overriding
+    pub(crate) fn get_relates_specialises_transitive<'c>(&'c self, relates: Relates<'c>) -> &'c Vec<Relates<'static>> {
+        &self.relates.get(&relates).unwrap().common_capability_cache.specialises_transitive
     }
 
-    pub(crate) fn get_relates_overriding_transitive<'c>(
+    pub(crate) fn get_relates_specialising<'c>(&'c self, relates: Relates<'c>) -> &'c HashSet<Relates<'static>> {
+        &self.relates.get(&relates).unwrap().common_capability_cache.specialising
+    }
+
+    pub(crate) fn get_relates_specialising_transitive<'c>(
         &'c self,
         relates: Relates<'c>,
-    ) -> &'c HashSet<Relates<'static>> {
-        &self.relates.get(&relates).unwrap().overriding_transitive
+    ) -> &'c Vec<Relates<'static>> {
+        &self.relates.get(&relates).unwrap().common_capability_cache.specialising_transitive
     }
 
-    pub(crate) fn get_plays_for_role_type_declared(&self, role_type: RoleType<'_>) -> &HashSet<Plays<'static>> {
-        &RoleType::get_cache(self, role_type).plays_declared
+    pub(crate) fn get_role_type_plays(&self, role_type: RoleType<'_>) -> &HashSet<Plays<'static>> {
+        &RoleType::get_cache(self, role_type).plays
     }
 
-    pub(crate) fn get_plays_for_role_type(
+    pub(crate) fn get_role_type_player_types(
         &self,
         role_type: RoleType<'_>,
     ) -> &HashMap<ObjectType<'static>, Plays<'static>> {
-        &RoleType::get_cache(self, role_type).plays
+        &RoleType::get_cache(self, role_type).player_types
     }
 
     pub(crate) fn get_plays_declared<'a, 'this, T, CACHE>(&'this self, type_: T) -> &HashSet<Plays<'static>>
@@ -394,45 +402,46 @@ impl TypeCache {
     }
 
     pub(crate) fn get_plays<'a, 'this, T, CACHE>(&'this self, type_: T) -> &'this HashSet<Plays<'static>>
-    where
-        T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
-        CACHE: HasObjectCache + 'this,
+        where
+            T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
+            CACHE: HasObjectCache + 'this,
     {
         &T::get_cache(self, type_).object_cache().plays
     }
 
-    pub(crate) fn get_object_plays_overrides<'a, 'this, T, CACHE>(
-        &'this self,
-        type_: T,
-    ) -> &'this HashMap<Plays<'static>, Plays<'static>>
-    where
-        T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
-        CACHE: HasObjectCache + 'this,
+    pub(crate) fn get_plays_with_specialised<'a, 'this, T, CACHE>(&'this self, type_: T) -> &'this HashSet<Plays<'static>>
+        where
+            T: OwnerAPI<'a> + PlayerAPI<'a> + CacheGetter<CacheType = CACHE>,
+            CACHE: HasObjectCache + 'this,
     {
-        &T::get_cache(self, type_).object_cache().plays_overrides
+        &T::get_cache(self, type_).object_cache().plays_with_specialised
     }
 
-    pub(crate) fn get_plays_override<'c>(&'c self, plays: Plays<'c>) -> &'c Option<Plays<'static>> {
-        &self.plays.get(&plays).unwrap().overrides
+    pub(crate) fn get_plays_specialises<'c>(&'c self, plays: Plays<'c>) -> &'c Option<Plays<'static>> {
+        &self.plays.get(&plays).unwrap().common_capability_cache.specialises
     }
 
-    pub(crate) fn get_plays_overriding<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<Plays<'static>> {
-        &self.plays.get(&plays).unwrap().overriding
+    pub(crate) fn get_plays_specialises_transitive<'c>(&'c self, plays: Plays<'c>) -> &'c Vec<Plays<'static>> {
+        &self.plays.get(&plays).unwrap().common_capability_cache.specialises_transitive
     }
 
-    pub(crate) fn get_plays_overriding_transitive<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<Plays<'static>> {
-        &self.plays.get(&plays).unwrap().overriding_transitive
+    pub(crate) fn get_plays_specialising<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<Plays<'static>> {
+        &self.plays.get(&plays).unwrap().common_capability_cache.specialising
+    }
+
+    pub(crate) fn get_plays_specialising_transitive<'c>(&'c self, plays: Plays<'c>) -> &'c Vec<Plays<'static>> {
+        &self.plays.get(&plays).unwrap().common_capability_cache.specialising_transitive
     }
 
     pub(crate) fn get_plays_annotations_declared<'c>(&'c self, plays: Plays<'c>) -> &'c HashSet<PlaysAnnotation> {
-        &self.plays.get(&plays).unwrap().annotations_declared
+        &self.plays.get(&plays).unwrap().common_capability_cache.annotations_declared
     }
 
-    pub(crate) fn get_plays_annotations<'c>(
+    pub(crate) fn get_plays_constraints<'c>(
         &'c self,
         plays: Plays<'c>,
-    ) -> &'c HashMap<PlaysAnnotation, Plays<'static>> {
-        &self.plays.get(&plays).unwrap().annotations
+    ) -> &'c HashSet<CapabilityConstraint<Plays<'static>>> {
+        &self.plays.get(&plays).unwrap().common_capability_cache.constraints
     }
 
     pub(crate) fn get_attribute_type_value_type_declared(
@@ -450,27 +459,31 @@ impl TypeCache {
     }
 
     pub(crate) fn get_owns_annotations_declared<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<OwnsAnnotation> {
-        &self.owns.get(&owns).unwrap().annotations_declared
+        &self.owns.get(&owns).unwrap().common_capability_cache.annotations_declared
     }
 
-    pub(crate) fn get_owns_annotations<'c>(&'c self, owns: Owns<'c>) -> &'c HashMap<OwnsAnnotation, Owns<'static>> {
-        &self.owns.get(&owns).unwrap().annotations
+    pub(crate) fn get_owns_constraints<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<CapabilityConstraint<Owns<'static>>> {
+        &self.owns.get(&owns).unwrap().common_capability_cache.constraints
     }
 
     pub(crate) fn get_owns_ordering<'c>(&'c self, owns: Owns<'c>) -> Ordering {
         self.owns.get(&owns).unwrap().ordering
     }
 
-    pub(crate) fn get_owns_override<'c>(&'c self, owns: Owns<'c>) -> &'c Option<Owns<'static>> {
-        &self.owns.get(&owns).unwrap().overrides
+    pub(crate) fn get_owns_specialises<'c>(&'c self, owns: Owns<'c>) -> &'c Option<Owns<'static>> {
+        &self.owns.get(&owns).unwrap().common_capability_cache.specialises
     }
 
-    pub(crate) fn get_owns_overriding<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<Owns<'static>> {
-        &self.owns.get(&owns).unwrap().overriding
+    pub(crate) fn get_owns_specialises_transitive<'c>(&'c self, owns: Owns<'c>) -> &'c Vec<Owns<'static>> {
+        &self.owns.get(&owns).unwrap().common_capability_cache.specialises_transitive
     }
 
-    pub(crate) fn get_owns_overriding_transitive<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<Owns<'static>> {
-        &self.owns.get(&owns).unwrap().overriding_transitive
+    pub(crate) fn get_owns_specialising<'c>(&'c self, owns: Owns<'c>) -> &'c HashSet<Owns<'static>> {
+        &self.owns.get(&owns).unwrap().common_capability_cache.specialising
+    }
+
+    pub(crate) fn get_owns_specialising_transitive<'c>(&'c self, owns: Owns<'c>) -> &'c Vec<Owns<'static>> {
+        &self.owns.get(&owns).unwrap().common_capability_cache.specialising_transitive
     }
 
     pub(crate) fn get_struct_definition_key(&self, label: &str) -> Option<DefinitionKey<'static>> {

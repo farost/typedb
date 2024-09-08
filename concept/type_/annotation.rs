@@ -31,6 +31,8 @@ use encoding::{
 use regex::Regex;
 use resource::constants::snapshot::BUFFER_VALUE_INLINE;
 use serde::{Deserialize, Serialize};
+use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, TypeConstraint};
+use crate::type_::{Capability, KindAPI, TypeAPI};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Annotation {
@@ -57,10 +59,26 @@ pub struct AnnotationDistinct;
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct AnnotationUnique;
 
+impl AnnotationUnique {
+    pub fn value_type_valid(value_type: Option<ValueType>) -> bool {
+        match value_type {
+            Some(value_type) => value_type.keyable(),
+            None => false,
+        }
+    }
+}
+
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct AnnotationKey;
 
 impl AnnotationKey {
+    pub fn value_type_valid(value_type: Option<ValueType>) -> bool {
+        AnnotationUnique::value_type_valid(value_type)
+    }
+}
+
+impl AnnotationKey {
+    pub const UNIQUE: AnnotationUnique = AnnotationUnique;
     pub const CARDINALITY: AnnotationCardinality = AnnotationCardinality::new(1, Some(1));
 }
 
@@ -90,6 +108,10 @@ impl AnnotationCardinality {
         Self::new(0, None)
     }
 
+    pub fn is_unchecked(&self) -> bool {
+        self == &Self::unchecked()
+    }
+
     pub fn valid(&self) -> bool {
         match self.end_inclusive {
             Some(end_inclusive) if self.start_inclusive > end_inclusive => false,
@@ -111,14 +133,16 @@ impl AnnotationCardinality {
     }
 
     pub fn narrowed_correctly_by(&self, other: &Self) -> bool {
-        self.value_satisfies_start(other.start()) && self.value_satisfies_end(other.end())
+        // We allow other.min < self.min and other.max > self.max.
+        // The only limitation is other.min <= self.max.
+        self.value_satisfies_end(Some(other.start()))
     }
 
-    fn value_satisfies_start(&self, value: u64) -> bool {
+    pub fn value_satisfies_start(&self, value: u64) -> bool {
         self.start_inclusive <= value
     }
 
-    fn value_satisfies_end(&self, value: Option<u64>) -> bool {
+    pub fn value_satisfies_end(&self, value: Option<u64>) -> bool {
         self.end_inclusive.unwrap_or(u64::MAX) >= value.unwrap_or(u64::MAX)
     }
 }
@@ -179,12 +203,17 @@ impl AnnotationRegex {
             _ => false,
         }
     }
+
+    // Can try to implement the check, but allow everything now!
+    pub fn narrowed_correctly_by(&self, _other: &Self) -> bool {
+        true
+    }
 }
 
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct AnnotationCascade;
 
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
 pub struct AnnotationRange {
     // ##########################################################################
     // ###### WARNING: any changes here may break backwards compatibility! ######
@@ -321,14 +350,7 @@ impl AnnotationRange {
     }
 }
 
-impl Hash for AnnotationRange {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        hash_value::hash_value_opt(&self.start_inclusive, state);
-        hash_value::hash_value_opt(&self.end_inclusive, state);
-    }
-}
-
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
 pub struct AnnotationValues {
     // ##########################################################################
     // ###### WARNING: any changes here may break backwards compatibility! ######
@@ -416,12 +438,6 @@ impl AnnotationValues {
     }
 }
 
-impl Hash for AnnotationValues {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        hash_value::hash_value_vec(&self.values, state);
-    }
-}
-
 impl Annotation {
     pub fn category(&self) -> AnnotationCategory {
         match self {
@@ -436,6 +452,22 @@ impl Annotation {
             Self::Range(_) => AnnotationCategory::Range,
             Self::Values(_) => AnnotationCategory::Values,
         }
+    }
+
+    pub fn to_type_constraints<T: KindAPI<'static>>(&self, source: T) -> HashSet<TypeConstraint<T>> {
+        self.clone().into_type_constraints(source)
+    }
+
+    pub fn to_capability_constraints<CAP: Capability<'static>>(&self, source: CAP) -> HashSet<CapabilityConstraint<CAP>> {
+        self.clone().into_capability_constraints(source)
+    }
+
+    pub fn into_type_constraints<T: KindAPI<'static>>(self, source: T) -> HashSet<TypeConstraint<T>> {
+        ConstraintDescription::from_annotation(self).into_iter().map(|description| TypeConstraint::new(description.clone(), source.clone())).collect()
+    }
+
+    pub fn into_capability_constraints<CAP: Capability<'static>>(self, source: CAP) -> HashSet<CapabilityConstraint<CAP>> {
+        ConstraintDescription::from_annotation(self).into_iter().map(|description| CapabilityConstraint::new(description.clone(), source.clone())).collect()
     }
 }
 
@@ -495,51 +527,7 @@ impl AnnotationCategory {
         }
     }
 
-    pub fn declarable_below(&self, other: AnnotationCategory) -> bool {
-        match self {
-            AnnotationCategory::Unique => match other {
-                AnnotationCategory::Key => false,
-                _ => true,
-            },
-            AnnotationCategory::Cardinality => match other {
-                AnnotationCategory::Key => false,
-                _ => true,
-            },
-            | AnnotationCategory::Abstract
-            | AnnotationCategory::Key
-            | AnnotationCategory::Distinct
-            | AnnotationCategory::Independent
-            | AnnotationCategory::Regex
-            | AnnotationCategory::Cascade
-            | AnnotationCategory::Range
-            | AnnotationCategory::Values => true,
-        }
-    }
-
-    pub fn inheritable_alongside(&self, other: AnnotationCategory) -> bool {
-        // Note: this function implies that all the compared annotations already processed
-        // the type manager validations (other "declarable" methods) and only considers
-        // valid inheritance scenarios.
-        match self {
-            AnnotationCategory::Unique => match other {
-                AnnotationCategory::Key => false,
-                _ => true,
-            },
-            AnnotationCategory::Cardinality => match other {
-                AnnotationCategory::Key => false,
-                _ => true,
-            },
-            | AnnotationCategory::Abstract
-            | AnnotationCategory::Key
-            | AnnotationCategory::Distinct
-            | AnnotationCategory::Independent
-            | AnnotationCategory::Regex
-            | AnnotationCategory::Cascade
-            | AnnotationCategory::Range
-            | AnnotationCategory::Values => true,
-        }
-    }
-
+    // TODO: remove and constraint validation type instead!
     pub fn inheritable(&self) -> bool {
         match self {
             AnnotationCategory::Abstract => false,
@@ -802,43 +790,6 @@ impl Error for AnnotationError {
             Self::UnsupportedAnnotationForSub(_) => None,
             Self::UnsupportedAnnotationForValueType(_) => None,
         }
-    }
-}
-
-// TODO: Use ValueType's hash instead of this hack once it is merged with 3.0 branch!
-mod hash_value {
-    use std::hash::{Hash, Hasher};
-
-    use encoding::value::value::Value;
-
-    // WARN: Use this function only for Annotations containing Values to allow its hashing,
-    // not while precisely working with real values.
-    fn hash_value<H: Hasher>(value: &Value<'static>, state: &mut H) {
-        match value {
-            Value::Boolean(value) => value.hash(state),
-            Value::Long(value) => value.hash(state),
-            Value::Double(value) => value.to_bits().hash(state),
-            Value::Decimal(value) => value.hash(state),
-            Value::Date(value) => value.hash(state),
-            Value::DateTime(value) => value.hash(state),
-            Value::DateTimeTZ(value) => value.hash(state),
-            Value::String(value) => value.hash(state),
-            Value::Duration(value) => value.hash(state),
-            Value::Struct(_value) => unreachable!("Cannot hash a struct"),
-        }
-    }
-
-    pub(crate) fn hash_value_opt<H: Hasher>(value_opt: &Option<Value<'static>>, state: &mut H) {
-        const NONE_HASH_MARKER: u64 = 0xDEADBEEFDEADBEEF;
-
-        match value_opt {
-            None => NONE_HASH_MARKER.hash(state),
-            Some(value) => hash_value(value, state),
-        }
-    }
-
-    pub(crate) fn hash_value_vec<H: Hasher>(value_vec: &Vec<Value<'static>>, state: &mut H) {
-        value_vec.iter().for_each(|value| hash_value(value, state))
     }
 }
 

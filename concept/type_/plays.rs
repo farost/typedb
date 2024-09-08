@@ -24,6 +24,9 @@ use crate::{
         Capability, TypeAPI,
     },
 };
+use crate::type_::constraint::CapabilityConstraint;
+use crate::type_::Ordering;
+use crate::type_::owns::Owns;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Plays<'a> {
@@ -40,25 +43,6 @@ impl<'a> Plays<'a> {
 
     pub fn role(&self) -> RoleType<'a> {
         self.role.clone()
-    }
-
-    pub fn set_override(
-        &self,
-        snapshot: &mut impl WritableSnapshot,
-        type_manager: &TypeManager,
-        thing_manager: &ThingManager,
-        overridden: Plays<'static>,
-    ) -> Result<(), ConceptWriteError> {
-        type_manager.set_plays_override(snapshot, thing_manager, self.clone().into_owned(), overridden)
-    }
-
-    pub fn unset_override(
-        &self,
-        snapshot: &mut impl WritableSnapshot,
-        type_manager: &TypeManager,
-        thing_manager: &ThingManager,
-    ) -> Result<(), ConceptWriteError> {
-        type_manager.unset_plays_override(snapshot, thing_manager, self.clone().into_owned())
     }
 
     pub fn set_annotation(
@@ -94,6 +78,18 @@ impl<'a> Plays<'a> {
             }
         }
         Ok(())
+    }
+
+    pub fn get_constraint_abstract(
+        &self,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<Option<CapabilityConstraint<Plays<'static>>>, ConceptReadError> {
+        type_manager.get_capability_abstract_constraints(snapshot, self.clone().into_owned())
+    }
+
+    pub fn get_default_cardinality() -> AnnotationCardinality {
+        Self::DEFAULT_CARDINALITY
     }
 
     pub(crate) fn into_owned(self) -> Plays<'static> {
@@ -138,29 +134,47 @@ impl<'a> Capability<'a> for Plays<'a> {
         self.role.clone()
     }
 
-    fn get_override<'this>(
-        &'this self,
+    fn is_abstract(
+        &self,
         snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, Option<Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_override(snapshot, self.clone().into_owned())
+        type_manager: &TypeManager,
+    ) -> Result<bool, ConceptReadError> {
+        let is_abstract = self.get_constraints_abstract(snapshot, type_manager)?.is_some();
+        debug_assert!(!is_abstract, "Abstractness of plays is not implemented! Take care of validation");
+        Ok(is_abstract)
     }
 
-    fn get_overriding<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashSet<Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_overriding(snapshot, self.clone().into_owned())
-    }
+    // fn get_specialises<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, Option<Plays<'static>>>, ConceptReadError> {
+    //     type_manager.get_plays_specialises(snapshot, self.clone().into_owned())
+    // }
+    //
+    // fn get_specialises_transitive<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, Vec<Plays<'static>>>, ConceptReadError> {
+    //     type_manager.get_plays_specialises_transitive(snapshot, self.clone().into_owned())
+    // }
 
-    fn get_overriding_transitive<'this>(
-        &'this self,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashSet<Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_overriding_transitive(snapshot, self.clone().into_owned())
-    }
+    // fn get_specialising<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, HashSet<Plays<'static>>>, ConceptReadError> {
+    //     type_manager.get_plays_specialising(snapshot, self.clone().into_owned())
+    // }
+    //
+    // fn get_specialising_transitive<'this>(
+    //     &'this self,
+    //     snapshot: &impl ReadableSnapshot,
+    //     type_manager: &'this TypeManager,
+    // ) -> Result<MaybeOwns<'this, Vec<Plays<'static>>>, ConceptReadError> {
+    //     type_manager.get_plays_specialising_transitive(snapshot, self.clone().into_owned())
+    // }
 
     fn get_annotations_declared<'this>(
         &'this self,
@@ -170,20 +184,12 @@ impl<'a> Capability<'a> for Plays<'a> {
         type_manager.get_plays_annotations_declared(snapshot, self.clone().into_owned())
     }
 
-    fn get_annotations<'this>(
+    fn get_constraints<'this>(
         &'this self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'this TypeManager,
-    ) -> Result<MaybeOwns<'this, HashMap<PlaysAnnotation, Plays<'static>>>, ConceptReadError> {
-        type_manager.get_plays_annotations(snapshot, self.clone().into_owned())
-    }
-
-    fn get_default_cardinality<'this>(
-        &'this self,
-        _snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-    ) -> Result<AnnotationCardinality, ConceptReadError> {
-        Ok(type_manager.get_plays_default_cardinality())
+    ) -> Result<MaybeOwns<'this, HashSet<CapabilityConstraint<Plays<'static>>>>, ConceptReadError> {
+        type_manager.get_plays_constraints(snapshot, self.clone().into_owned())
     }
 }
 

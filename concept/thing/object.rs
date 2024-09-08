@@ -237,7 +237,7 @@ pub trait ObjectAPI<'a>: for<'b> ThingAPI<'a, Vertex<'b> = ObjectVertex<'b>> + C
             self.type_(),
             attribute.type_(),
         )
-        .map_err(|error| ConceptWriteError::DataValidation { source: error })?;
+            .map_err(|error| ConceptWriteError::DataValidation { source: error })?;
 
         let owns = self.type_().try_get_owns_attribute(snapshot, thing_manager.type_manager(), attribute.type_())?;
         match owns.get_ordering(snapshot, thing_manager.type_manager())? {
@@ -245,13 +245,13 @@ pub trait ObjectAPI<'a>: for<'b> ThingAPI<'a, Vertex<'b> = ObjectVertex<'b>> + C
             Ordering::Ordered => return Err(ConceptWriteError::SetHasUnorderedOwnsOrdered {}),
         }
 
-        OperationTimeValidation::validate_has_unique_constraint(
+        OperationTimeValidation::validate_owns_is_not_abstract(
             snapshot,
             thing_manager,
-            owns.into_owned(),
-            attribute.get_value(snapshot, thing_manager)?.into_owned(),
+            self,
+            owns,
         )
-        .map_err(|error| ConceptWriteError::DataValidation { source: error })?;
+            .map_err(|error| ConceptWriteError::DataValidation { source: error })?;
 
         thing_manager.set_has_unordered(snapshot, self, attribute.as_reference())
     }
@@ -278,6 +278,7 @@ pub trait ObjectAPI<'a>: for<'b> ThingAPI<'a, Vertex<'b> = ObjectVertex<'b>> + C
             Ordering::Unordered => (),
             Ordering::Ordered => return Err(ConceptWriteError::UnsetHasUnorderedOwnsOrdered {}),
         }
+
         thing_manager.unset_has(snapshot, self, attribute);
         Ok(())
     }
@@ -307,6 +308,14 @@ pub trait ObjectAPI<'a>: for<'b> ThingAPI<'a, Vertex<'b> = ObjectVertex<'b>> + C
             Ordering::Ordered => (),
         }
 
+        OperationTimeValidation::validate_owns_is_not_abstract(
+            snapshot,
+            thing_manager,
+            self,
+            owns,
+        )
+            .map_err(|error| ConceptWriteError::DataValidation { source: error })?;
+
         let mut new_counts = BTreeMap::<_, u64>::new();
         for attr in &new_attributes {
             *new_counts.entry(attr).or_default() += 1;
@@ -315,7 +324,8 @@ pub trait ObjectAPI<'a>: for<'b> ThingAPI<'a, Vertex<'b> = ObjectVertex<'b>> + C
         OperationTimeValidation::validate_owns_distinct_constraint(
             snapshot,
             thing_manager,
-            owns.clone().into_owned(),
+            self,
+            attribute_type.clone(),
             &new_counts,
         )
         .map_err(|error| ConceptWriteError::DataValidation { source: error })?;

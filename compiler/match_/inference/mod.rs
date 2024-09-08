@@ -57,43 +57,20 @@ mod type_seeder;
 
 #[derive(Debug)]
 pub enum TypeInferenceError {
-    ConceptRead {
-        source: ConceptReadError,
-    },
+    ConceptRead { source: ConceptReadError },
     LabelNotResolved(String),
 
-    MultipleAssignmentsForSingleVariable {
-        assign_variable: Variable,
-    },
-    CircularDependencyInExpressions {
-        assign_variable: Variable,
-    },
+    MultipleAssignmentsForSingleVariable { assign_variable: Variable },
+    CircularDependencyInExpressions { assign_variable: Variable },
     // TODO: Improve error
-    CouldNotDetermineValueTypeForVariable {
-        variable: Variable,
-    },
-    ExpressionVariableDidNotHaveSingleValueType {
-        variable: Variable,
-    },
-    ExpressionVariableHasNoValueType {
-        variable: Variable,
-    },
-    ExpressionCompilation {
-        source: ExpressionCompileError,
-    },
-    VariableInExpressionMustBeValueOrAttribute {
-        variable: Variable,
-        actual_category: VariableCategory,
-    },
+    CouldNotDetermineValueTypeForVariable { variable: Variable },
+    ExpressionVariableDidNotHaveSingleValueType { variable: Variable },
+    ExpressionVariableHasNoValueType { variable: Variable },
+    ExpressionCompilation { source: ExpressionCompileError },
+    VariableInExpressionMustBeValueOrAttribute { variable: Variable, actual_category: VariableCategory },
     RoleNameNotResolved(String),
-    MultipleLabelsForSingleTypeVariable {
-        variable: Variable,
-    },
-    IllegalInsertTypes {
-        constraint: Constraint<Variable>,
-        left_type: Type,
-        right_type: Type,
-    },
+    MultipleLabelsForSingleTypeVariable { variable: Variable },
+    IllegalInsertTypes { constraint: Constraint<Variable>, left_type: Type, right_type: Type },
 }
 
 impl Display for TypeInferenceError {
@@ -267,20 +244,18 @@ pub mod tests {
                 .unwrap();
 
             // Ownerships
-            let animal_owns = animal.set_owns(&mut snapshot, type_manager, thing_manager, name.clone()).unwrap();
-            let cat_owns = cat.set_owns(&mut snapshot, type_manager, thing_manager, catname.clone()).unwrap();
-            let dog_owns = dog.set_owns(&mut snapshot, type_manager, thing_manager, dogname.clone()).unwrap();
-            cat_owns.set_override(&mut snapshot, type_manager, thing_manager, animal_owns.clone()).unwrap();
-            dog_owns.set_override(&mut snapshot, type_manager, thing_manager, animal_owns.clone()).unwrap();
+            let animal_owns = animal.set_owns(&mut snapshot, type_manager, thing_manager, name.clone(), Ordering::Unordered).unwrap();
+            let cat_owns = cat.set_owns(&mut snapshot, type_manager, thing_manager, catname.clone(), Ordering::Unordered).unwrap();
+            let dog_owns = dog.set_owns(&mut snapshot, type_manager, thing_manager, dogname.clone(), Ordering::Unordered).unwrap();
 
             // Relations
             let fears = type_manager.create_relation_type(&mut snapshot, &Label::build(LABEL_FEARS)).unwrap();
             let has_fear = fears
-                .create_relates(&mut snapshot, type_manager, thing_manager, LABEL_HAS_FEAR, Ordering::Unordered, None)
+                .create_relates(&mut snapshot, type_manager, thing_manager, LABEL_HAS_FEAR, Ordering::Unordered)
                 .unwrap()
                 .role();
             let is_feared = fears
-                .create_relates(&mut snapshot, type_manager, thing_manager, LABEL_IS_FEARED, Ordering::Unordered, None)
+                .create_relates(&mut snapshot, type_manager, thing_manager, LABEL_IS_FEARED, Ordering::Unordered)
                 .unwrap()
                 .role();
             cat.set_plays(&mut snapshot, type_manager, thing_manager, has_fear.clone()).unwrap();

@@ -171,9 +171,9 @@ fn test_match_as_pipeline() {
         count += 1;
     }
     let PipelineContext::Owned(mut snapshot, mut thing_manager) = insert_pipeline.finalise_and_into_context().unwrap()
-        else {
-            unreachable!()
-        };
+    else {
+        unreachable!()
+    };
     let inserted_seq = snapshot.commit().unwrap();
 
     let mut newer_statistics = Statistics::new(inserted_seq.unwrap());
@@ -225,8 +225,7 @@ fn test_has_planning_traversal() {
     let name_type = type_manager.create_attribute_type(&mut snapshot, &NAME_LABEL).unwrap();
     name_type.set_value_type(&mut snapshot, &type_manager, &thing_manager, ValueType::String).unwrap();
 
-    let person_owns_age =
-        person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, age_type.clone(), Ordering::Unordered).unwrap();
+    let person_owns_age = person_type.set_owns(&mut snapshot, &type_manager, &thing_manager, age_type.clone(), Ordering::Unordered).unwrap();
     person_owns_age.set_annotation(&mut snapshot, &type_manager, &thing_manager, CARDINALITY_ANY).unwrap();
 
     let person_owns_name =
@@ -333,9 +332,9 @@ fn delete_has() {
     assert!(matches!(insert_pipeline.next(), Some(Ok(_))));
     assert!(insert_pipeline.next().is_none());
     let PipelineContext::Owned(mut snapshot, mut thing_manager) = insert_pipeline.finalise_and_into_context().unwrap()
-        else {
-            unreachable!()
-        };
+    else {
+        unreachable!()
+    };
     snapshot.commit().unwrap();
 
     let mut snapshot = context.storage.clone().open_snapshot_write();
@@ -362,8 +361,8 @@ fn delete_has() {
     assert!(matches!(insert_pipeline.next(), Some(Ok(_))));
     assert!(insert_pipeline.next().is_none());
     let PipelineContext::Owned(mut snapshot, mut thing_manager) = insert_pipeline.finalise_and_into_context().unwrap()
-        else {
-            unreachable!()
-        };
+    else {
+        unreachable!()
+    };
     snapshot.commit().unwrap();
 }
