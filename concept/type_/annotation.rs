@@ -59,8 +59,23 @@ pub struct AnnotationDistinct;
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct AnnotationUnique;
 
+impl AnnotationUnique {
+    pub fn value_type_valid(value_type: Option<ValueType>) -> bool {
+        match value_type {
+            Some(value_type) => value_type.keyable(),
+            None => false,
+        }
+    }
+}
+
 #[derive(Debug, Default, Copy, Clone, Eq, PartialEq, Hash)]
 pub struct AnnotationKey;
+
+impl AnnotationKey {
+    pub fn value_type_valid(value_type: Option<ValueType>) -> bool {
+        AnnotationUnique::value_type_valid(value_type)
+    }
+}
 
 impl AnnotationKey {
     pub const UNIQUE: AnnotationUnique = AnnotationUnique;

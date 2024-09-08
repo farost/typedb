@@ -1357,7 +1357,7 @@ impl TypeManager {
         OperationTimeValidation::validate_no_subtypes_for_type_deletion(snapshot, self, type_.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_no_instances_to_delete(snapshot, thing_manager, type_)
+        OperationTimeValidation::validate_no_instances_to_delete(snapshot, self, thing_manager, type_)
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         Ok(())
@@ -1640,6 +1640,7 @@ impl TypeManager {
             Some(existing_value_type) if value_type != existing_value_type => {
                 OperationTimeValidation::validate_no_instances_to_change_value_type(
                     snapshot,
+                    self,
                     thing_manager,
                     attribute_type.clone(),
                 )
@@ -1747,7 +1748,7 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_attribute_type_does_not_lose_instances_with_independent_annotation_with_new_supertype(
+        OperationTimeValidation::validate_attribute_type_does_not_lose_instances_with_independent_constraint_with_new_supertype(
             snapshot,
             self,
             thing_manager,
@@ -1792,7 +1793,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_attribute_type_does_not_lose_instances_with_independent_annotation_with_new_supertype(
+        OperationTimeValidation::validate_attribute_type_does_not_lose_instances_with_independent_constraint_with_new_supertype(
             snapshot,
             self,
             thing_manager,
@@ -1950,14 +1951,15 @@ impl TypeManager {
         )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_relation_type_does_not_acquire_cascade_annotation_to_lose_instances_with_new_supertype(
-            snapshot,
-            self,
-            thing_manager,
-            subtype.clone(),
-            supertype.clone(),
-        )
-            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
+        // TODO: Cascade constraint does not exist. Revisit it after cascade returns.
+        // OperationTimeValidation::validate_relation_type_does_not_acquire_cascade_constraint_to_lose_instances_with_new_supertype(
+        //     snapshot,
+        //     self,
+        //     thing_manager,
+        //     subtype.clone(),
+        //     supertype.clone(),
+        // )
+        //     .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         OperationTimeValidation::validate_lost_relates_do_not_cause_lost_instances_while_changing_supertype(
             snapshot,
@@ -2058,7 +2060,7 @@ impl TypeManager {
         owner: ObjectType<'static>,
         attribute_type: AttributeType<'static>,
     ) -> Result<(), ConceptWriteError> {
-        OperationTimeValidation::validate_unset_owns_is_not_inherited(snapshot, owner.clone(), attribute_type.clone())
+        OperationTimeValidation::validate_unset_owns_is_not_inherited(snapshot, self, owner.clone(), attribute_type.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         if let Some(owns) = owner.get_owns_attribute_declared(snapshot, self, attribute_type.clone())? {
@@ -2126,7 +2128,7 @@ impl TypeManager {
         player: ObjectType<'static>,
         role_type: RoleType<'static>,
     ) -> Result<(), ConceptWriteError> {
-        OperationTimeValidation::validate_unset_plays_is_not_inherited(snapshot, player.clone(), role_type.clone())
+        OperationTimeValidation::validate_unset_plays_is_not_inherited(snapshot, self, player.clone(), role_type.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         if let Some(plays) = player.get_plays_role_declared(snapshot, self, role_type.clone())? {
@@ -2176,7 +2178,7 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        OperationTimeValidation::validate_no_owns_instances_to_set_ordering(snapshot, thing_manager, owns.clone())
+        OperationTimeValidation::validate_no_owns_instances_to_set_ordering(snapshot, self, thing_manager, owns.clone())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         TypeWriter::storage_set_owns_ordering(snapshot, owns, ordering);
@@ -2204,6 +2206,7 @@ impl TypeManager {
         if let Some(relates_override) = relates_override_opt {
             OperationTimeValidation::validate_role_supertype_ordering_match(
                 snapshot,
+                self,
                 relates.role(),
                 relates_override.role(),
                 Some(ordering),
@@ -2211,7 +2214,7 @@ impl TypeManager {
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
         }
 
-        OperationTimeValidation::validate_no_role_instances_to_set_ordering(snapshot, thing_manager, relates.role())
+        OperationTimeValidation::validate_no_role_instances_to_set_ordering(snapshot, self, thing_manager, relates.role())
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         TypeWriter::storage_put_type_vertex_property(snapshot, role_type, Some(ordering));
@@ -2462,6 +2465,7 @@ impl TypeManager {
     ) -> Result<(), ConceptWriteError> {
         OperationTimeValidation::validate_role_supertype_ordering_match(
             snapshot,
+            self,
             subtype.clone(),
             supertype.clone(),
             None,
@@ -2628,9 +2632,10 @@ impl TypeManager {
 
         self.validate_set_capability_annotation_general(snapshot, owns.clone(), annotation.clone())?;
 
-        OperationTimeValidation::validate_owns_value_type_compatible_with_unique_annotation_transitive(
+        OperationTimeValidation::validate_owns_value_type_compatible_with_unique_annotation(
             snapshot,
             owns.clone(),
+            owns.attribute().get_value_type_without_source(snapshot, self)?,
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
@@ -2666,9 +2671,10 @@ impl TypeManager {
 
         self.validate_set_capability_annotation_general(snapshot, owns.clone(), annotation.clone())?;
 
-        OperationTimeValidation::validate_owns_value_type_compatible_with_key_annotation_transitive(
+        OperationTimeValidation::validate_owns_value_type_compatible_with_key_annotation(
             snapshot,
             owns.clone(),
+            owns.attribute().get_value_type_without_source(snapshot, self)?,
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
@@ -3348,15 +3354,11 @@ impl TypeManager {
     ) -> Result<(), ConceptWriteError> {
         let category = annotation.category();
 
-        OperationTimeValidation::validate_declared_annotation_is_compatible_with_declared_annotations(
+        OperationTimeValidation::validate_declared_type_annotation_is_compatible_with_declared_annotations(
             snapshot,
+            self,
             type_.clone(),
             category.clone(),
-        )
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_inherited_annotation_is_compatible_with_declared_annotations_of_subtypes(
-            snapshot, category, type_,
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
@@ -3394,17 +3396,11 @@ impl TypeManager {
 
         OperationTimeValidation::validate_declared_capability_annotation_is_compatible_with_declared_annotations(
             snapshot,
+            self,
             capability.clone(),
             category.clone(),
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_inherited_annotation_is_compatible_with_declared_annotations_of_overriding_capabilities(
-            snapshot,
-            category,
-            capability,
-        )
-            .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
         Ok(())
     }

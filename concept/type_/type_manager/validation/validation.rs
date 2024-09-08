@@ -5,7 +5,6 @@
  */
 
 use std::collections::HashMap;
-use std::iter;
 
 use encoding::value::label::Label;
 use itertools::Itertools;
@@ -14,7 +13,6 @@ use storage::snapshot::ReadableSnapshot;
 use crate::{
     error::ConceptReadError,
     type_::{
-        annotation::AnnotationCategory,
         owns::Owns,
         relation_type::RelationType,
         role_type::RoleType,
@@ -27,38 +25,30 @@ use crate::type_::constraint::{Constraint, filter_by_source};
 use crate::type_::object_type::ObjectType;
 use crate::type_::OwnerAPI;
 
-// TODO: Use get_label_cloned from TypeAPI instead of this function
 pub(crate) fn get_label_or_concept_read_err<'a>(
     snapshot: &impl ReadableSnapshot,
+    type_manager: &TypeManager,
     type_: impl TypeAPI<'a>,
 ) -> Result<Label<'static>, ConceptReadError> {
-    TypeReader::get_label(snapshot, type_)?.ok_or(ConceptReadError::CorruptMissingLabelOfType)
-}
-
-pub(crate) fn get_opt_label_or_concept_read_err<'a>(
-    snapshot: &impl ReadableSnapshot,
-    type_: Option<impl TypeAPI<'a>>,
-) -> Result<Option<Label<'static>>, ConceptReadError> {
-    Ok(match type_ {
-        None => None,
-        Some(type_) => Some(get_label_or_concept_read_err(snapshot, type_)?),
-    })
+    type_.get_label_cloned(snapshot, type_manager).map_err(|_| ConceptReadError::CorruptMissingLabelOfType)
 }
 
 pub(crate) fn get_label_or_schema_err<'a>(
     snapshot: &impl ReadableSnapshot,
+    type_manager: &TypeManager,
     type_: impl TypeAPI<'a>,
 ) -> Result<Label<'static>, SchemaValidationError> {
-    get_label_or_concept_read_err(snapshot, type_).map_err(SchemaValidationError::ConceptRead)
+    get_label_or_concept_read_err(snapshot, type_manager, type_).map_err(SchemaValidationError::ConceptRead)
 }
 
 pub(crate) fn get_opt_label_or_schema_err<'a>(
     snapshot: &impl ReadableSnapshot,
+    type_manager: &TypeManager,
     type_: Option<impl TypeAPI<'a>>,
 ) -> Result<Option<Label<'static>>, SchemaValidationError> {
     Ok(match type_ {
         None => None,
-        Some(type_) => Some(get_label_or_schema_err(snapshot, type_)?),
+        Some(type_) => Some(get_label_or_schema_err(snapshot, type_manager, type_)?),
     })
 }
 
@@ -83,30 +73,6 @@ pub(crate) fn validate_role_name_uniqueness_non_transitive(
     }
 }
 
-pub(crate) fn is_type_transitive_supertype_or_same<T: KindAPI<'static>>(
-    snapshot: &impl ReadableSnapshot,
-    type_: T,
-    potential_supertype: T,
-) -> Result<bool, ConceptReadError> {
-    if type_ == potential_supertype {
-        return Ok(true);
-    }
-
-    Ok(TypeReader::get_supertypes_transitive(snapshot, type_.clone())?.contains(&potential_supertype.clone()))
-}
-
-pub(crate) fn is_overridden_interface_object_declared_supertype_or_self<T: KindAPI<'static>>(
-    snapshot: &impl ReadableSnapshot,
-    type_: T,
-    overridden: T,
-) -> Result<bool, ConceptReadError> {
-    if type_ == overridden {
-        return Ok(true);
-    }
-
-    Ok(TypeReader::get_supertype(snapshot, type_.clone())? == Some(overridden.clone()))
-}
-
 pub(crate) fn validate_type_declared_constraints_narrowing_of_supertype_constraints<T: KindAPI<'static>>(
     snapshot: &impl ReadableSnapshot,
     type_manager: &TypeManager,
@@ -119,8 +85,8 @@ pub(crate) fn validate_type_declared_constraints_narrowing_of_supertype_constrai
     for subtype_constraint in filter_by_source!(subtype_constraints, subtype) {
         for supertype_constraint in supertype_constraints.iter() {
             supertype_constraint.validate_narrowed_by_any_type(&subtype_constraint).map_err(|source| SchemaValidationError::SubtypeConstraintDoesNotNarrowSupertypeConstraint(
-                get_label_or_schema_err(snapshot, subtype.clone())?,
-                get_label_or_schema_err(snapshot, supertype.clone())?,
+                get_label_or_schema_err(snapshot, type_manager, subtype.clone())?,
+                get_label_or_schema_err(snapshot, type_manager, supertype.clone())?,
                 source,
             ))?;
         }
@@ -131,6 +97,7 @@ pub(crate) fn validate_type_declared_constraints_narrowing_of_supertype_constrai
 
 pub(crate) fn validate_role_type_supertype_ordering_match(
     snapshot: &impl ReadableSnapshot,
+    type_manager: &TypeManager,
     type_: RoleType<'static>,
     supertype: RoleType<'static>,
     set_subtype_role_ordering: Option<Ordering>,
@@ -144,8 +111,8 @@ pub(crate) fn validate_role_type_supertype_ordering_match(
         Ok(())
     } else {
         Err(SchemaValidationError::OrderingDoesNotMatchWithSupertype(
-            get_label_or_schema_err(snapshot, type_)?,
-            get_label_or_schema_err(snapshot, supertype)?,
+            get_label_or_schema_err(snapshot, type_manager, type_)?,
+            get_label_or_schema_err(snapshot, type_manager, supertype)?,
             type_ordering,
             supertype_ordering,
         ))
@@ -183,9 +150,9 @@ pub(crate) fn validate_sibling_owns_ordering_match_for_type(
         if let Some((first_subtype, first_ordering)) = attribute_types_ordering.get(&root_attribute_type) {
             if first_ordering != &ordering {
                 return Err(SchemaValidationError::OrderingDoesNotMatchWithCapabilityOfSubtypeInterface(
-                    get_label_or_schema_err(snapshot, owner_type)?,
-                    get_label_or_schema_err(snapshot, first_subtype)?,
-                    get_label_or_schema_err(snapshot, attribute_type)?,
+                    get_label_or_schema_err(snapshot, type_manager, owner_type)?,
+                    get_label_or_schema_err(snapshot, type_manager, first_subtype)?,
+                    get_label_or_schema_err(snapshot, type_manager, attribute_type)?,
                     first_ordering.clone(),
                     ordering,
                 ));
@@ -220,33 +187,13 @@ pub(crate) fn validate_type_supertype_abstractness<T: KindAPI<'static>>(
         match (subtype_abstract, supertype_abstract) {
             (false, false) | (false, true) | (true, true) => Ok(()),
             (true, false) => Err(SchemaValidationError::AbstractTypesSupertypeHasToBeAbstract(
-                get_label_or_schema_err(snapshot, supertype)?,
-                get_label_or_schema_err(snapshot, subtype)?,
+                get_label_or_schema_err(snapshot, type_manager, supertype)?,
+                get_label_or_schema_err(snapshot, type_manager, subtype)?,
             )),
         }
     } else {
         Ok(())
     }
-}
-
-// TODO: Can we get rid of it?
-pub(crate) fn type_get_annotation_with_source_by_category<T: KindAPI<'static>>(
-    snapshot: &impl ReadableSnapshot,
-    type_manager: &TypeManager,
-    type_: T,
-    annotation_category: AnnotationCategory,
-) -> Result<Option<(T::AnnotationType, T)>, ConceptReadError> {
-    let type_and_supertypes = iter::once(type_).chain(type_.get_supertypes_transitive(snapshot, type_manager)?.into_iter());
-    for current_type in type_and_supertypes {
-        let annotations = current_type.get_annotations_declared(snapshot, type_manager)?;
-        let found_annotation_opt = annotations
-            .iter()
-            .find(|annotation| annotation.clone().into().category() == annotation_category);
-        if let Some(found_annotation) = found_annotation_opt {
-            return Ok(Some((found_annotation, current_type)));
-        }
-    }
-    Ok(None)
 }
 
 // TODO: This validation can be resurrected (and all the other capabilities constraints validations as well)
@@ -290,8 +237,8 @@ pub(crate) fn type_get_annotation_with_source_by_category<T: KindAPI<'static>>(
 //             validation_errors.push(
 //                 SchemaValidationError::SummarizedCardinalityOfCapabilitiesOverridingSingleCapabilityOverflowsConstraint(
 //                     CAP::KIND,
-//                     get_label_or_concept_read_err(snapshot, root_capability.object())?,
-//                     get_label_or_concept_read_err(snapshot, root_capability.interface())?,
+//                     get_label_or_concept_read_err(snapshot, type_manager, root_capability.object())?,
+//                     get_label_or_concept_read_err(snapshot, type_manager, root_capability.interface())?,
 //                     get_opt_label_or_concept_read_err(
 //                         snapshot,
 //                         specialising_capabilities.iter().next().map(|cap| cap.object()),

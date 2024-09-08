@@ -8,9 +8,10 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fmt;
 use std::hash::Hash;
+use itertools::Itertools;
 use encoding::value::value::Value;
 
-use storage::snapshot::WritableSnapshot;
+use storage::snapshot::{ReadableSnapshot, WritableSnapshot};
 
 use crate::{
     type_::{
@@ -331,12 +332,11 @@ macro_rules! filter_out_unchecked_constraints {
 pub use filter_out_unchecked_constraints;
 
 
-use crate::thing::thing_manager::validation::DataValidationError;
-use crate::thing::thing_manager::validation::validation::get_label_or_data_err;
 use crate::type_::Ordering;
 use crate::type_::owns::Owns;
 use crate::type_::plays::Plays;
 use crate::type_::relates::Relates;
+use crate::type_::type_manager::TypeManager;
 
 pub(crate) fn get_cardinality_constraints<'a, C: Constraint<T>, T: Hash + PartialEq>(
     constraints: impl IntoIterator<Item = &C>,
@@ -478,6 +478,14 @@ pub(crate) fn get_relates_default_constraints<CAP: Capability<'static>>(
     }
 
     constraints
+}
+
+pub(crate) fn type_get_constraints_closest_source<T: KindAPI<'static>>(
+    snapshot: &impl ReadableSnapshot,
+    type_manager: &TypeManager,
+    constraints: impl IntoIterator<Item = &TypeConstraint<T>>,
+) -> Option<T> {
+    constraints.into_iter().map(|constraint| constraint.source()).sorted_by(|lhs, rhs| lhs.inheritance_cmp(snapshot, type_manager, rhs.clone()).unwrap_or(std::cmp::Ordering::Equal)).next()
 }
 
 #[derive(Debug, Clone)]
