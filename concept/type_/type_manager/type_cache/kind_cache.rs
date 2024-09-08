@@ -47,7 +47,7 @@ pub(crate) struct RelationTypeCache {
     pub(super) common_type_cache: CommonTypeCache<RelationType<'static>>,
     pub(super) relates_declared: HashSet<Relates<'static>>,
     pub(super) relates: HashSet<Relates<'static>>,
-    pub(super) relates_with_specialized: HashSet<Relates<'static>>,
+    pub(super) relates_with_specialised: HashSet<Relates<'static>>,
     pub(super) object_cache: ObjectCache,
 }
 
@@ -114,10 +114,10 @@ pub(crate) struct CommonCapabilityCache<CAP: Capability<'static>> {
 pub struct ObjectCache {
     pub(super) owns_declared: HashSet<Owns<'static>>,
     pub(super) owns: HashSet<Owns<'static>>,
-    pub(super) owns_with_specialized: HashSet<Owns<'static>>,
+    pub(super) owns_with_specialised: HashSet<Owns<'static>>,
     pub(super) plays_declared: HashSet<Plays<'static>>,
     pub(super) plays: HashSet<Plays<'static>>,
-    pub(super) plays_with_specialized: HashSet<Plays<'static>>,
+    pub(super) plays_with_specialised: HashSet<Plays<'static>>,
 }
 
 impl EntityTypeCache {
@@ -158,7 +158,7 @@ impl RelationTypeCache {
                 relates_declared: TypeReader::get_capabilities_declared::<Relates<'static>>(snapshot, relation.clone())
                     .unwrap(),
                 relates: TypeReader::get_capabilities::<Relates<'static>>(snapshot, relation.clone(), false).unwrap(),
-                relates_with_specialized: TypeReader::get_capabilities::<Relates<'static>>(snapshot, relation.clone(), true).unwrap(),
+                relates_with_specialised: TypeReader::get_capabilities::<Relates<'static>>(snapshot, relation.clone(), true).unwrap(),
             };
             caches[relation.vertex().type_id_().as_u16() as usize] = Some(cache);
         }
@@ -345,11 +345,11 @@ impl ObjectCache {
             owns_declared: TypeReader::get_capabilities_declared::<Owns<'static>>(snapshot, object_type.clone())
                 .unwrap(),
             owns: TypeReader::get_capabilities::<Owns<'static>>(snapshot, object_type.clone(), false).unwrap(),
-            owns_with_specialized: TypeReader::get_capabilities::<Owns<'static>>(snapshot, object_type.clone(), true).unwrap(),
+            owns_with_specialised: TypeReader::get_capabilities::<Owns<'static>>(snapshot, object_type.clone(), true).unwrap(),
             plays_declared: TypeReader::get_capabilities_declared::<Plays<'static>>(snapshot, object_type.clone())
                 .unwrap(),
             plays: TypeReader::get_capabilities::<Plays<'static>>(snapshot, object_type.clone(), false).unwrap(),
-            plays_with_specialized: TypeReader::get_capabilities::<Plays<'static>>(snapshot, object_type.clone(), true).unwrap(),
+            plays_with_specialised: TypeReader::get_capabilities::<Plays<'static>>(snapshot, object_type.clone(), true).unwrap(),
         }
     }
 }

@@ -40,7 +40,7 @@ use crate::{
             AnnotationError, DefaultFrom,
         },
         attribute_type::AttributeType,
-        get_with_overridden,
+        get_with_specialised,
         object_type::ObjectType,
         owns::Owns,
         plays::Plays,
@@ -295,12 +295,12 @@ impl<'a> RelationType<'a> {
         type_manager.get_relation_type_relates(snapshot, self.clone().into_owned())
     }
 
-    pub fn get_relates_with_specialized<'m>(
+    pub fn get_relates_with_specialised<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Relates<'static>>>, ConceptReadError> {
-        type_manager.get_relation_type_relates_with_specialized(snapshot, self.clone().into_owned())
+        type_manager.get_relation_type_relates_with_specialised(snapshot, self.clone().into_owned())
     }
 
     pub(crate) fn get_type_relates_constraints<'m>(
@@ -395,9 +395,9 @@ impl<'a> RelationType<'a> {
         Ok(None)
     }
 
-    get_with_overridden! {
-        pub fn get_relates_role_with_overridden() -> Relates = RoleType<'static> | get_relates_role;
-        pub fn get_relates_role_name_with_overridden() -> Relates = &str | get_relates_role_name;
+    get_with_specialised! {
+        pub fn get_relates_role_with_specialised() -> Relates = RoleType<'static> | get_relates_role;
+        pub fn get_relates_role_name_with_specialised() -> Relates = &str | get_relates_role_name;
     }
 
     pub fn into_owned(self) -> RelationType<'static> {
@@ -467,12 +467,12 @@ impl<'a> OwnerAPI<'a> for RelationType<'a> {
         type_manager.get_relation_type_owns(snapshot, self.clone().into_owned())
     }
 
-    fn get_owns_with_specialized<'m>(
+    fn get_owns_with_specialised<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
-        type_manager.get_relation_type_owns_with_specialized(snapshot, self.clone().into_owned())
+        type_manager.get_relation_type_owns_with_specialised(snapshot, self.clone().into_owned())
     }
 
 
@@ -586,12 +586,12 @@ impl<'a> PlayerAPI<'a> for RelationType<'a> {
         type_manager.get_relation_type_plays(snapshot, self.clone().into_owned())
     }
 
-    fn get_plays_with_specialized<'m>(
+    fn get_plays_with_specialised<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError> {
-        type_manager.get_relation_type_plays_with_specialized(snapshot, self.clone().into_owned())
+        type_manager.get_relation_type_plays_with_specialised(snapshot, self.clone().into_owned())
     }
 
     fn get_type_plays_constraints<'m>(

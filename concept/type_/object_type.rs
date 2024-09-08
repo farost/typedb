@@ -121,12 +121,12 @@ impl<'a> OwnerAPI<'a> for ObjectType<'a> {
         with_object_type!(self, |object| { object.get_owns(snapshot, type_manager) })
     }
 
-    fn get_owns_with_specialized<'m>(
+    fn get_owns_with_specialised<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError> {
-        with_object_type!(self, |object| { object.get_owns_with_specialized(snapshot, type_manager) })
+        with_object_type!(self, |object| { object.get_owns_with_specialised(snapshot, type_manager) })
     }
 
     fn get_type_owns_constraints<'m>(
@@ -343,12 +343,12 @@ impl<'a> PlayerAPI<'a> for ObjectType<'a> {
         with_object_type!(self, |object| { object.get_plays(snapshot, type_manager) })
     }
 
-    fn get_plays_with_specialized<'m>(
+    fn get_plays_with_specialised<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError> {
-        with_object_type!(self, |object| { object.get_plays_with_specialized(snapshot, type_manager) })
+        with_object_type!(self, |object| { object.get_plays_with_specialised(snapshot, type_manager) })
     }
 
     fn get_type_plays_constraints<'m>(

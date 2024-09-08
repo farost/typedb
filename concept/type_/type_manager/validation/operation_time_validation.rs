@@ -1318,7 +1318,7 @@ impl OperationTimeValidation {
         if relates.role().get_subtypes(snapshot, type_manager).map_err(SchemaValidationError::ConceptRead)?.is_empty() {
             Ok(())
         } else {
-            Err(SchemaValidationError::CannotUnsetRelatesAbstractnessAsItHasspecialisingRelates(relates))
+            Err(SchemaValidationError::CannotUnsetRelatesAbstractnessAsItHasSpecialisingRelates(relates))
         }
     }
 

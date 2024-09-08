@@ -1827,8 +1827,7 @@ impl ThingManager {
     ///
     /// TODO:
     /// Call index regenerations when cardinality changes in schema
-    /// (create role type, set override, unset override,
-    /// set cardinality annotation, unset cardinality annotation)
+    /// (create role type, set cardinality annotation, unset cardinality annotation, ...)
     ///
 
     /// Clean up all parts of a relation index to do with a specific role player

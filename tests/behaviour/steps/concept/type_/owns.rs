@@ -100,69 +100,6 @@ pub async fn unset_owns(
 }
 
 #[apply(generic_step)]
-#[step(expr = "{root_label}\\({type_label}\\) get owns\\({type_label}\\) set override: {type_label}{may_error}")]
-pub async fn get_owns_set_override(
-    context: &mut Context,
-    root_label: params::RootLabel,
-    type_label: params::Label,
-    attr_type_label: params::Label,
-    overridden_type_label: params::Label,
-    may_error: params::MayError,
-) {
-    let owner = get_as_object_type(context, root_label.into_typedb(), &type_label);
-    with_schema_tx!(context, |tx| {
-        let attr_type =
-            tx.type_manager.get_attribute_type(tx.snapshot.as_ref(), &attr_type_label.into_typedb()).unwrap().unwrap();
-        let owns = owner.get_owns_attribute(tx.snapshot.as_ref(), &tx.type_manager, attr_type).unwrap().unwrap();
-
-        if let Some(owner_supertype) = owner.get_supertype(tx.snapshot.as_ref(), &tx.type_manager).unwrap() {
-            let overridden_attr_type = tx
-                .type_manager
-                .get_attribute_type(tx.snapshot.as_ref(), &overridden_type_label.into_typedb())
-                .unwrap()
-                .unwrap();
-            let overridden_owns_opt = owner_supertype
-                .get_owns_attribute(tx.snapshot.as_ref(), &tx.type_manager, overridden_attr_type)
-                .unwrap();
-
-            if let Some(overridden_owns) = overridden_owns_opt {
-                let res = owns.set_override(
-                    Arc::get_mut(&mut tx.snapshot).unwrap(),
-                    &tx.type_manager,
-                    &tx.thing_manager,
-                    overridden_owns,
-                );
-                may_error.check_concept_write_without_read_errors(&res);
-                return;
-            }
-        }
-
-        may_error.check::<(), BehaviourConceptTestExecutionError>(&Err(
-            BehaviourConceptTestExecutionError::CannotFindObjectTypeAttributeTypeToOverride,
-        ));
-    });
-}
-
-#[apply(generic_step)]
-#[step(expr = "{root_label}\\({type_label}\\) get owns\\({type_label}\\) unset override{may_error}")]
-pub async fn get_owns_unset_override(
-    context: &mut Context,
-    root_label: params::RootLabel,
-    type_label: params::Label,
-    attr_type_label: params::Label,
-    may_error: params::MayError,
-) {
-    let owner = get_as_object_type(context, root_label.into_typedb(), &type_label);
-    with_schema_tx!(context, |tx| {
-        let attr_type =
-            tx.type_manager.get_attribute_type(tx.snapshot.as_ref(), &attr_type_label.into_typedb()).unwrap().unwrap();
-        let owns = owner.get_owns_attribute(tx.snapshot.as_ref(), &tx.type_manager, attr_type).unwrap().unwrap();
-        let res = owns.unset_override(Arc::get_mut(&mut tx.snapshot).unwrap(), &tx.type_manager, &tx.thing_manager);
-        may_error.check_concept_write_without_read_errors(&res);
-    });
-}
-
-#[apply(generic_step)]
 #[step(expr = "{root_label}\\({type_label}\\) get owns\\({type_label}\\) set annotation: {annotation}{may_error}")]
 pub async fn get_owns_set_annotation(
     context: &mut Context,
@@ -434,28 +371,6 @@ pub async fn get_declared_owns_contain(
 }
 
 #[apply(generic_step)]
-#[step(expr = "{root_label}\\({type_label}\\) get owns overridden\\({type_label}\\) {exists_or_doesnt}")]
-pub async fn get_owns_overridden_exists(
-    context: &mut Context,
-    root_label: params::RootLabel,
-    type_label: params::Label,
-    attr_type_label: params::Label,
-    exists: params::ExistsOrDoesnt,
-) {
-    let object_type = get_as_object_type(context, root_label.into_typedb(), &type_label);
-    with_read_tx!(context, |tx| {
-        let attr_type =
-            tx.type_manager.get_attribute_type(tx.snapshot.as_ref(), &attr_type_label.into_typedb()).unwrap().unwrap();
-        let owns = object_type.get_owns_attribute(tx.snapshot.as_ref(), &tx.type_manager, attr_type).unwrap().unwrap();
-        let overridden_owns_opt = owns.get_override(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
-        exists.check(
-            &overridden_owns_opt,
-            &format!("override for {} owns {}", type_label.into_typedb(), attr_type_label.into_typedb()),
-        );
-    });
-}
-
-#[apply(generic_step)]
 #[step(expr = "{root_label}\\({type_label}\\) get owns\\({type_label}\\) get label: {type_label}")]
 pub async fn get_owns_get_label(
     context: &mut Context,
@@ -477,33 +392,6 @@ pub async fn get_owns_get_label(
             .as_str()
             .to_owned();
         assert_eq!(expected_label.into_typedb().scoped_name().as_str().to_owned(), actual_type_label);
-    });
-}
-
-#[apply(generic_step)]
-#[step(expr = "{root_label}\\({type_label}\\) get owns overridden\\({type_label}\\) get label: {type_label}")]
-pub async fn get_owns_overridden_get_label(
-    context: &mut Context,
-    root_label: params::RootLabel,
-    type_label: params::Label,
-    attr_type_label: params::Label,
-    expected_overridden: params::Label,
-) {
-    let owner = get_as_object_type(context, root_label.into_typedb(), &type_label);
-    with_read_tx!(context, |tx| {
-        let attr_type =
-            tx.type_manager.get_attribute_type(tx.snapshot.as_ref(), &attr_type_label.into_typedb()).unwrap().unwrap();
-        let owns = owner.get_owns_attribute(tx.snapshot.as_ref(), &tx.type_manager, attr_type).unwrap().unwrap();
-        let overridden_owns_opt = owns.get_override(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
-        let overridden_owns = overridden_owns_opt.as_ref().unwrap();
-        let actual_type_label = overridden_owns
-            .attribute()
-            .get_label(tx.snapshot.as_ref(), &tx.type_manager)
-            .unwrap()
-            .scoped_name()
-            .as_str()
-            .to_owned();
-        assert_eq!(expected_overridden.into_typedb().scoped_name().as_str().to_owned(), actual_type_label);
     });
 }
 

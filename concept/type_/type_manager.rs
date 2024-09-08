@@ -56,7 +56,7 @@ use crate::{
         Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI,
     },
 };
-use crate::type_::constraint::{CapabilityConstraint, ConstraintDescription, get_abstract_constraint, get_cardinality_constraint, get_cardinality_constraints, get_distinct_constraints, get_independent_constraints, get_owns_default_constraints, get_plays_default_constraints, get_range_constraints, get_regex_constraints, get_relates_default_constraints, get_unique_constraint, get_values_constraints, TypeConstraint};
+use crate::type_::constraint::{CapabilityConstraint, get_abstract_constraint, get_cardinality_constraint, get_cardinality_constraints, get_distinct_constraints, get_owns_default_constraints, get_plays_default_constraints, get_range_constraints, get_regex_constraints, get_relates_default_constraints, get_unique_constraint, get_values_constraints, TypeConstraint};
 
 pub mod type_cache;
 pub mod type_reader;
@@ -594,13 +594,13 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_relation_type_relates_with_specialized(
+    pub(crate) fn get_relation_type_relates_with_specialised(
         &self,
         snapshot: &impl ReadableSnapshot,
         relation_type: RelationType<'static>,
     ) -> Result<MaybeOwns<'_, HashSet<Relates<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_relation_type_relates_with_specialized(relation_type)))
+            Ok(MaybeOwns::Borrowed(cache.get_relation_type_relates_with_specialised(relation_type)))
         } else {
             let relates = TypeReader::get_capabilities::<Relates<'static>>(snapshot, relation_type.clone(), true)?;
             Ok(MaybeOwns::Owned(relates))
@@ -685,13 +685,13 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_entity_type_owns_with_specialized(
+    pub(crate) fn get_entity_type_owns_with_specialised(
         &self,
         snapshot: &impl ReadableSnapshot,
         entity_type: EntityType<'static>,
     ) -> Result<MaybeOwns<'_, HashSet<Owns<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_owns_with_specialized(entity_type)))
+            Ok(MaybeOwns::Borrowed(cache.get_owns_with_specialised(entity_type)))
         } else {
             let owns = TypeReader::get_capabilities::<Owns<'static>>(snapshot, entity_type.into_owned_object_type(), true)?;
             Ok(MaybeOwns::Owned(owns))
@@ -711,13 +711,13 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_relation_type_owns_with_specialized(
+    pub(crate) fn get_relation_type_owns_with_specialised(
         &self,
         snapshot: &impl ReadableSnapshot,
         relation_type: RelationType<'static>,
     ) -> Result<MaybeOwns<'_, HashSet<Owns<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_owns_with_specialized(relation_type)))
+            Ok(MaybeOwns::Borrowed(cache.get_owns_with_specialised(relation_type)))
         } else {
             let owns = TypeReader::get_capabilities::<Owns<'static>>(snapshot, relation_type.into_owned_object_type(), true)?;
             Ok(MaybeOwns::Owned(owns))
@@ -768,13 +768,13 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_entity_type_plays_with_specialized(
+    pub(crate) fn get_entity_type_plays_with_specialised(
         &self,
         snapshot: &impl ReadableSnapshot,
         entity_type: EntityType<'static>,
     ) -> Result<MaybeOwns<'_, HashSet<Plays<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_plays_with_specialized(entity_type)))
+            Ok(MaybeOwns::Borrowed(cache.get_plays_with_specialised(entity_type)))
         } else {
             let plays = TypeReader::get_capabilities::<Plays<'static>>(snapshot, entity_type.into_owned_object_type(), true)?;
             Ok(MaybeOwns::Owned(plays))
@@ -808,13 +808,13 @@ impl TypeManager {
         }
     }
 
-    pub(crate) fn get_relation_type_plays_with_specialized(
+    pub(crate) fn get_relation_type_plays_with_specialised(
         &self,
         snapshot: &impl ReadableSnapshot,
         relation_type: RelationType<'static>,
     ) -> Result<MaybeOwns<'_, HashSet<Plays<'static>>>, ConceptReadError> {
         if let Some(cache) = &self.type_cache {
-            Ok(MaybeOwns::Borrowed(cache.get_plays_with_specialized(relation_type)))
+            Ok(MaybeOwns::Borrowed(cache.get_plays_with_specialised(relation_type)))
         } else {
             let plays =
                 TypeReader::get_capabilities::<Plays<'static>>(snapshot, relation_type.into_owned_object_type(), true)?;
@@ -2202,13 +2202,12 @@ impl TypeManager {
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
 
-        let relates_override_opt = TypeReader::get_type_capability_specialises(snapshot, relates.clone())?;
-        if let Some(relates_override) = relates_override_opt {
+        if let Some(role_supertype) = role_type.get_supertype(snapshot, self)? {
             OperationTimeValidation::validate_role_supertype_ordering_match(
                 snapshot,
                 self,
-                relates.role(),
-                relates_override.role(),
+                role_type.clone(),
+                role_supertype,
                 Some(ordering),
             )
             .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
@@ -2634,6 +2633,7 @@ impl TypeManager {
 
         OperationTimeValidation::validate_owns_value_type_compatible_with_unique_annotation(
             snapshot,
+            self,
             owns.clone(),
             owns.attribute().get_value_type_without_source(snapshot, self)?,
         )
@@ -2673,6 +2673,7 @@ impl TypeManager {
 
         OperationTimeValidation::validate_owns_value_type_compatible_with_key_annotation(
             snapshot,
+            self,
             owns.clone(),
             owns.attribute().get_value_type_without_source(snapshot, self)?,
         )
@@ -2897,6 +2898,7 @@ impl TypeManager {
 
         OperationTimeValidation::validate_annotation_regex_compatible_value_type(
             snapshot,
+            self,
             attribute_type.clone(),
             attribute_type.get_value_type_without_source(snapshot, self)?,
         )
@@ -2958,6 +2960,7 @@ impl TypeManager {
 
         OperationTimeValidation::validate_annotation_regex_compatible_value_type(
             snapshot,
+            self,
             owns.attribute(),
             owns.attribute().get_value_type_without_source(snapshot, self)?,
         )
@@ -2970,14 +2973,6 @@ impl TypeManager {
             snapshot,
             self,
             owns.clone(),
-            regex.clone(),
-        )
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_capability_regex_narrows_inherited_regex(
-            snapshot,
-            owns.clone(),
-            None, // overridden_owns: will be read from storage
             regex.clone(),
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
@@ -3053,6 +3048,7 @@ impl TypeManager {
 
         OperationTimeValidation::validate_annotation_range_compatible_value_type(
             snapshot,
+            self,
             attribute_type.clone(),
             type_value_type.clone(),
         )
@@ -3118,6 +3114,7 @@ impl TypeManager {
 
         OperationTimeValidation::validate_annotation_range_compatible_value_type(
             snapshot,
+            self,
             owns.attribute(),
             attribute_value_type.clone(),
         )
@@ -3130,14 +3127,6 @@ impl TypeManager {
             snapshot,
             self,
             owns.clone(),
-            range.clone(),
-        )
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_capabilities_range_narrows_inherited_range(
-            snapshot,
-            owns.clone(),
-            None, // overridden_owns: will be read from storage
             range.clone(),
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
@@ -3181,6 +3170,7 @@ impl TypeManager {
 
         OperationTimeValidation::validate_annotation_values_compatible_value_type(
             snapshot,
+            self,
             attribute_type.clone(),
             type_value_type.clone(),
         )
@@ -3246,6 +3236,7 @@ impl TypeManager {
 
         OperationTimeValidation::validate_annotation_values_compatible_value_type(
             snapshot,
+            self,
             owns.attribute(),
             attribute_value_type.clone(),
         )
@@ -3258,14 +3249,6 @@ impl TypeManager {
             snapshot,
             self,
             owns.clone(),
-            values.clone(),
-        )
-        .map_err(|source| ConceptWriteError::SchemaValidation { source })?;
-
-        OperationTimeValidation::validate_capabilities_values_narrows_inherited_values(
-            snapshot,
-            owns.clone(),
-            None, // overridden_owns: will be read from storage
             values.clone(),
         )
         .map_err(|source| ConceptWriteError::SchemaValidation { source })?;

@@ -7,7 +7,6 @@
 use std::collections::HashMap;
 
 use encoding::value::label::Label;
-use itertools::Itertools;
 use storage::snapshot::ReadableSnapshot;
 
 use crate::{
@@ -127,7 +126,7 @@ pub(crate) fn validate_sibling_owns_ordering_match_for_type(
 ) -> Result<(), SchemaValidationError> {
     let mut attribute_types_ordering: HashMap<AttributeType<'static>, (AttributeType<'static>, Ordering)> = HashMap::new();
     let existing_owns = owner_type
-        .get_owns_with_specialized(snapshot, type_manager)
+        .get_owns_with_specialised(snapshot, type_manager)
         .map_err(SchemaValidationError::ConceptRead)?
         .into_iter()
         .filter(|owns| !new_set_owns_orderings.contains_key(*owns))
@@ -235,7 +234,7 @@ pub(crate) fn validate_type_supertype_abstractness<T: KindAPI<'static>>(
 //
 //         if !root_cardinality.narrowed_correctly_by(&inheriting_cardinality) {
 //             validation_errors.push(
-//                 SchemaValidationError::SummarizedCardinalityOfCapabilitiesOverridingSingleCapabilityOverflowsConstraint(
+//                 SchemaValidationError::SummarizedCardinalityOfCapabilitiesSpecialisingSingleCapabilityOverflowsConstraint(
 //                     CAP::KIND,
 //                     get_label_or_concept_read_err(snapshot, type_manager, root_capability.object())?,
 //                     get_label_or_concept_read_err(snapshot, type_manager, root_capability.interface())?,

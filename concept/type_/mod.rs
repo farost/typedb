@@ -22,9 +22,6 @@ use encoding::{
 use primitive::maybe_owns::MaybeOwns;
 use resource::constants::snapshot::{BUFFER_KEY_INLINE, BUFFER_VALUE_INLINE};
 use serde::{Deserialize, Serialize};
-use bytes::byte_array::ByteArray;
-use encoding::value::boolean_bytes::BooleanBytes;
-use encoding::value::value_type::ValueTypeBytes;
 use storage::snapshot::{ReadableSnapshot, WritableSnapshot};
 
 use crate::{
@@ -55,7 +52,7 @@ pub mod role_type;
 pub mod sub;
 pub mod type_manager;
 
-macro_rules! get_with_overridden {
+macro_rules! get_with_specialised {
     ($(
         $vis:vis fn $method_name:ident() -> $output_type:ident = $input_type:ty | $get_method:ident;
     )*) => {
@@ -84,7 +81,7 @@ macro_rules! get_with_overridden {
         )*
     }
 }
-pub(crate) use get_with_overridden;
+pub(crate) use get_with_specialised;
 use crate::type_::constraint::{CapabilityConstraint, TypeConstraint};
 
 pub trait TypeAPI<'a>: ConceptAPI<'a> + TypeVertexEncoding<'a> + Sized + Clone + Hash + Eq + 'a {
@@ -259,7 +256,7 @@ pub trait OwnerAPI<'a>: TypeAPI<'a> {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Owns<'static>>>, ConceptReadError>;
 
-    fn get_owns_with_specialized<'m>(
+    fn get_owns_with_specialised<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
@@ -352,8 +349,8 @@ pub trait OwnerAPI<'a>: TypeAPI<'a> {
         Ok(self.get_owns(snapshot, type_manager)?.iter().find(|owns| owns.attribute() == attribute_type).cloned())
     }
 
-    get_with_overridden! {
-        fn get_owns_attribute_with_overridden() -> Owns = AttributeType<'static> | get_owns_attribute;
+    get_with_specialised! {
+        fn get_owns_attribute_with_specialised() -> Owns = AttributeType<'static> | get_owns_attribute;
     }
 
     fn has_owns_attribute(
@@ -411,7 +408,7 @@ pub trait PlayerAPI<'a>: TypeAPI<'a> {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<Plays<'static>>>, ConceptReadError>;
 
-    fn get_plays_with_specialized<'m>(
+    fn get_plays_with_specialised<'m>(
         &self,
         snapshot: &impl ReadableSnapshot,
         type_manager: &'m TypeManager,
@@ -483,9 +480,9 @@ pub trait PlayerAPI<'a>: TypeAPI<'a> {
         Ok(result)
     }
 
-    get_with_overridden! {
-        fn get_plays_role_with_overridden() -> Plays = RoleType<'static> | get_plays_role;
-        fn get_plays_role_name_with_overridden() -> Plays = &str | get_plays_role_name;
+    get_with_specialised! {
+        fn get_plays_role_with_specialised() -> Plays = RoleType<'static> | get_plays_role;
+        fn get_plays_role_name_with_specialised() -> Plays = &str | get_plays_role_name;
     }
 
     fn try_get_plays_role(

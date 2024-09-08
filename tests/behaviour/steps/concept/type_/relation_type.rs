@@ -90,7 +90,7 @@ pub async fn relation_role_set_specialise(
             .unwrap()
             .unwrap();
         if let Some(relation_supertype) = relation_type.get_supertype(tx.snapshot.as_ref(), &tx.type_manager).unwrap() {
-            if let Some(overridden_relates) = tx
+            if let Some(specialisden_relates) = tx
                 .type_manager
                 .resolve_relates(
                     tx.snapshot.as_ref(),
@@ -103,14 +103,14 @@ pub async fn relation_role_set_specialise(
                     Arc::get_mut(&mut tx.snapshot).unwrap(),
                     &tx.type_manager,
                     &tx.thing_manager,
-                    overridden_relates,
+                    specialisden_relates,
                 );
                 may_error.check_concept_write_without_read_errors(&res);
                 return;
             }
         }
         may_error.check::<(), BehaviourConceptTestExecutionError>(&Err(
-            BehaviourConceptTestExecutionError::CannotFindRelationTypeRoleTypeToOverride,
+            BehaviourConceptTestExecutionError::CannotFindRelationTypeRoleTypeToSpecialise,
         ));
     });
 }
@@ -356,9 +356,9 @@ pub async fn relation_role_get_supertype(
             .unwrap();
         let role = relates.role();
         let superrole = role.get_supertype(tx.snapshot.as_ref(), &tx.type_manager).unwrap().unwrap();
-        let relates_override = relates.get_override(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
+        let relates_specialise = relates.get_specialise(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
         assert_eq!(
-            relates_override.clone().unwrap(),
+            relates_specialise.clone().unwrap(),
             *superrole.get_relates(tx.snapshot.as_ref(), &tx.type_manager).unwrap()
         );
         assert_eq!(
@@ -533,8 +533,8 @@ pub async fn relation_role_set_name(
 }
 
 #[apply(generic_step)]
-#[step(expr = r"relation\({type_label}\) get overridden role\({type_label}\) {exists_or_doesnt}")]
-pub async fn relation_get_overridden_role(
+#[step(expr = r"relation\({type_label}\) get specialisden role\({type_label}\) {exists_or_doesnt}")]
+pub async fn relation_get_specialisden_role(
     context: &mut Context,
     relation_label: Label,
     role_label: Label,
@@ -552,14 +552,14 @@ pub async fn relation_get_overridden_role(
         let superrole_opt = role.get_supertype(tx.snapshot.as_ref(), &tx.type_manager).unwrap();
         exists.check(
             &superrole_opt,
-            &format!("overridden role for {}:{}", relation_label.into_typedb(), role_label.into_typedb()),
+            &format!("specialisden role for {}:{}", relation_label.into_typedb(), role_label.into_typedb()),
         );
     });
 }
 
 #[apply(generic_step)]
-#[step(expr = r"relation\({type_label}\) get overridden role\({type_label}\) get label: {type_label}")]
-pub async fn relation_overridden_role_get_label(
+#[step(expr = r"relation\({type_label}\) get specialisden role\({type_label}\) get label: {type_label}")]
+pub async fn relation_specialisden_role_get_label(
     context: &mut Context,
     relation_label: Label,
     role_label: Label,

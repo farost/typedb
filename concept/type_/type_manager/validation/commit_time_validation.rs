@@ -25,7 +25,6 @@ use crate::{
             validation::{
                 validation::{
                     get_label_or_concept_read_err,
-                    is_overridden_interface_object_declared_supertype_or_self, is_type_transitive_supertype_or_same,
                     validate_role_name_uniqueness_non_transitive,
                     validate_role_type_supertype_ordering_match,
                     validate_type_declared_constraints_narrowing_of_supertype_constraints,
@@ -37,8 +36,8 @@ use crate::{
         Capability, KindAPI, ObjectTypeAPI, TypeAPI,
     },
 };
+use crate::type_::constraint::{Constraint, ConstraintDescription, filter_by_source};
 use crate::type_::object_type::ObjectType;
-use crate::type_::{Ordering, OwnerAPI};
 use crate::type_::type_manager::validation::validation::{validate_sibling_owns_ordering_match_for_type, validate_type_supertype_abstractness};
 
 pub struct CommitTimeValidation {}
@@ -99,8 +98,6 @@ impl CommitTimeValidation {
     validate_types!(validate_relation_types, get_relation_types, RelationType, Self::validate_relation_type);
     validate_types!(validate_attribute_types, get_attribute_types, AttributeType, Self::validate_attribute_type);
 
-    // TODO: redundancy check that there are no constraints on capabilities that are equal to type constraints (description() == description())
-
     fn validate_entity_type(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
@@ -125,22 +122,17 @@ impl CommitTimeValidation {
         Self::validate_relation_type_has_relates(snapshot, type_manager, type_.clone(), validation_errors)?;
         Self::validate_relation_type_role_types(snapshot, type_manager, type_.clone(), validation_errors)?;
 
-        let invalid_relates = produced_errors!(
-            validation_errors,
-            Self::validate_relates(snapshot, type_manager, type_.clone(), validation_errors)?
-        );
-        if !invalid_relates {
-            // TODO: Capabilities constraints narrowing checks are currently disabled
-            // validate_capabilities_cardinalities_narrowing::<Relates<'static>>(
-            //     snapshot,
-            //     type_manager,
-            //     type_.clone(),
-            //     &HashMap::new(), // read everything from storage
-            //     &HashMap::new(), // read everything from storage
-            //     &HashMap::new(), // read everything from storage
-            //     validation_errors,
-            // )?;
-        }
+        Self::validate_relates(snapshot, type_manager, type_.clone(), validation_errors)?;
+        // TODO: Capabilities constraints narrowing checks are currently disabled
+        // validate_capabilities_cardinalities_narrowing::<Relates<'static>>(
+        //     snapshot,
+        //     type_manager,
+        //     type_.clone(),
+        //     &HashMap::new(), // read everything from storage
+        //     &HashMap::new(), // read everything from storage
+        //     &HashMap::new(), // read everything from storage
+        //     validation_errors,
+        // )?;
 
         Ok(())
     }
@@ -209,39 +201,29 @@ impl CommitTimeValidation {
         type_: ObjectType<'static>,
         validation_errors: &mut Vec<SchemaValidationError>,
     ) -> Result<(), ConceptReadError> {
-        let invalid_owns = produced_errors!(
-            validation_errors,
-            Self::validate_owns(snapshot, type_manager, type_.clone(), validation_errors)?
-        );
-        if !invalid_owns {
-            // TODO: Capabilities constraints narrowing checks are currently disabled
-            // validate_capabilities_cardinalities_narrowing::<Owns<'static>>(
-            //     snapshot,
-            //     type_manager,
-            //     type_.clone().into_owned_object_type(),
-            //     &HashMap::new(), // read everything from storage
-            //     &HashMap::new(), // read everything from storage
-            //     &HashMap::new(), // read everything from storage
-            //     validation_errors,
-            // )?;
-        }
+        Self::validate_owns(snapshot, type_manager, type_.clone(), validation_errors)?;
+        // TODO: Capabilities constraints narrowing checks are currently disabled
+        // validate_capabilities_cardinalities_narrowing::<Owns<'static>>(
+        //     snapshot,
+        //     type_manager,
+        //     type_.clone().into_owned_object_type(),
+        //     &HashMap::new(), // read everything from storage
+        //     &HashMap::new(), // read everything from storage
+        //     &HashMap::new(), // read everything from storage
+        //     validation_errors,
+        // )?;
 
-        let invalid_plays = produced_errors!(
-            validation_errors,
-            Self::validate_plays(snapshot, type_manager, type_.clone(), validation_errors)?
-        );
-        if !invalid_plays {
-            // TODO: Capabilities constraints narrowing checks are currently disabled
-            // validate_capabilities_cardinalities_narrowing::<Plays<'static>>(
-            //     snapshot,
-            //     type_manager,
-            //     type_.clone().into_owned_object_type(),
-            //     &HashMap::new(), // read everything from storage
-            //     &HashMap::new(), // read everything from storage
-            //     &HashMap::new(), // read everything from storage
-            //     validation_errors,
-            // )?;
-        }
+        Self::validate_plays(snapshot, type_manager, type_.clone(), validation_errors)?;
+        // TODO: Capabilities constraints narrowing checks are currently disabled
+        // validate_capabilities_cardinalities_narrowing::<Plays<'static>>(
+        //     snapshot,
+        //     type_manager,
+        //     type_.clone().into_owned_object_type(),
+        //     &HashMap::new(), // read everything from storage
+        //     &HashMap::new(), // read everything from storage
+        //     &HashMap::new(), // read everything from storage
+        //     validation_errors,
+        // )?;
 
         Ok(())
     }
@@ -255,8 +237,6 @@ impl CommitTimeValidation {
         let owns_declared: HashSet<Owns<'static>> = TypeReader::get_capabilities_declared(snapshot, type_.clone())?;
 
         for owns in owns_declared {
-            Self::validate_hidden_owns(snapshot, type_manager, owns.clone(), validation_errors)?;
-
             Self::validate_redundant_capabilities::<Owns<'static>>(
                 snapshot,
                 type_manager,
@@ -264,7 +244,7 @@ impl CommitTimeValidation {
                 validation_errors,
             )?;
 
-            Self::validate_capabilities_annotations::<Owns<'static>>(
+            Self::validate_capabilities_constraints::<Owns<'static>>(
                 snapshot,
                 type_manager,
                 owns.clone(),
@@ -282,30 +262,23 @@ impl CommitTimeValidation {
         type_manager: &TypeManager,
         type_: ObjectType<'static>,
         validation_errors: &mut Vec<SchemaValidationError>,
-    ) -> Result<(), ConceptReadError>
-    {
+    ) -> Result<(), ConceptReadError> {
         let plays_declared: HashSet<Plays<'static>> = TypeReader::get_capabilities_declared(snapshot, type_.clone())?;
 
         for plays in plays_declared {
-            let invalid_overrides = produced_errors!(
+            Self::validate_redundant_capabilities::<Plays<'static>>(
+                snapshot,
+                type_manager,
+                plays.clone(),
                 validation_errors,
-                Self::validate_hidden_plays(snapshot, type_manager, plays.clone(), validation_errors)?
-            );
+            )?;
 
-            if !invalid_overrides {
-                Self::validate_redundant_capabilities::<Plays<'static>>(
-                    snapshot,
-                    type_manager,
-                    plays.clone(),
-                    validation_errors,
-                )?;
-                Self::validate_capabilities_annotations::<Plays<'static>>(
-                    snapshot,
-                    type_manager,
-                    plays.clone(),
-                    validation_errors,
-                )?;
-            }
+            Self::validate_capabilities_constraints::<Plays<'static>>(
+                snapshot,
+                type_manager,
+                plays.clone(),
+                validation_errors,
+            )?;
         }
 
         Ok(())
@@ -321,13 +294,13 @@ impl CommitTimeValidation {
             TypeReader::get_capabilities_declared(snapshot, relation_type.clone())?;
 
         for relates in relates_declared {
-            let invalid_overrides = produced_errors!(
+            let invalid_specialised = produced_errors!(
                 validation_errors,
-                Self::validate_specialized_relates(snapshot, type_manager, relates.clone(), validation_errors)?
+                Self::validate_specialised_relates(snapshot, type_manager, relates.clone(), validation_errors)?
             );
 
-            if !invalid_overrides {
-                Self::validate_capabilities_annotations::<Relates<'static>>(
+            if !invalid_specialised {
+                Self::validate_capabilities_constraints::<Relates<'static>>(
                     snapshot,
                     type_manager,
                     relates,
@@ -339,169 +312,21 @@ impl CommitTimeValidation {
         Ok(())
     }
 
-    // TODO: Change this method to check it correctly!
-    fn validate_specialized_relates(
+    fn validate_specialised_relates(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
         relates: Relates<'static>,
         validation_errors: &mut Vec<SchemaValidationError>,
     ) -> Result<(), ConceptReadError> {
         let relation_type = relates.relation();
-        let supertype = TypeReader::get_supertype(snapshot, relation_type.clone())?;
-
-        if let Some(relates_override) = TypeReader::get_type_capability_specialises(snapshot, relates.clone())? {
-            let role_type_overridden = relates_override.role();
-
-            match &supertype {
-                None => validation_errors.push(SchemaValidationError::HiddenRelatesIsNotInheritedByRelationType(
-                    get_label_or_concept_read_err(snapshot, type_manager, relation_type.clone())?,
-                    get_label_or_concept_read_err(snapshot, type_manager, role_type_overridden.clone())?,
-                )),
-                Some(supertype) => {
-                    let contains = TypeReader::get_capabilities::<Relates<'static>>(snapshot, supertype.clone(), false)?
-                        .into_iter()
-                        .any(|relates| &relates.interface() == &role_type_overridden);
-
-                    if !contains {
-                        validation_errors.push(SchemaValidationError::HiddenRelatesIsNotInheritedByRelationType(
-                            get_label_or_concept_read_err(snapshot, type_manager, relation_type.clone())?,
-                            get_label_or_concept_read_err(snapshot, type_manager, role_type_overridden.clone())?,
-                        ));
-                    }
-                }
-            }
-
-            let role_type = relates.role();
-            // Only declared supertype (not transitive) fits as relates override == role subtype!
-            // It is only a commit-time check as we verify that operation-time generation has been correct
-
-            /*
-
-            if needed:
-                pub(crate) fn is_overridden_interface_object_declared_supertype_or_self<T: KindAPI<'static>>(
-                    snapshot: &impl ReadableSnapshot,
-                    type_manager: &TypeManager,
-                    type_: T,
-                    overridden: T,
-                ) -> Result<bool, ConceptReadError> {
-                    if type_ == overridden {
-                        return Ok(true);
-                    }
-
-                    Ok(TypeReader::get_supertype(snapshot, type_.clone())? == Some(overridden.clone()))
-                }
-
-             */
-            if !is_overridden_interface_object_declared_supertype_or_self(
-                snapshot,
-                role_type.clone(),
-                role_type_overridden.clone(),
-            )? {
-                validation_errors.push(SchemaValidationError::HiddenCapabilityInterfaceIsNotSupertype(
-                    CapabilityKind::Relates,
+        let role_type = relates.role();
+        if let Some(role_supertype) = TypeReader::get_supertype(snapshot, role_type.clone())? {
+            if !relates.is_abstract(snapshot, type_manager)? {
+                validation_errors.push(SchemaValidationError::SpecialisedRelatesIsNotAbstract(
                     get_label_or_concept_read_err(snapshot, type_manager, relation_type.clone())?,
                     get_label_or_concept_read_err(snapshot, type_manager, role_type.clone())?,
-                    get_label_or_concept_read_err(snapshot, type_manager, role_type_overridden.clone())?,
-                ));
-            }
-        }
-
-        Ok(())
-    }
-
-    fn validate_hidden_owns(
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-        owns: Owns<'static>,
-        validation_errors: &mut Vec<SchemaValidationError>,
-    ) -> Result<(), ConceptReadError> {
-        let type_ = owns.owner();
-        let supertype = TypeReader::get_supertype(snapshot, type_.clone())?;
-
-        if let Some(owns_override) = TypeReader::get_type_capability_specialises(snapshot, owns.clone())? {
-            let attribute_type_overridden = owns_override.attribute();
-
-            match &supertype {
-                None => validation_errors.push(SchemaValidationError::HiddenOwnsIsNotInheritedByObjectType(
-                    get_label_or_concept_read_err(snapshot, type_manager, type_.clone())?,
-                    get_label_or_concept_read_err(snapshot, type_manager, attribute_type_overridden.clone())?,
-                )),
-                Some(supertype) => {
-                    let contains = TypeReader::get_capabilities::<Owns<'static>>(snapshot, supertype.clone(), false)?
-                        .into_iter()
-                        .any(|owns| &owns.attribute() == &attribute_type_overridden);
-
-                    if !contains {
-                        validation_errors.push(SchemaValidationError::HiddenOwnsIsNotInheritedByObjectType(
-                            get_label_or_concept_read_err(snapshot, type_manager, type_.clone())?,
-                            get_label_or_concept_read_err(snapshot, type_manager, attribute_type_overridden.clone())?,
-                        ));
-                    }
-                }
-            }
-
-            let attribute_type = owns.attribute();
-            if !is_type_transitive_supertype_or_same(
-                // Any supertype (even transitive) fits
-                snapshot,
-                attribute_type.clone(),
-                attribute_type_overridden.clone(),
-            )? {
-                validation_errors.push(SchemaValidationError::HiddenCapabilityInterfaceIsNotSupertype(
-                    CapabilityKind::Owns,
-                    get_label_or_concept_read_err(snapshot, type_manager, type_.clone())?,
-                    get_label_or_concept_read_err(snapshot, type_manager, attribute_type.clone())?,
-                    get_label_or_concept_read_err(snapshot, type_manager, attribute_type_overridden.clone())?,
-                ));
-            }
-        }
-
-        Ok(())
-    }
-
-    fn validate_hidden_plays(
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-        plays: Plays<'static>,
-        validation_errors: &mut Vec<SchemaValidationError>,
-    ) -> Result<(), ConceptReadError> {
-        let type_ = plays.player();
-
-        if let Some(plays_override) = TypeReader::get_type_capability_specialises(snapshot, plays.clone())? {
-            let role_type_overridden = plays_override.role();
-            let supertype = TypeReader::get_supertype(snapshot, type_.clone())?;
-            match &supertype {
-                None => validation_errors.push(SchemaValidationError::HiddenPlaysIsNotInheritedByObjectType(
-                    get_label_or_concept_read_err(snapshot, type_manager, type_.clone())?,
-                    get_label_or_concept_read_err(snapshot, type_manager, role_type_overridden.clone())?,
-                )),
-                Some(supertype) => {
-                    let contains = TypeReader::get_capabilities::<Plays<'static>>(snapshot, supertype.clone(), false)?
-                        .into_iter()
-                        .any(|plays| &plays.role() == &role_type_overridden);
-
-                    if !contains {
-                        validation_errors.push(SchemaValidationError::HiddenPlaysIsNotInheritedByObjectType(
-                            get_label_or_concept_read_err(snapshot, type_manager, type_.clone())?,
-                            get_label_or_concept_read_err(snapshot, type_manager, role_type_overridden.clone())?,
-                        ));
-                    }
-                }
-            }
-
-            let role_type = plays.role();
-            if !is_type_transitive_supertype_or_same(
-                // Any supertype (even transitive) fits
-                snapshot,
-                role_type.clone(),
-                role_type_overridden.clone(),
-            )? {
-                validation_errors.push(SchemaValidationError::HiddenCapabilityInterfaceIsNotSupertype(
-                    CapabilityKind::Plays,
-                    get_label_or_concept_read_err(snapshot, type_manager, type_.clone())?,
-                    get_label_or_concept_read_err(snapshot, type_manager, role_type.clone())?,
-                    get_label_or_concept_read_err(snapshot, type_manager, role_type_overridden.clone())?,
-                ));
+                    get_label_or_concept_read_err(snapshot, type_manager, role_supertype.clone())?,
+                ))
             }
         }
 
@@ -521,38 +346,74 @@ impl CommitTimeValidation {
             if let Some(supertype_capability) =
                 supertype_capabilities.iter().find(|cap| &cap.interface() == &interface_type)
             {
-                let supertype_capability_object = supertype_capability.object();
-
-                let capability_override = TypeReader::get_type_capability_specialises(snapshot, capability.clone())?;
-                let correct_override = match capability_override {
-                    None => false,
-                    Some(capability_override) => &capability_override == supertype_capability,
-                };
-                if !correct_override {
-                    validation_errors.push(
-                        SchemaValidationError::CannotRedeclareInheritedCapabilityWithoutspecialisationWithOverride(
-                            CAP::KIND,
-                            get_label_or_concept_read_err(snapshot, type_manager, interface_type.clone())?,
-                            get_label_or_concept_read_err(snapshot, type_manager, capability.object())?,
-                            get_label_or_concept_read_err(snapshot, type_manager, supertype_capability_object.clone())?,
-                        ),
-                    );
-                }
-
                 let capability_annotations_declared =
                     TypeReader::get_capability_annotations_declared(snapshot, capability.clone())?;
                 if capability_annotations_declared.is_empty() {
                     validation_errors.push(
-                        SchemaValidationError::CannotRedeclareInheritedCapabilityWithoutspecialisationWithOverride(
+                        SchemaValidationError::CannotRedeclareInheritedCapabilityWithoutSpecialisation(
                             CAP::KIND,
                             get_label_or_concept_read_err(snapshot, type_manager, interface_type.clone())?,
                             get_label_or_concept_read_err(snapshot, type_manager, capability.object())?,
-                            get_label_or_concept_read_err(snapshot, type_manager, supertype_capability_object.clone())?,
+                            get_label_or_concept_read_err(snapshot, type_manager, supertype_capability.object())?,
                         ),
                     );
                 }
             }
         }
+
+        Ok(())
+    }
+
+    fn validate_type_constraints(
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+        type_: impl KindAPI<'static>,
+        validation_errors: &mut Vec<SchemaValidationError>,
+    ) -> Result<(), ConceptReadError> {
+        if let Some(supertype) = TypeReader::get_supertype(snapshot, type_.clone())? {
+            if let Err(err) = validate_type_supertype_abstractness(
+                snapshot: &impl ReadableSnapshot,
+                type_manager: &TypeManager,
+                type_,
+                Some(supertype), // already found the supertype
+                None,            // read abstractness from storage
+                None,            // read abstractness from storage
+            ) {
+                validation_errors.push(err);
+            }
+
+            if let Err(err) = validate_type_declared_constraints_narrowing_of_supertype_constraints(
+                snapshot,
+                type_manager,
+                type_.clone(),
+                supertype.clone(),
+            ) {
+                validation_errors.push(err);
+            }
+        }
+
+        Self::validate_redundant_type_constraints(
+            snapshot,
+            type_manager,
+            type_.clone(),
+            validation_errors,
+        )?;
+
+        Ok(())
+    }
+
+    fn validate_capabilities_constraints<CAP: Capability<'static>>(
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+        capability: CAP,
+        validation_errors: &mut Vec<SchemaValidationError>,
+    ) -> Result<(), ConceptReadError> {
+        Self::validate_redundant_capability_constraints(
+            snapshot,
+            type_manager,
+            capability,
+            validation_errors,
+        )?;
 
         Ok(())
     }
@@ -561,23 +422,22 @@ impl CommitTimeValidation {
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
         type_: T,
-        annotation: &T::AnnotationType,
         validation_errors: &mut Vec<SchemaValidationError>,
     ) -> Result<(), ConceptReadError> {
-        if !annotation.clone().into().category().inheritable() {
-            return Ok(());
-        }
+        let constraints = type_.get_constraints(snapshot, type_manager)?.into_iter();
+        let declared_constraint_descriptions = filter_by_source!(constraints.clone(), type_).map(|constraint| constraint.description().clone());
 
-        if let Some(supertype) = TypeReader::get_supertype(snapshot, type_.clone())? {
-            let supertype_annotations = TypeReader::get_type_constraints(snapshot, supertype.clone())?;
-
-            if supertype_annotations.keys().contains(&annotation) {
+        for constraint in constraints {
+            if &constraint.source() == &type_ {
+                continue;
+            }
+            if declared_constraint_descriptions.clone().contains(&constraint.description()) {
                 validation_errors.push(
-                    SchemaValidationError::CannotRedeclareInheritedAnnotationWithoutspecialisationForType(
+                    SchemaValidationError::CannotRedeclareConstraintOnSubtypeWithoutSpecialisation(
                         T::ROOT_KIND,
                         get_label_or_concept_read_err(snapshot, type_manager, type_.clone())?,
-                        get_label_or_concept_read_err(snapshot, type_manager, supertype.clone())?,
-                        annotation.clone().into(),
+                        get_label_or_concept_read_err(snapshot, type_manager, constraint.source())?,
+                        constraint.description(),
                     ),
                 );
             }
@@ -586,28 +446,26 @@ impl CommitTimeValidation {
         Ok(())
     }
 
-    fn validate_redundant_edge_annotations<CAP: Capability<'static>>(
+    fn validate_redundant_capability_constraints<CAP: Capability<'static>>(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
-        edge: CAP,
-        annotation: &CAP::AnnotationType,
+        capability: CAP,
         validation_errors: &mut Vec<SchemaValidationError>,
     ) -> Result<(), ConceptReadError> {
-        if !annotation.clone().into().category().inheritable() {
-            return Ok(());
-        }
-
-        if let Some(overridden_edge) = TypeReader::get_type_capability_specialises(snapshot, edge.clone())? {
-            let overridden_edge_annotations = TypeReader::get_capability_constraints(snapshot, overridden_edge.clone())?;
-
-            if overridden_edge_annotations.keys().contains(&annotation) {
+        let interface_type = capability.interface();
+        let interface_type_constraint_descriptions = interface_type
+            .get_constraints(snapshot, type_manager)?
+            .into_iter()
+            .map(|constraint| constraint.description().clone());
+        for constraint in capability.get_constraints(snapshot, type_manager)?.into_iter() {
+            let description = constraint.description();
+            if interface_type_constraint_descriptions.clone().contains(&description) {
                 validation_errors.push(
-                    SchemaValidationError::CannotRedeclareInheritedAnnotationWithoutspecialisationForCapability(
+                    SchemaValidationError::CapabilityConstraintAlreadyExistsForTheWholeInterfaceType(
                         CAP::KIND,
-                        get_label_or_concept_read_err(snapshot, type_manager, edge.object())?,
-                        get_label_or_concept_read_err(snapshot, type_manager, overridden_edge.object())?,
-                        get_label_or_concept_read_err(snapshot, type_manager, edge.interface())?,
-                        annotation.clone().into(),
+                        get_label_or_concept_read_err(snapshot, type_manager, capability.object())?,
+                        get_label_or_concept_read_err(snapshot, type_manager, capability.interface())?,
+                        description,
                     ),
                 );
             }
@@ -659,67 +517,6 @@ impl CommitTimeValidation {
         Ok(())
     }
 
-    fn validate_type_constraints(
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-        type_: impl KindAPI<'static>,
-        validation_errors: &mut Vec<SchemaValidationError>,
-    ) -> Result<(), ConceptReadError> {
-        if let Some(supertype) = TypeReader::get_supertype(snapshot, type_.clone())? {
-            if let Err(err) = validate_type_supertype_abstractness(
-                snapshot: &impl ReadableSnapshot,
-                type_manager: &TypeManager,
-                type_,
-                Some(supertype), // already found the supertype
-                None,            // read abstractness from storage
-                None,            // read abstractness from storage
-            ) {
-                validation_errors.push(err);
-            }
-
-            if let Err(err) = validate_type_declared_constraints_narrowing_of_supertype_constraints(
-                snapshot,
-                type_manager,
-                type_.clone(),
-                supertype.clone(),
-            ) {
-                validation_errors.push(err);
-            }
-        }
-
-        // TODO: Just iterate over all constraints and count constraint descriptions without owners... If > 1, error!
-        Self::validate_redundant_type_constraints(
-            snapshot,
-            type_manager,
-            type_.clone(),
-            &annotation,
-            validation_errors,
-        )?;
-
-        Ok(())
-    }
-
-    fn validate_capabilities_annotations<CAP: Capability<'static>>(
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-        edge: CAP,
-        validation_errors: &mut Vec<SchemaValidationError>,
-    ) -> Result<(), ConceptReadError> {
-        let declared_annotations = TypeReader::get_capability_annotations_declared(snapshot, edge.clone())?;
-
-        for annotation in declared_annotations {
-            Self::validate_redundant_edge_annotations(
-                snapshot,
-                type_manager,
-                edge.clone(),
-                &annotation,
-                validation_errors,
-            )?;
-        }
-
-        Ok(())
-    }
-
     fn validate_type_ordering(
         snapshot: &impl ReadableSnapshot,
         type_manager: &TypeManager,
@@ -761,7 +558,7 @@ impl CommitTimeValidation {
                         attribute_type.get_value_type_annotations_declared(snapshot, type_manager)?;
                     if declared_value_type_annotations.is_empty() {
                         validation_errors.push(
-                            SchemaValidationError::CannotRedeclareInheritedValueTypeWithoutspecialisation(
+                            SchemaValidationError::CannotRedeclareInheritedValueTypeWithoutSpecialisation(
                                 get_label_or_concept_read_err(snapshot, type_manager, attribute_type.clone())?,
                                 get_label_or_concept_read_err(snapshot, type_manager, supertype)?,
                                 declared_value_type,
@@ -785,7 +582,7 @@ impl CommitTimeValidation {
 
     fn validate_struct_definition_fields(
         _snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
+        _type_manager: &TypeManager,
         struct_definition: StructDefinition,
         validation_errors: &mut Vec<SchemaValidationError>,
     ) -> Result<(), ConceptReadError> {
