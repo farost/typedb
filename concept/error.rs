@@ -4,6 +4,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+use std::fmt;
 use std::sync::Arc;
 
 use encoding::{
@@ -77,5 +78,12 @@ typedb_error! {
         ValueTypeMismatchWithAttributeType(22, "Attribute type '{attribute_type}' has value type '{expected:?}' and cannot be used with '{provided}'.", attribute_type: AttributeType, expected: Option<ValueType>, provided: ValueType),
         RelationIndexNotAvailable(23, "Relation index not available for relations of type '{relation_label}'.", relation_label: Label),
         UnimplementedFunctionality(24, "Unimplemented functionality encountered: {functionality}.", functionality: error::UnimplementedFeature),
+        FormatError(25, "Formatting error", source: fmt::Error),
+    }
+}
+
+impl Into<ConceptReadError> for fmt::Error {
+    fn into(self) -> ConceptReadError {
+        ConceptReadError::FormatError { source: self }
     }
 }
