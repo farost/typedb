@@ -18,6 +18,7 @@ use typeql::{
         Function, FunctionBlock, ReturnReduction, ReturnSingle, ReturnStatement, ReturnStream, Signature,
     },
 };
+use concept::error::ConceptReadError;
 
 use crate::{
     pattern::{
@@ -41,6 +42,13 @@ typedb_error! {
         FunctionIDNotFound(1, "Function '{name}' not found by its internal ID '{id}'.", name: String, id: FunctionID),
         FunctionRetrieval(2, "Error retrieving function.", source: SnapshotGetError),
         FunctionsScan(3, "Error scanning functions.", source: Arc<SnapshotIteratorError>),
+        FormatError(4, "Formatting error", source: fmt::Error),
+    }
+}
+
+impl Into<FunctionReadError> for fmt::Error {
+    fn into(self) -> FunctionReadError {
+        FunctionReadError::FormatError { source: self }
     }
 }
 
