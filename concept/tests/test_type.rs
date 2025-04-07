@@ -180,8 +180,9 @@ fn test_syntax_tmp() {
     let mut snapshot: ReadSnapshot<_> = storage.clone().open_snapshot_read();
     {
         let type_manager = type_manager_no_cache();
-        let syntax = type_manager.get_types_syntax(&snapshot).unwrap();
-        println!("define\n{}", syntax);
+        let mut define = String::from("define\n");
+        type_manager.get_types_syntax(&mut define, &snapshot).unwrap();
+        println!("{}", define);
     }
     panic!("failed");
 }

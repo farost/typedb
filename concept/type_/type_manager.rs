@@ -9,7 +9,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
-use std::fmt::Formatter;
+use std::fmt::{Formatter, Write};
 
 use encoding::{
     error::EncodingError,
@@ -1134,18 +1134,17 @@ impl TypeManager {
         }
     }
 
-    pub fn get_types_syntax(&self, snapshot: &impl ReadableSnapshot) -> Result<String, Box<ConceptReadError>> {
-        let mut builder = String::new();
+    pub fn get_types_syntax(&self, builder: &mut impl Write, snapshot: &impl ReadableSnapshot) -> Result<(), Box<ConceptReadError>> {
         for attribute_type in self.get_attribute_types(snapshot)?.iter() {
-            attribute_type.format_syntax(&mut builder, snapshot, self)?;
+            attribute_type.format_syntax(builder, snapshot, self)?;
         }
         for entity_type in self.get_entity_types(snapshot)?.iter() {
-            entity_type.format_syntax(&mut builder, snapshot, self)?;
+            entity_type.format_syntax(builder, snapshot, self)?;
         }
         for relation_type in self.get_relation_types(snapshot)?.iter() {
-            relation_type.format_syntax(&mut builder, snapshot, self)?;
+            relation_type.format_syntax(builder, snapshot, self)?;
         }
-        Ok(builder)
+        Ok(())
     }
 }
 

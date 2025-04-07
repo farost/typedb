@@ -20,6 +20,7 @@ use encoding::{
     Prefixed,
 };
 use itertools::Itertools;
+use encoding::value::string_bytes::StringBytes;
 use lending_iterator::higher_order::Hkt;
 use primitive::maybe_owns::MaybeOwns;
 use resource::constants::snapshot::BUFFER_KEY_INLINE;
@@ -570,7 +571,12 @@ impl RelationType {
                 super_roles.insert(role_supertype);
             }
         }
-        for relates in declared_relates.into_iter() {
+        for relates in declared_relates.into_iter()
+            .sorted_by_key(|relates| {
+                relates.role().get_label(snapshot, type_manager).map(|label| (*label).clone())
+                    .unwrap_or(Label::new_static(""))
+            })
+        {
             let role = relates.role();
             if !super_roles.contains(&role) {
                 let label = role.get_label(snapshot, type_manager)?;
@@ -579,8 +585,10 @@ impl RelationType {
                     let supertype_label = role_supertype.get_label(snapshot, type_manager)?;
                     write!(f, " {} {}", typeql::token::Keyword::As, supertype_label.name.as_str()).map_err(|err| Box::new(err.into()))?;
                 }
-                for annotation in relates.get_annotations_declared(snapshot, type_manager)?.iter() {
-                    let annotation: Annotation = annotation.clone().into();
+                for annotation in relates.get_annotations_declared(snapshot, type_manager)?.iter()
+                    .map(|annotation| Annotation::from(annotation.clone()))
+                    .sorted_by_key(|annotation| annotation.category())
+                {
                     write!(f, " {}", annotation).map_err(|err| Box::new(err.into()))?;
                 }
             }

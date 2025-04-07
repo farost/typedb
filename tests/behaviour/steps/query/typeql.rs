@@ -5,6 +5,7 @@
  */
 
 use std::{collections::HashMap, iter, str::FromStr, sync::Arc};
+use std::mem::transmute;
 
 use answer::{variable_value::VariableValue, Thing};
 use compiler::VariablePosition;
@@ -25,7 +26,11 @@ use executor::{
 use itertools::Itertools;
 use lending_iterator::LendingIterator;
 use macro_rules_attribute::apply;
+use database::Database;
+use database::transaction::{TransactionRead, TransactionSchema};
+use options::TransactionOptions;
 use query::error::QueryError;
+use storage::durability_client::WALClient;
 use test_utils::assert_matches;
 
 use crate::{
