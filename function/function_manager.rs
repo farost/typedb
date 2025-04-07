@@ -226,13 +226,13 @@ impl FunctionManager {
 
     pub fn get_functions_syntax(
         &self,
+        builder: &mut impl Write,
         snapshot: &impl ReadableSnapshot,
-    ) -> Result<String, FunctionReadError> {
-        let mut builder = String::new();
+    ) -> Result<(), FunctionReadError> {
         for function in FunctionReader::get_functions_all(snapshot)? {
             write!(builder, "\n{}", function.parsed.unparsed).map_err(|err| err.into())?;
         }
-        Ok(builder)
+        Ok(())
     }
 }
 

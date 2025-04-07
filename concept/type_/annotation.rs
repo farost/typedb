@@ -563,7 +563,7 @@ impl Annotation {
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum AnnotationCategory {
     Abstract,
     Distinct,

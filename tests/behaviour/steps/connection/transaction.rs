@@ -4,14 +4,17 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
+use std::sync::Arc;
 use cucumber::gherkin::Step;
 use database::transaction::{DataCommitError, SchemaCommitError, TransactionRead, TransactionSchema, TransactionWrite};
 use futures::future::join_all;
 use itertools::Either;
 use macro_rules_attribute::apply;
+use database::Database;
 use options::TransactionOptions;
 use params::{self, check_boolean};
 use server::server::Server;
+use storage::durability_client::WALClient;
 use test_utils::assert_matches;
 
 use crate::{connection::BehaviourConnectionTestExecutionError, generic_step, util, ActiveTransaction, Context};
@@ -135,6 +138,8 @@ pub async fn transaction_commits(context: &mut Context, may_error: params::MayEr
             }
         }
         ActiveTransaction::Schema(tx) => {
+            let mut schema = String::from("define\n");
+            tx.type_manager.get_types_syntax(&mut schema, tx.snapshot.as_ref()).unwrap();
             if let Either::Right(error) = may_error.check(tx.commit()) {
                 match error {
                     SchemaCommitError::ConceptWriteErrors { write_errors: errors, .. } => {
@@ -153,8 +158,46 @@ pub async fn transaction_commits(context: &mut Context, may_error: params::MayEr
                     }
                 }
             }
+
+            // after each schema trasaction, we re-test the schema export/import
+            test_schema_export(context, &schema);
         }
     }
+}
+
+fn test_schema_export(context: &mut Context, schema: &str) {
+    // export, re-import, and export schema and verify that's equal!
+    let guard = context.server.as_ref().unwrap().lock().unwrap();
+    let database_manager = guard.database_manager();
+    if !schema.trim_start_matches("define").trim().is_empty() {
+        const REIMPORT_DB: &str = "schema_reimport_from_test_tmp";
+        database_manager.create_database(REIMPORT_DB).unwrap();
+        let reimport = database_manager.database(REIMPORT_DB).unwrap();
+        let mut transaction = TransactionSchema::open(reimport.clone(), TransactionOptions::default()).unwrap();
+        transaction.query_manager.execute_schema(
+            Arc::get_mut(&mut transaction.snapshot).unwrap(),
+            &transaction.type_manager,
+            &transaction.thing_manager,
+            &transaction.function_manager,
+            typeql::parse_query(&schema).unwrap().into_schema(),
+            schema,
+        ).unwrap();
+        transaction.commit().unwrap();
+
+        let re_exported_schema = get_schema(reimport.clone());
+        assert_eq!(re_exported_schema, schema);
+        drop(reimport);
+        let result = database_manager.delete_database(REIMPORT_DB);
+
+        result.unwrap();
+    }
+}
+
+fn get_schema(database: Arc<Database<WALClient>>) -> String {
+    let transaction = TransactionRead::open(database, TransactionOptions::default()).unwrap();
+    let mut schema = String::from("define\n");
+    transaction.type_manager.get_types_syntax(&mut schema, transaction.snapshot()).unwrap();
+    schema
 }
 
 #[apply(generic_step)]

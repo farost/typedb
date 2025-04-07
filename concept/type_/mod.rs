@@ -5,6 +5,7 @@
  */
 
 use std::{collections::HashSet, fmt, hash::Hash, iter, sync::Arc};
+use itertools::Itertools;
 
 use bytes::Bytes;
 use encoding::{
@@ -224,8 +225,10 @@ pub trait TypeQLSyntax: KindAPI {
     }
 
     fn type_annotations_syntax(&self, f: &mut impl std::fmt::Write, snapshot: &impl ReadableSnapshot, type_manager: &TypeManager) -> Result<(), Box<ConceptReadError>> {
-        for annotation in self.get_annotations_declared(snapshot, type_manager)?.iter() {
-            let annotation: Annotation = annotation.clone().into();
+        for annotation in self.get_annotations_declared(snapshot, type_manager)?.iter()
+            .map(|annotation| annotation.clone().into())
+            .sorted_by_key(|annotation| annotation.category())
+        {
             write!(f, " {}", annotation).map_err(|err| Box::new(err.into()))?;
         }
         Ok(())
@@ -428,11 +431,19 @@ pub trait OwnerAPI: TypeAPI {
     }
 
     fn owns_syntax(&self, f: &mut impl std::fmt::Write, snapshot: &impl ReadableSnapshot, type_manager: &TypeManager) -> Result<(), Box<ConceptReadError>> {
-        for owns in self.get_owns_declared(snapshot, type_manager)?.iter() {
+        for owns in self.get_owns_declared(snapshot, type_manager)?
+            .iter()
+            .sorted_by_key(|owns| {
+                owns.attribute().get_label(snapshot, type_manager).map(|label| (*label).clone())
+                    .unwrap_or(Label::new_static(""))
+            })
+        {
             let label = owns.attribute().get_label(snapshot, type_manager)?;
             write!(f, ",\n  {} {}", typeql::token::Keyword::Owns, label.name().as_str()).map_err(|err| Box::new(err.into()))?;
-            for annotation in owns.get_annotations_declared(snapshot, type_manager)?.iter() {
-                let annotation: Annotation = annotation.clone().into();
+            for annotation in owns.get_annotations_declared(snapshot, type_manager)?.iter()
+                .map(|annotation| Annotation::from(annotation.clone()))
+                .sorted_by_key(|annotation| annotation.category())
+            {
                 write!(f, " {}", annotation).map_err(|err| Box::new(err.into()))?;
             }
         }
@@ -603,11 +614,18 @@ pub trait PlayerAPI: TypeAPI {
     }
 
     fn plays_syntax(&self, f: &mut impl std::fmt::Write, snapshot: &impl ReadableSnapshot, type_manager: &TypeManager) -> Result<(), Box<ConceptReadError>> {
-        for plays in self.get_plays_declared(snapshot, type_manager)?.iter() {
+        for plays in self.get_plays_declared(snapshot, type_manager)?.iter()
+            .sorted_by_key(|plays| {
+                plays.role().get_label(snapshot, type_manager).map(|label| (*label).clone())
+                    .unwrap_or(Label::new_static(""))
+            })
+        {
             let label = plays.role().get_label(snapshot, type_manager)?;
             write!(f, ",\n  {} {}", typeql::token::Keyword::Plays, label.scoped_name().as_str()).map_err(|err| Box::new(err.into()))?;
-            for annotation in plays.get_annotations_declared(snapshot, type_manager)?.iter() {
-                let annotation: Annotation = annotation.clone().into();
+            for annotation in plays.get_annotations_declared(snapshot, type_manager)?.iter()
+                .map(|annotation| Annotation::from(annotation.clone()))
+                .sorted_by_key(|annotation| annotation.category())
+            {
                 write!(f, " {}", annotation).map_err(|err| Box::new(err.into()))?;
             }
         }

@@ -264,11 +264,11 @@ impl typedb_protocol::type_db_server::TypeDb for TypeDBService {
                 Some(database) => {
                     let transaction = TransactionRead::open(database, TransactionOptions::default())
                         .map_err(|err| ServiceError::FailedToOpenPrerequisiteTransaction {}.into_error_message().into_status())?;
-                    let types_syntax = transaction.type_manager.get_types_syntax(transaction.snapshot())
+                    let mut define_syntax = String::from("define\n");
+                    transaction.type_manager.get_types_syntax(&mut define_syntax, transaction.snapshot())
                         .map_err(|err| ServiceError::ConceptReadError { typedb_source: err }.into_error_message().into_status())?;
-                    let functions_syntax = transaction.function_manager.get_functions_syntax(transaction.snapshot())
+                    transaction.function_manager.get_functions_syntax(&mut define_syntax, transaction.snapshot())
                         .map_err(|err| ServiceError::FunctionReadError { typedb_source: err }.into_error_message().into_status())?;
-                    let define_syntax = format!("{} {} {}", typeql::token::Clause::Define, types_syntax, functions_syntax);
                     Ok(Response::new(database_schema_res(define_syntax)))
                 }
             }
@@ -288,10 +288,10 @@ impl typedb_protocol::type_db_server::TypeDb for TypeDBService {
                 Some(database) => {
                     let transaction = TransactionRead::open(database, TransactionOptions::default())
                         .map_err(|err| ServiceError::FailedToOpenPrerequisiteTransaction {}.into_error_message().into_status())?;
-                    let syntax = transaction.type_manager.get_types_syntax(transaction.snapshot())
+                    let mut define = String::from("define\n");
+                    transaction.type_manager.get_types_syntax(&mut define, transaction.snapshot())
                         .map_err(|err| ServiceError::ConceptReadError { typedb_source: err }.into_error_message().into_status())?;
-                    let define_syntax = format!("{} {}", typeql::token::Clause::Define, syntax);
-                    Ok(Response::new(database_type_schema_res(define_syntax)))
+                    Ok(Response::new(database_type_schema_res(define)))
                 }
             }
         })
