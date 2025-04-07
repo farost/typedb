@@ -619,9 +619,9 @@ fn redefine_relates_specialise(
             type_manager,
             relates.relation(),
             checked_identifier(&specialised_label.ident)?,
-            specialised_label.ident.span()
+            specialised_label.ident.span(),
         )
-                .map_err(|typedb_source| RedefineError::DefinitionResolution { typedb_source })?;
+        .map_err(|typedb_source| RedefineError::DefinitionResolution { typedb_source })?;
 
         let definition_status = get_sub_status(snapshot, type_manager, relates.role(), specialised_relates.role())
             .map_err(|source| RedefineError::UnexpectedConceptRead { typedb_source: source })?;

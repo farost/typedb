@@ -12,7 +12,6 @@ use typeql::common::{Span, Spanned};
 use crate::{
     pattern::variable_category::VariableCategory,
     pipeline::{block::BlockBuilderContext, reduce::Reducer, ParameterRegistry, VariableRegistry},
-    RepresentationError,
 };
 
 mod constraints;

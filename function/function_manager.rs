@@ -6,14 +6,14 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Write,
     iter::zip,
     sync::Arc,
 };
-use std::fmt::Write;
 
 use bytes::{byte_array::ByteArray, Bytes};
 use compiler::annotation::function::{annotate_stored_functions, AnnotatedSchemaFunctions};
-use concept::type_::type_manager::TypeManager;
+use concept::{error::ConceptReadError, type_::type_manager::TypeManager};
 use encoding::{
     graph::{
         definition::{
@@ -46,7 +46,6 @@ use storage::{
     snapshot::{ReadableSnapshot, WritableSnapshot},
 };
 use typeql::common::Spanned;
-use concept::error::ConceptReadError;
 
 use crate::{function::SchemaFunction, function_cache::FunctionCache, FunctionError};
 

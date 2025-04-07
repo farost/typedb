@@ -5,12 +5,15 @@
  */
 
 use std::sync::Arc;
+
 use cucumber::gherkin::Step;
-use database::transaction::{DataCommitError, SchemaCommitError, TransactionRead, TransactionSchema, TransactionWrite};
+use database::{
+    transaction::{DataCommitError, SchemaCommitError, TransactionRead, TransactionSchema, TransactionWrite},
+    Database,
+};
 use futures::future::join_all;
 use itertools::Either;
 use macro_rules_attribute::apply;
-use database::Database;
 use options::TransactionOptions;
 use params::{self, check_boolean};
 use server::server::Server;
@@ -174,14 +177,17 @@ fn test_schema_export(context: &mut Context, schema: &str) {
         database_manager.create_database(REIMPORT_DB).unwrap();
         let reimport = database_manager.database(REIMPORT_DB).unwrap();
         let mut transaction = TransactionSchema::open(reimport.clone(), TransactionOptions::default()).unwrap();
-        transaction.query_manager.execute_schema(
-            Arc::get_mut(&mut transaction.snapshot).unwrap(),
-            &transaction.type_manager,
-            &transaction.thing_manager,
-            &transaction.function_manager,
-            typeql::parse_query(&schema).unwrap().into_schema(),
-            schema,
-        ).unwrap();
+        transaction
+            .query_manager
+            .execute_schema(
+                Arc::get_mut(&mut transaction.snapshot).unwrap(),
+                &transaction.type_manager,
+                &transaction.thing_manager,
+                &transaction.function_manager,
+                typeql::parse_query(&schema).unwrap().into_schema(),
+                schema,
+            )
+            .unwrap();
         transaction.commit().unwrap();
 
         let re_exported_schema = get_schema(reimport.clone());

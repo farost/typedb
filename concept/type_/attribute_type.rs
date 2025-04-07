@@ -7,10 +7,9 @@
 use std::{
     collections::{HashMap, HashSet},
     fmt,
+    fmt::Write,
     sync::Arc,
 };
-use std::fmt::Write;
-use itertools::Itertools;
 
 use encoding::{
     error::{EncodingError, EncodingError::UnexpectedPrefix},
@@ -25,6 +24,7 @@ use encoding::{
     value::{label::Label, value_type::ValueType},
     Prefixed,
 };
+use itertools::Itertools;
 use lending_iterator::higher_order::Hkt;
 use primitive::maybe_owns::MaybeOwns;
 use storage::snapshot::{ReadableSnapshot, WritableSnapshot};
@@ -41,11 +41,10 @@ use crate::{
         object_type::ObjectType,
         owns::Owns,
         type_manager::TypeManager,
-        KindAPI, ThingTypeAPI, TypeAPI,
+        KindAPI, ThingTypeAPI, TypeAPI, TypeQLSyntax,
     },
     ConceptAPI,
 };
-use crate::type_::TypeQLSyntax;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct AttributeType {
@@ -196,10 +195,17 @@ impl ThingTypeAPI for AttributeType {
 }
 
 impl TypeQLSyntax for AttributeType {
-    fn capabilities_syntax(&self, f: &mut impl std::fmt::Write, snapshot: &impl ReadableSnapshot, type_manager: &TypeManager) -> Result<(), Box<ConceptReadError>> {
+    fn capabilities_syntax(
+        &self,
+        f: &mut impl std::fmt::Write,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<(), Box<ConceptReadError>> {
         if let Some(value_type) = self.get_value_type_declared(snapshot, type_manager)? {
             write!(f, ",\n  {} {}", typeql::token::Keyword::Value, value_type).map_err(|err| Box::new(err.into()))?;
-            for annotation in self.get_value_type_annotations_declared(snapshot, type_manager)?.iter()
+            for annotation in self
+                .get_value_type_annotations_declared(snapshot, type_manager)?
+                .iter()
                 .map(|annotation| Annotation::from(annotation.clone()))
                 .sorted_by_key(|annotation| annotation.category())
             {
@@ -209,8 +215,15 @@ impl TypeQLSyntax for AttributeType {
         Ok(())
     }
 
-    fn type_annotations_syntax(&self, f: &mut impl std::fmt::Write, snapshot: &impl ReadableSnapshot, type_manager: &TypeManager) -> Result<(), Box<ConceptReadError>> {
-        for annotation in self.get_annotations_declared(snapshot, type_manager)?.iter()
+    fn type_annotations_syntax(
+        &self,
+        f: &mut impl std::fmt::Write,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<(), Box<ConceptReadError>> {
+        for annotation in self
+            .get_annotations_declared(snapshot, type_manager)?
+            .iter()
             .filter(|annotation| !annotation.is_value_type_annotation())
             .map(|annotation| Annotation::from(annotation.clone()))
             .sorted_by_key(|annotation| annotation.category())
