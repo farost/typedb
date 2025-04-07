@@ -16,12 +16,11 @@ use chrono_tz::Tz;
 use concept::{
     thing::{statistics::Statistics, thing_manager::ThingManager},
     type_::{
-        annotation::{AnnotationAbstract, AnnotationCardinality, AnnotationRange, AnnotationValues},
+        annotation::{AnnotationAbstract, AnnotationRange, AnnotationValues},
         attribute_type::AttributeTypeAnnotation,
         entity_type::EntityTypeAnnotation,
         object_type::ObjectType,
         owns::{Owns, OwnsAnnotation},
-        relates::RelatesAnnotation,
         type_manager::{type_cache::TypeCache, TypeManager},
         Capability, KindAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI,
     },
