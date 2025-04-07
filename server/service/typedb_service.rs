@@ -6,13 +6,17 @@
 
 use std::{net::SocketAddr, pin::Pin, sync::Arc, time::Instant};
 
-use database::database_manager::DatabaseManager;
+use concept::error::ConceptReadError;
+use database::{database_manager::DatabaseManager, transaction::TransactionRead, Database};
 use diagnostics::{
     diagnostics_manager::{run_with_diagnostics, DiagnosticsManager},
     metrics::ActionKind,
 };
 use error::typedb_error;
+use ir::pipeline::FunctionReadError;
+use options::TransactionOptions;
 use resource::constants::server::AUTHENTICATOR_USERNAME_FIELD;
+use storage::durability_client::WALClient;
 use tokio::sync::mpsc::channel;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{metadata::MetadataMap, Request, Response, Status, Streaming};
@@ -24,12 +28,6 @@ use typedb_protocol::{
 };
 use user::{permission_manager::PermissionManager, user_manager::UserManager};
 use uuid::Uuid;
-use concept::error::ConceptReadError;
-use database::Database;
-use database::transaction::TransactionRead;
-use ir::pipeline::FunctionReadError;
-use options::TransactionOptions;
-use storage::durability_client::WALClient;
 
 use crate::{
     authenticator_cache::AuthenticatorCache,
@@ -39,7 +37,10 @@ use crate::{
         response_builders::{
             connection::connection_open_res,
             database::database_delete_res,
-            database_manager::{database_all_res, database_contains_res, database_create_res, database_get_res},
+            database_manager::{
+                database_all_res, database_contains_res, database_create_res, database_get_res, database_schema_res,
+                database_type_schema_res,
+            },
             server_manager::servers_all_res,
             user_manager::{
                 user_create_res, user_update_res, users_all_res, users_contains_res, users_delete_res, users_get_res,
@@ -49,7 +50,6 @@ use crate::{
         ConnectionID,
     },
 };
-use crate::service::response_builders::database_manager::{database_schema_res, database_type_schema_res};
 
 #[derive(Debug)]
 pub(crate) struct TypeDBService {
@@ -184,21 +184,25 @@ impl typedb_protocol::type_db_server::TypeDb for TypeDBService {
         request: Request<typedb_protocol::database::schema::Req>,
     ) -> Result<Response<typedb_protocol::database::schema::Res>, Status> {
         let message = request.into_inner();
-        run_with_diagnostics(&self.diagnostics_manager, Some(&message.name), ActionKind::DatabaseSchema, || {
-            match self.database_manager.database(&message.name) {
-                None => {
-                    Err(ServiceError::DatabaseDoesNotExist { name: message.name.clone() }.into_error_message().into_status())
-                }
-                Some(database) => {
-                    let transaction = TransactionRead::open(database, TransactionOptions::default())
-                        .map_err(|err| ServiceError::FailedToOpenPrerequisiteTransaction {}.into_error_message().into_status())?;
-                    let mut define_syntax = String::from("define\n");
-                    transaction.type_manager.get_types_syntax(&mut define_syntax, transaction.snapshot())
-                        .map_err(|err| ServiceError::ConceptReadError { typedb_source: err }.into_error_message().into_status())?;
-                    transaction.function_manager.get_functions_syntax(&mut define_syntax, transaction.snapshot())
-                        .map_err(|err| ServiceError::FunctionReadError { typedb_source: err }.into_error_message().into_status())?;
-                    Ok(Response::new(database_schema_res(define_syntax)))
-                }
+        run_with_diagnostics(&self.diagnostics_manager, Some(&message.name), ActionKind::DatabaseSchema, || match self
+            .database_manager
+            .database(&message.name)
+        {
+            None => Err(ServiceError::DatabaseDoesNotExist { name: message.name.clone() }
+                .into_error_message()
+                .into_status()),
+            Some(database) => {
+                let transaction = TransactionRead::open(database, TransactionOptions::default()).map_err(|err| {
+                    ServiceError::FailedToOpenPrerequisiteTransaction {}.into_error_message().into_status()
+                })?;
+                let mut define_syntax = String::from("define\n");
+                transaction.type_manager.get_types_syntax(&mut define_syntax, transaction.snapshot()).map_err(
+                    |err| ServiceError::ConceptReadError { typedb_source: err }.into_error_message().into_status(),
+                )?;
+                transaction.function_manager.get_functions_syntax(&mut define_syntax, transaction.snapshot()).map_err(
+                    |err| ServiceError::FunctionReadError { typedb_source: err }.into_error_message().into_status(),
+                )?;
+                Ok(Response::new(database_schema_res(define_syntax)))
             }
         })
     }
@@ -208,19 +212,22 @@ impl typedb_protocol::type_db_server::TypeDb for TypeDBService {
         request: Request<typedb_protocol::database::type_schema::Req>,
     ) -> Result<Response<typedb_protocol::database::type_schema::Res>, Status> {
         let message = request.into_inner();
-        run_with_diagnostics(&self.diagnostics_manager, Some(&message.name), ActionKind::DatabaseSchema, || {
-            match self.database_manager.database(&message.name) {
-                None => {
-                    Err(ServiceError::DatabaseDoesNotExist { name: message.name.clone() }.into_error_message().into_status())
-                }
-                Some(database) => {
-                    let transaction = TransactionRead::open(database, TransactionOptions::default())
-                        .map_err(|err| ServiceError::FailedToOpenPrerequisiteTransaction {}.into_error_message().into_status())?;
-                    let mut define = String::from("define\n");
-                    transaction.type_manager.get_types_syntax(&mut define, transaction.snapshot())
-                        .map_err(|err| ServiceError::ConceptReadError { typedb_source: err }.into_error_message().into_status())?;
-                    Ok(Response::new(database_type_schema_res(define)))
-                }
+        run_with_diagnostics(&self.diagnostics_manager, Some(&message.name), ActionKind::DatabaseSchema, || match self
+            .database_manager
+            .database(&message.name)
+        {
+            None => Err(ServiceError::DatabaseDoesNotExist { name: message.name.clone() }
+                .into_error_message()
+                .into_status()),
+            Some(database) => {
+                let transaction = TransactionRead::open(database, TransactionOptions::default()).map_err(|err| {
+                    ServiceError::FailedToOpenPrerequisiteTransaction {}.into_error_message().into_status()
+                })?;
+                let mut define = String::from("define\n");
+                transaction.type_manager.get_types_syntax(&mut define, transaction.snapshot()).map_err(|err| {
+                    ServiceError::ConceptReadError { typedb_source: err }.into_error_message().into_status()
+                })?;
+                Ok(Response::new(database_type_schema_res(define)))
             }
         })
     }

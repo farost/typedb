@@ -165,7 +165,7 @@ fn define_types<'a>(
         if existing.is_none() {
             let span = label.source_span();
             return Err(DefineError::SymbolResolution {
-                typedb_source: Box::new(SymbolResolutionError::TypeNotFound { label, source_span: span, }),
+                typedb_source: Box::new(SymbolResolutionError::TypeNotFound { label, source_span: span }),
             });
         }
     }
@@ -253,7 +253,7 @@ fn define_type(
         try_resolve_typeql_type(snapshot, type_manager, &label).map_err(|err| DefineError::SymbolResolution {
             typedb_source: Box::new(SymbolResolutionError::UnexpectedConceptRead {
                 typedb_source: err,
-                source_span: type_declaration.label.span()
+                source_span: type_declaration.label.span(),
             }),
         })?;
     match type_declaration.kind {
@@ -686,8 +686,14 @@ fn define_relates_specialises(
 
         let (role_label, _ordering) = type_ref_to_label_and_ordering(&label, &typeql_relates.related)
             .map_err(|typedb_source| DefineError::SymbolResolution { typedb_source })?;
-        let relates = resolve_relates_declared(snapshot, type_manager, *relation_type, role_label.name.as_str(), role_label.source_span())
-            .map_err(|typedb_source| DefineError::SymbolResolution { typedb_source })?;
+        let relates = resolve_relates_declared(
+            snapshot,
+            type_manager,
+            *relation_type,
+            role_label.name.as_str(),
+            role_label.source_span(),
+        )
+        .map_err(|typedb_source| DefineError::SymbolResolution { typedb_source })?;
 
         define_relates_specialise(snapshot, type_manager, thing_manager, &label, relates, typeql_relates)?;
     }
@@ -704,8 +710,14 @@ fn define_relates_specialise(
 ) -> Result<(), DefineError> {
     if let Some(specialised_label) = &typeql_relates.specialised {
         let checked_specialised = checked_identifier(&specialised_label.ident)?;
-        let specialised_relates = resolve_relates(snapshot, type_manager, relates.relation(), checked_specialised, specialised_label.ident.span())
-            .map_err(|typedb_source| DefineError::SymbolResolution { typedb_source })?;
+        let specialised_relates = resolve_relates(
+            snapshot,
+            type_manager,
+            relates.relation(),
+            checked_specialised,
+            specialised_label.ident.span(),
+        )
+        .map_err(|typedb_source| DefineError::SymbolResolution { typedb_source })?;
 
         let definition_status = get_sub_status(snapshot, type_manager, relates.role(), specialised_relates.role())
             .map_err(|source| DefineError::UnexpectedConceptRead { typedb_source: source })?;

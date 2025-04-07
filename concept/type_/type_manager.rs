@@ -7,9 +7,9 @@
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
+    fmt::{Formatter, Write},
     sync::Arc,
 };
-use std::fmt::{Formatter, Write};
 
 use encoding::{
     error::EncodingError,
@@ -52,10 +52,9 @@ use crate::{
         relation_type::{RelationType, RelationTypeAnnotation},
         role_type::{RoleType, RoleTypeAnnotation},
         type_manager::type_reader::TypeReader,
-        Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI,
+        Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI, TypeQLSyntax,
     },
 };
-use crate::type_::TypeQLSyntax;
 
 pub mod type_cache;
 pub mod type_reader;
@@ -1134,7 +1133,11 @@ impl TypeManager {
         }
     }
 
-    pub fn get_types_syntax(&self, builder: &mut impl Write, snapshot: &impl ReadableSnapshot) -> Result<(), Box<ConceptReadError>> {
+    pub fn get_types_syntax(
+        &self,
+        builder: &mut impl Write,
+        snapshot: &impl ReadableSnapshot,
+    ) -> Result<(), Box<ConceptReadError>> {
         for attribute_type in self.get_attribute_types(snapshot)?.iter() {
             attribute_type.format_syntax(builder, snapshot, self)?;
         }

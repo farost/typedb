@@ -4,8 +4,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-use std::{collections::HashMap, iter, str::FromStr, sync::Arc};
-use std::mem::transmute;
+use std::{collections::HashMap, iter, mem::transmute, str::FromStr, sync::Arc};
 
 use answer::{variable_value::VariableValue, Thing};
 use compiler::VariablePosition;
@@ -14,6 +13,10 @@ use concept::{
     type_::TypeAPI,
 };
 use cucumber::gherkin::Step;
+use database::{
+    transaction::{TransactionRead, TransactionSchema},
+    Database,
+};
 use encoding::{
     value::{label::Label, value_type::ValueType, ValueEncodable},
     AsBytes,
@@ -26,8 +29,6 @@ use executor::{
 use itertools::Itertools;
 use lending_iterator::LendingIterator;
 use macro_rules_attribute::apply;
-use database::Database;
-use database::transaction::{TransactionRead, TransactionSchema};
 use options::TransactionOptions;
 use query::error::QueryError;
 use storage::durability_client::WALClient;

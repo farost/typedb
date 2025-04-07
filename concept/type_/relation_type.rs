@@ -16,11 +16,10 @@ use encoding::{
         Typed,
     },
     layout::prefix::{Prefix, Prefix::VertexRelationType},
-    value::label::Label,
+    value::{label::Label, string_bytes::StringBytes},
     Prefixed,
 };
 use itertools::Itertools;
-use encoding::value::string_bytes::StringBytes;
 use lending_iterator::higher_order::Hkt;
 use primitive::maybe_owns::MaybeOwns;
 use resource::constants::snapshot::BUFFER_KEY_INLINE;
@@ -45,11 +44,10 @@ use crate::{
         relates::Relates,
         role_type::RoleType,
         type_manager::TypeManager,
-        Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, ThingTypeAPI, TypeAPI,
+        Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, ThingTypeAPI, TypeAPI, TypeQLSyntax,
     },
     ConceptAPI,
 };
-use crate::type_::TypeQLSyntax;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct RelationType {
@@ -188,7 +186,12 @@ impl ThingTypeAPI for RelationType {
 }
 
 impl TypeQLSyntax for RelationType {
-    fn capabilities_syntax(&self, f: &mut impl std::fmt::Write, snapshot: &impl ReadableSnapshot, type_manager: &TypeManager) -> Result<(), Box<ConceptReadError>> {
+    fn capabilities_syntax(
+        &self,
+        f: &mut impl std::fmt::Write,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<(), Box<ConceptReadError>> {
         self.relates_syntax(f, snapshot, type_manager)?;
         self.owns_syntax(f, snapshot, type_manager)?;
         self.plays_syntax(f, snapshot, type_manager)?;
@@ -562,7 +565,12 @@ impl RelationType {
         }
     }
 
-    fn relates_syntax(&self, f: &mut impl std::fmt::Write, snapshot: &impl ReadableSnapshot, type_manager: &TypeManager) -> Result<(), Box<ConceptReadError>> {
+    fn relates_syntax(
+        &self,
+        f: &mut impl std::fmt::Write,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<(), Box<ConceptReadError>> {
         let mut declared_relates = HashSet::new();
         let mut super_roles = HashSet::new();
         for relates in self.get_relates_declared(snapshot, type_manager)?.iter() {
@@ -571,21 +579,26 @@ impl RelationType {
                 super_roles.insert(role_supertype);
             }
         }
-        for relates in declared_relates.into_iter()
-            .sorted_by_key(|relates| {
-                relates.role().get_label(snapshot, type_manager).map(|label| (*label).clone())
-                    .unwrap_or(Label::new_static(""))
-            })
-        {
+        for relates in declared_relates.into_iter().sorted_by_key(|relates| {
+            relates
+                .role()
+                .get_label(snapshot, type_manager)
+                .map(|label| (*label).clone())
+                .unwrap_or(Label::new_static(""))
+        }) {
             let role = relates.role();
             if !super_roles.contains(&role) {
                 let label = role.get_label(snapshot, type_manager)?;
-                write!(f, ",\n  {} {}", typeql::token::Keyword::Relates, label.name().as_str()).map_err(|err| Box::new(err.into()))?;
+                write!(f, ",\n  {} {}", typeql::token::Keyword::Relates, label.name().as_str())
+                    .map_err(|err| Box::new(err.into()))?;
                 if let Some(role_supertype) = role.get_supertype(snapshot, type_manager)? {
                     let supertype_label = role_supertype.get_label(snapshot, type_manager)?;
-                    write!(f, " {} {}", typeql::token::Keyword::As, supertype_label.name.as_str()).map_err(|err| Box::new(err.into()))?;
+                    write!(f, " {} {}", typeql::token::Keyword::As, supertype_label.name.as_str())
+                        .map_err(|err| Box::new(err.into()))?;
                 }
-                for annotation in relates.get_annotations_declared(snapshot, type_manager)?.iter()
+                for annotation in relates
+                    .get_annotations_declared(snapshot, type_manager)?
+                    .iter()
                     .map(|annotation| Annotation::from(annotation.clone()))
                     .sorted_by_key(|annotation| annotation.category())
                 {
