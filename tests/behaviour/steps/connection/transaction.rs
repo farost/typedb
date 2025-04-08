@@ -141,8 +141,8 @@ pub async fn transaction_commits(context: &mut Context, may_error: params::MayEr
             }
         }
         ActiveTransaction::Schema(tx) => {
-            let mut schema = String::from("define\n");
-            tx.type_manager.get_types_syntax(&mut schema, tx.snapshot.as_ref()).unwrap();
+            let types_syntax =  tx.type_manager.get_types_syntax(tx.snapshot.as_ref()).unwrap();
+            let schema = format!("define\n{}", types_syntax);
             if let Either::Right(error) = may_error.check(tx.commit()) {
                 match error {
                     SchemaCommitError::ConceptWriteErrors { write_errors: errors, .. } => {
@@ -172,7 +172,7 @@ fn test_schema_export(context: &mut Context, schema: &str) {
     // export, re-import, and export schema and verify that's equal!
     let guard = context.server.as_ref().unwrap().lock().unwrap();
     let database_manager = guard.database_manager();
-    if !schema.trim_start_matches("define").trim().is_empty() {
+    if !schema.trim().is_empty() {
         const REIMPORT_DB: &str = "schema_reimport_from_test_tmp";
         database_manager.create_database(REIMPORT_DB).unwrap();
         let reimport = database_manager.database(REIMPORT_DB).unwrap();
@@ -201,8 +201,8 @@ fn test_schema_export(context: &mut Context, schema: &str) {
 
 fn get_schema(database: Arc<Database<WALClient>>) -> String {
     let transaction = TransactionRead::open(database, TransactionOptions::default()).unwrap();
-    let mut schema = String::from("define\n");
-    transaction.type_manager.get_types_syntax(&mut schema, transaction.snapshot()).unwrap();
+    let types_syntax = transaction.type_manager.get_types_syntax(transaction.snapshot()).unwrap();
+    let mut schema = format!("define\n{}", types_syntax);
     schema
 }
 

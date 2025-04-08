@@ -1,3 +1,3 @@
-## Usage and product changes
+## Product change and motivation
 
 ## Implementation

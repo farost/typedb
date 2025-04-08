@@ -1135,19 +1135,19 @@ impl TypeManager {
 
     pub fn get_types_syntax(
         &self,
-        builder: &mut impl Write,
         snapshot: &impl ReadableSnapshot,
-    ) -> Result<(), Box<ConceptReadError>> {
+    ) -> Result<String, Box<ConceptReadError>> {
+        let mut syntax = String::new();
         for attribute_type in self.get_attribute_types(snapshot)?.iter() {
-            attribute_type.format_syntax(builder, snapshot, self)?;
+            attribute_type.format_syntax(&mut syntax, snapshot, self)?;
         }
         for entity_type in self.get_entity_types(snapshot)?.iter() {
-            entity_type.format_syntax(builder, snapshot, self)?;
+            entity_type.format_syntax(&mut syntax, snapshot, self)?;
         }
         for relation_type in self.get_relation_types(snapshot)?.iter() {
-            relation_type.format_syntax(builder, snapshot, self)?;
+            relation_type.format_syntax(&mut syntax, snapshot, self)?;
         }
-        Ok(())
+        Ok(syntax)
     }
 }
 
