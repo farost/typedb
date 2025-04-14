@@ -6,3 +6,15 @@ Feature: Debugging Space
 
   # Paste any scenarios below for debugging.
   # Do not commit any changes to this file.
+
+  Background:
+    Given typedb starts
+    Given connection opens with default authentication
+    Given connection is open: true
+    Given connection reset database: typedb
+    Given connection open schema transaction for database: typedb
+
+
+  Scenario: Non-abstract relation and cannot be created without roles
+    When create relation type: marriage
+    Then transaction commits; fails

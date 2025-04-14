@@ -58,7 +58,7 @@ fn test_assembly() {
 }
 
 fn run_test_against_server() -> Output {
-    build_cmd("typedb-extracted/typedb console --script=tests/assembly/script.tql")
+    build_cmd("typedb-extracted/typedb console --address=localhost:1729 --tls-disabled --username=admin --password=password --script=tests/assembly/script.tql")
         .output()
         .expect("Failed to run console script")
 }

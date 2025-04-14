@@ -44,7 +44,7 @@ use crate::{
         relates::Relates,
         role_type::RoleType,
         type_manager::TypeManager,
-        Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, ThingTypeAPI, TypeAPI, TypeQLSyntax,
+        Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, ThingTypeAPI, TypeAPI, TypeQLKindSyntax,
     },
     ConceptAPI,
 };
@@ -179,13 +179,7 @@ impl KindAPI for RelationType {
     ) -> Result<MaybeOwns<'m, HashSet<TypeConstraint<RelationType>>>, Box<ConceptReadError>> {
         type_manager.get_relation_type_constraints(snapshot, self)
     }
-}
 
-impl ThingTypeAPI for RelationType {
-    type InstanceType = Relation;
-}
-
-impl TypeQLSyntax for RelationType {
     fn capabilities_syntax(
         &self,
         f: &mut impl std::fmt::Write,
@@ -197,6 +191,10 @@ impl TypeQLSyntax for RelationType {
         self.plays_syntax(f, snapshot, type_manager)?;
         Ok(())
     }
+}
+
+impl ThingTypeAPI for RelationType {
+    type InstanceType = Relation;
 }
 
 impl ObjectTypeAPI for RelationType {
@@ -589,7 +587,8 @@ impl RelationType {
             let role = relates.role();
             if !super_roles.contains(&role) {
                 let label = role.get_label(snapshot, type_manager)?;
-                write!(f, ",\n  {} {}", typeql::token::Keyword::Relates, label.name().as_str())
+                let order = role.get_ordering(snapshot, type_manager)?;
+                write!(f, ",\n  {} {}{}", typeql::token::Keyword::Relates, label.name().as_str(), order)
                     .map_err(|err| Box::new(err.into()))?;
                 if let Some(role_supertype) = role.get_supertype(snapshot, type_manager)? {
                     let supertype_label = role_supertype.get_label(snapshot, type_manager)?;

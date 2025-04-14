@@ -41,10 +41,11 @@ use crate::{
         object_type::ObjectType,
         owns::Owns,
         type_manager::TypeManager,
-        KindAPI, ThingTypeAPI, TypeAPI, TypeQLSyntax,
+        KindAPI, ThingTypeAPI, TypeAPI,
     },
     ConceptAPI,
 };
+use crate::type_::TypeQLSyntax;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct AttributeType {
@@ -188,13 +189,6 @@ impl KindAPI for AttributeType {
     ) -> Result<MaybeOwns<'m, HashSet<TypeConstraint<AttributeType>>>, Box<ConceptReadError>> {
         type_manager.get_attribute_type_constraints(snapshot, self)
     }
-}
-
-impl ThingTypeAPI for AttributeType {
-    type InstanceType = Attribute;
-}
-
-impl TypeQLSyntax for AttributeType {
     fn capabilities_syntax(
         &self,
         f: &mut impl std::fmt::Write,
@@ -202,7 +196,8 @@ impl TypeQLSyntax for AttributeType {
         type_manager: &TypeManager,
     ) -> Result<(), Box<ConceptReadError>> {
         if let Some(value_type) = self.get_value_type_declared(snapshot, type_manager)? {
-            write!(f, ",\n  {} {}", typeql::token::Keyword::Value, value_type).map_err(|err| Box::new(err.into()))?;
+            write!(f, ",\n {} ", typeql::token::Keyword::Value).map_err(|err| Box::new(err.into()))?;
+            TypeQLSyntax::format_syntax(&value_type, f, snapshot, type_manager)?;
             for annotation in self
                 .get_value_type_annotations_declared(snapshot, type_manager)?
                 .iter()
@@ -232,6 +227,10 @@ impl TypeQLSyntax for AttributeType {
         }
         Ok(())
     }
+}
+
+impl ThingTypeAPI for AttributeType {
+    type InstanceType = Attribute;
 }
 
 impl AttributeType {

@@ -9,6 +9,7 @@ use std::{
     fmt,
     sync::Arc,
 };
+use std::fmt::Write;
 
 use encoding::{
     error::{EncodingError, EncodingError::UnexpectedPrefix},
@@ -178,6 +179,10 @@ impl KindAPI for RoleType {
         type_manager: &'m TypeManager,
     ) -> Result<MaybeOwns<'m, HashSet<TypeConstraint<RoleType>>>, Box<ConceptReadError>> {
         type_manager.get_role_type_constraints(snapshot, self)
+    }
+
+    fn capabilities_syntax(&self, f: &mut impl Write, snapshot: &impl ReadableSnapshot, type_manager: &TypeManager) -> Result<(), Box<ConceptReadError>> {
+        Ok(())
     }
 }
 

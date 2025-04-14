@@ -40,7 +40,7 @@ use crate::{
         plays::Plays,
         role_type::RoleType,
         type_manager::TypeManager,
-        Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, ThingTypeAPI, TypeAPI, TypeQLSyntax,
+        Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, ThingTypeAPI, TypeAPI, TypeQLKindSyntax,
     },
     ConceptAPI,
 };
@@ -183,13 +183,7 @@ impl KindAPI for EntityType {
     ) -> Result<MaybeOwns<'m, HashSet<TypeConstraint<EntityType>>>, Box<ConceptReadError>> {
         type_manager.get_entity_type_constraints(snapshot, self)
     }
-}
 
-impl ThingTypeAPI for EntityType {
-    type InstanceType = Entity;
-}
-
-impl TypeQLSyntax for EntityType {
     fn capabilities_syntax(
         &self,
         f: &mut impl std::fmt::Write,
@@ -200,6 +194,10 @@ impl TypeQLSyntax for EntityType {
         self.plays_syntax(f, snapshot, type_manager)?;
         Ok(())
     }
+}
+
+impl ThingTypeAPI for EntityType {
+    type InstanceType = Entity;
 }
 
 impl EntityType {

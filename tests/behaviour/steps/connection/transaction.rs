@@ -159,10 +159,10 @@ pub async fn transaction_commits(context: &mut Context, may_error: params::MayEr
                         panic!("Unexpected schema commit error: {:?}", error);
                     }
                 }
+            } else {
+                // after each successful schema trasaction, we re-test the schema export/import
+                test_schema_export(context, &types_syntax);
             }
-
-            // after each schema trasaction, we re-test the schema export/import
-            test_schema_export(context, &types_syntax);
         }
     }
 }

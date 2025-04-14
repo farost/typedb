@@ -5,6 +5,7 @@
  */
 
 use std::{collections::HashSet, fmt, hash::Hash, iter, sync::Arc};
+use std::fmt::Write;
 
 use bytes::Bytes;
 use encoding::{
@@ -21,6 +22,8 @@ use itertools::Itertools;
 use primitive::maybe_owns::MaybeOwns;
 use resource::constants::snapshot::{BUFFER_KEY_INLINE, BUFFER_VALUE_INLINE};
 use serde::{Deserialize, Serialize};
+use encoding::graph::definition::r#struct::StructDefinition;
+use encoding::value::value_type::ValueType;
 use storage::snapshot::{ReadableSnapshot, WritableSnapshot};
 
 use crate::{
@@ -190,30 +193,8 @@ pub trait KindAPI: TypeAPI {
         snapshot: &impl ReadableSnapshot,
         type_manager: &'a TypeManager,
     ) -> Result<MaybeOwns<'a, HashSet<TypeConstraint<Self>>>, Box<ConceptReadError>>;
-}
 
-pub trait ObjectTypeAPI: TypeAPI + OwnerAPI + ThingTypeAPI {
-    fn into_object_type(self) -> ObjectType;
-}
-
-pub trait ThingTypeAPI: TypeAPI {
-    type InstanceType: ThingAPI;
-}
-
-pub trait TypeQLSyntax: KindAPI {
-    fn format_syntax(
-        &self,
-        f: &mut impl std::fmt::Write,
-        snapshot: &impl ReadableSnapshot,
-        type_manager: &TypeManager,
-    ) -> Result<(), Box<ConceptReadError>> {
-        self.kind_syntax(f, snapshot, type_manager)?;
-        self.capabilities_syntax(f, snapshot, type_manager)?;
-        write!(f, ";").map_err(|err| Box::new(err.into()))?;
-        Ok(())
-    }
-
-    /// The capability methods trait all expect to add a comma and a newline to finish the previous capability,
+    /// The capability methods all expect to add a comma and a newline to finish the previous capability,
     /// if required. In other words, they should not terminate their string write with a comma or newline, and let the next
     /// call decide if that is required.
     fn capabilities_syntax(
@@ -255,6 +236,65 @@ pub trait TypeQLSyntax: KindAPI {
             write!(f, " {}", annotation).map_err(|err| Box::new(err.into()))?;
         }
         Ok(())
+    }
+}
+
+pub trait ObjectTypeAPI: TypeAPI + OwnerAPI + ThingTypeAPI {
+    fn into_object_type(self) -> ObjectType;
+}
+
+pub trait ThingTypeAPI: TypeAPI {
+    type InstanceType: ThingAPI;
+}
+
+pub trait TypeQLSyntax {
+    fn format_syntax(
+        &self,
+        f: &mut impl std::fmt::Write,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<(), Box<ConceptReadError>>;
+}
+
+impl<T: KindAPI> TypeQLSyntax for T {
+    fn format_syntax(
+        &self,
+        f: &mut impl std::fmt::Write,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<(), Box<ConceptReadError>> {
+        self.kind_syntax(f, snapshot, type_manager)?;
+        self.capabilities_syntax(f, snapshot, type_manager)?;
+        write!(f, ";").map_err(|err| Box::new(err.into()))?;
+        Ok(())
+    }
+}
+
+impl TypeQLSyntax for ValueType  {
+    fn format_syntax(&self, f: &mut impl Write, snapshot: &impl ReadableSnapshot, type_manager: &TypeManager) -> Result<(), Box<ConceptReadError>> {
+        if let ValueType::Struct(definition_key) = self {
+            write!(f, "{}", type_manager.get_struct_definition(snapshot, definition_key.clone())?.name).map_err(|err| Box::new(err.into()))
+        } else {
+            write!(f, "{}", self).map_err(|err| Box::new(err.into()))
+        }
+    }
+}
+
+impl TypeQLSyntax for StructDefinition {
+    fn format_syntax(&self, f: &mut impl Write, snapshot: &impl ReadableSnapshot, type_manager: &TypeManager) -> Result<(), Box<ConceptReadError>> {
+        write!(f, "{} {}:", typeql::token::Keyword::Struct, &self.name).map_err(|err| Box::new(err.into()))?;
+        for (name, id) in self.field_names.iter() {
+            let field_definition = self.fields.get(id).unwrap();
+            let optional_syntax = if field_definition.optional {
+                typeql::token::Char::Question.as_str()
+            } else {
+                ""
+            };
+            write!(f, "\n  {} {} ", name, typeql::token::Keyword::Value).map_err(|err| Box::new(err.into()))?;
+            (&field_definition.value_type).format_syntax(f, snapshot, type_manager)?;
+            write!(f, "{},", optional_syntax)
+        }
+        write!(f, "\n  ;").map_err(|err| Box::new(err.into()))
     }
 }
 
@@ -466,7 +506,8 @@ pub trait OwnerAPI: TypeAPI {
                 .unwrap_or(Label::new_static(""))
         }) {
             let label = owns.attribute().get_label(snapshot, type_manager)?;
-            write!(f, ",\n  {} {}", typeql::token::Keyword::Owns, label.name().as_str())
+            let order = owns.get_ordering(snapshot, type_manager)?;
+            write!(f, ",\n  {} {}{}", typeql::token::Keyword::Owns, label.name().as_str(), order)
                 .map_err(|err| Box::new(err.into()))?;
             for annotation in owns
                 .get_annotations_declared(snapshot, type_manager)?
