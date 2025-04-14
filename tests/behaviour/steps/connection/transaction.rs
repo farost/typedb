@@ -144,7 +144,7 @@ pub async fn transaction_commits(context: &mut Context, may_error: params::MayEr
             }
         }
         ActiveTransaction::Schema(tx) => {
-            let types_syntax =  tx.type_manager.get_types_syntax(tx.snapshot.as_ref()).unwrap();
+            let types_syntax_result = tx.type_manager.get_types_syntax(tx.snapshot.as_ref());
             if let Some(error) = may_error.check(tx.commit()) {
                 match error {
                     SchemaCommitError::ConceptWriteErrors { write_errors: errors, .. } => {
@@ -162,24 +162,36 @@ pub async fn transaction_commits(context: &mut Context, may_error: params::MayEr
                         panic!("Unexpected schema commit error: {:?}", error);
                     }
                 }
+            } else {
+                // after each schema trasaction, we re-test the schema export/import
+                test_schema_export(context, types_syntax_result.unwrap())
             }
-
-            // after each schema trasaction, we re-test the schema export/import
-            test_schema_export(context, &types_syntax);
         }
     }
 }
 
-fn test_schema_export(context: &mut Context, types_syntax: &str) {
+fn test_schema_export(context: &mut Context, types_syntax: String) {
     // export, re-import, and export schema and verify that's equal!
-    let guard = context.server.as_ref().unwrap().lock().unwrap();
-    let database_manager = guard.database_manager();
-    if !types_syntax.trim().is_empty() {
+    if types_syntax.trim().is_empty() {
+        return;
+    }
+    let (re_exported_syntax, cleanup_result) = {
+        let guard = context.server.as_ref().unwrap().lock().unwrap();
+        let database_manager = guard.database_manager();
         const REIMPORT_DB: &str = "schema_reimport_from_test_tmp";
         database_manager.create_database(REIMPORT_DB).unwrap();
         let reimport = database_manager.database(REIMPORT_DB).unwrap();
         let mut transaction = TransactionSchema::open(reimport.clone(), TransactionOptions::default()).unwrap();
         let schema_define = format!("define\n{}", types_syntax);
+        let parsed_query = match typeql::parse_query(&schema_define) {
+            Ok(parsed_query) => parsed_query,
+            err_res => {
+                transaction.close();
+                database_manager.delete_database(REIMPORT_DB).unwrap();
+                err_res.unwrap();
+                return;
+            }
+        };
         transaction
             .query_manager
             .execute_schema(
@@ -187,24 +199,27 @@ fn test_schema_export(context: &mut Context, types_syntax: &str) {
                 &transaction.type_manager,
                 &transaction.thing_manager,
                 &transaction.function_manager,
-                typeql::parse_query(&schema_define).unwrap().into_schema(),
+                parsed_query.into_schema(),
                 &schema_define,
             )
             .unwrap();
         transaction.commit().unwrap();
 
         let re_exported_syntax = get_types_syntax(reimport.clone());
-        assert_eq!(re_exported_syntax, types_syntax);
         drop(reimport);
-        let result = database_manager.delete_database(REIMPORT_DB);
+        let cleanup_result = database_manager.delete_database(REIMPORT_DB);
+        (re_exported_syntax, cleanup_result)
+    };
 
-        result.unwrap();
-    }
+    assert_eq!(re_exported_syntax, types_syntax);
+    cleanup_result.unwrap();
 }
 
 fn get_types_syntax(database: Arc<Database<WALClient>>) -> String {
     let transaction = TransactionRead::open(database, TransactionOptions::default()).unwrap();
-    transaction.type_manager.get_types_syntax(transaction.snapshot()).unwrap()
+    let syntax = transaction.type_manager.get_types_syntax(transaction.snapshot()).unwrap();
+    transaction.close();
+    syntax
 }
 
 #[apply(generic_step)]
