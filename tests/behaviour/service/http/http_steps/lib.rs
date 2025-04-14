@@ -152,14 +152,18 @@ impl Context {
     const SERVER_MAX_START_TIME: Duration = Duration::from_secs(10);
 
     pub async fn test<I: AsRef<Path>>(glob: I) -> bool {
+        println!("Test");
         let default_panic = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
             default_panic(info);
             std::process::exit(1);
         }));
+        println!("Start incoming");
 
         let (shutdown_sender, server) = start_typedb().await;
+        println!("Wait server start");
         Self::wait_server_start().await;
+        println!("Server has started!");
 
         let result = !Self::cucumber::<I>()
             .repeat_failed()

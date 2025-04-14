@@ -3,6 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
+use std::net::TcpListener;
 use std::sync::{Arc, Mutex};
 
 use cucumber::{given, then, when};
@@ -39,14 +40,32 @@ const HTTP_ADDRESS: &str = "0.0.0.0:8000";
 const DISTRIBUTION: &str = "TypeDB CE TEST";
 const VERSION: &str = "0.0.0";
 
+fn test_tcp(address: &str) {
+    match TcpListener::bind(address) {
+        Ok(listener) => {
+            drop(listener);
+            println!("TRUE! ALL IS GOOD!");
+        }
+        Err(err) => println!("ERROR: {err:?}"),
+    }
+}
+
+
 pub(crate) async fn start_typedb(
 ) -> (tokio::sync::watch::Sender<()>, std::thread::JoinHandle<Result<(), ServerOpenError>>) {
+    println!("STarting typedb...");
+    println!("testing tcp......");
+    test_tcp(HTTP_ADDRESS);
+    println!("Creaeting senders...");
+
     let (shutdown_sender, shutdown_receiver) = tokio::sync::watch::channel(());
     let shutdown_sender_clone = shutdown_sender.clone();
+    println!("Creating handle...");
     let handle = std::thread::spawn(move || {
         let rt = tokio::runtime::Runtime::new().expect("Failed to create runtime");
         let config = Config::new(GRPC_ADDRESS).server_http_address(HTTP_ADDRESS).development_mode(true).build();
 
+        println!("Server future...");
         let server_future = async {
             let server = Server::new_with_external_shutdown(
                 config,
@@ -60,9 +79,11 @@ pub(crate) async fn start_typedb(
             .await
             .expect("Failed to start TypeDB server");
 
+            println!("Server serve...");
             server.serve().await
         };
 
+        println!("Block on...");
         rt.block_on(server_future)
     });
 

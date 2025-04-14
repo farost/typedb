@@ -120,6 +120,7 @@ impl Server {
 
         let grpc_server_address = Self::resolve_address(server_config.address.clone()).await;
 
+        println!("Grpc service...");
         let grpc_service = grpc::typedb_service::TypeDBService::new(
             grpc_server_address,
             database_manager.clone(),
@@ -134,6 +135,8 @@ impl Server {
             Some(http_address) => Some(Self::resolve_address(http_address).await),
             None => None,
         };
+
+        println!("HTTP service...");
         let http_service = http_server_address.map(|http_address| {
             http::typedb_service::TypeDBService::new(
                 http_address,
