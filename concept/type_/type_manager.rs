@@ -7,10 +7,10 @@
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    fmt::{Formatter, Write},
+    fmt::{ Write},
     sync::Arc,
 };
-use bytes::Bytes;
+use itertools::Itertools;
 
 use encoding::{
     error::EncodingError,
@@ -24,7 +24,6 @@ use encoding::{
 };
 use primitive::maybe_owns::MaybeOwns;
 use resource::constants::{concept::RELATION_INDEX_THRESHOLD, encoding::StructFieldIDUInt};
-use storage::key_range::KeyRange;
 use storage::snapshot::{ReadableSnapshot, WritableSnapshot};
 use type_cache::TypeCache;
 use type_writer::TypeWriter;
@@ -54,7 +53,7 @@ use crate::{
         relation_type::{RelationType, RelationTypeAnnotation},
         role_type::{RoleType, RoleTypeAnnotation},
         type_manager::type_reader::TypeReader,
-        Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI, TypeQLKindSyntax,
+        Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI,
     },
 };
 use crate::type_::TypeQLSyntax;
@@ -1162,7 +1161,10 @@ impl TypeManager {
         for relation_type in self.get_relation_types(snapshot)?.iter() {
             relation_type.format_syntax(&mut syntax, snapshot, self)?;
         }
-        for (_struct_key, struct_definition) in self.get_struct_definitions(snapshot)?.into_iter() {
+        for (_struct_key, struct_definition) in self.get_struct_definitions(snapshot)?
+            .into_iter()
+            .sorted_by_key(|(_, definition)| definition.name.clone())
+        {
             struct_definition.format_syntax(&mut syntax, snapshot, self)?;
         }
         Ok(syntax)

@@ -24,6 +24,8 @@ use typedb_protocol::{
 };
 use user::{permission_manager::PermissionManager, user_manager::UserManager};
 use uuid::Uuid;
+use database::transaction::TransactionRead;
+use options::TransactionOptions;
 
 use crate::{
     authentication::{

@@ -282,8 +282,8 @@ impl TypeQLSyntax for ValueType  {
 
 impl TypeQLSyntax for StructDefinition {
     fn format_syntax(&self, f: &mut impl Write, snapshot: &impl ReadableSnapshot, type_manager: &TypeManager) -> Result<(), Box<ConceptReadError>> {
-        write!(f, "{} {}:", typeql::token::Keyword::Struct, &self.name).map_err(|err| Box::new(err.into()))?;
-        for (name, id) in self.field_names.iter() {
+        write!(f, "\n{} {}:", typeql::token::Keyword::Struct, &self.name).map_err(|err| Box::new(err.into()))?;
+        for (name, id) in self.field_names.iter().sorted_by_key(|(field_name, _)| field_name.clone()) {
             let field_definition = self.fields.get(id).unwrap();
             let optional_syntax = if field_definition.optional {
                 typeql::token::Char::Question.as_str()
@@ -292,7 +292,7 @@ impl TypeQLSyntax for StructDefinition {
             };
             write!(f, "\n  {} {} ", name, typeql::token::Keyword::Value).map_err(|err| Box::new(err.into()))?;
             (&field_definition.value_type).format_syntax(f, snapshot, type_manager)?;
-            write!(f, "{},", optional_syntax)
+            write!(f, "{},", optional_syntax).map_err(|err| Box::new(err.into()))?;
         }
         write!(f, "\n  ;").map_err(|err| Box::new(err.into()))
     }

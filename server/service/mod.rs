@@ -5,6 +5,8 @@
  */
 use error::typedb_error;
 use serde::{Deserialize, Serialize};
+use concept::error::ConceptReadError;
+use ir::pipeline::FunctionReadError;
 
 pub(crate) mod grpc;
 pub mod http;
@@ -40,5 +42,8 @@ typedb_error! {
         OperationNotPermitted(2, "The user is not permitted to execute the operation"),
         DatabaseDoesNotExist(3, "Database '{name}' does not exist.", name: String),
         UserDoesNotExist(4, "User does not exist"),
+        FailedToOpenPrerequisiteTransaction(5, "Failed to open transaction, which is a prerequisite for the operation."),
+        ConceptReadError(6, "Error reading concepts", typedb_source: Box<ConceptReadError>),
+        FunctionReadError(7, "Error reading functions", typedb_source: FunctionReadError),
     }
 }
