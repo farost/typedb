@@ -478,7 +478,9 @@ impl TypeCache {
     }
 
     pub(crate) fn get_struct_definitions(&self) -> HashMap<DefinitionKey, StructDefinition> {
-        self.struct_definitions.iter().filter(|def| def.is_some())
+        self.struct_definitions
+            .iter()
+            .filter(|def| def.is_some())
             .map(|def| (def.as_ref().unwrap().definition_key.clone(), def.as_ref().unwrap().definition.clone()))
             .collect()
     }

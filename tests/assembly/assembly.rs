@@ -4,9 +4,11 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-use std::process::{Child, Command, Output};
-use std::thread;
-use std::time::Duration;
+use std::{
+    process::{Child, Command, Output},
+    thread,
+    time::Duration,
+};
 
 fn build_cmd(cmd_str: &str) -> Command {
     let mut cmd = Command::new("sh");

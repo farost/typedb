@@ -4,26 +4,26 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-use std::{collections::HashSet, fmt, hash::Hash, iter, sync::Arc};
-use std::fmt::Write;
+use std::{collections::HashSet, fmt, fmt::Write, hash::Hash, iter, sync::Arc};
 
 use bytes::Bytes;
 use encoding::{
-    graph::type_::{
-        edge::TypeEdgeEncoding,
-        property::{TypeEdgePropertyEncoding, TypeVertexPropertyEncoding},
-        vertex::{TypeVertex, TypeVertexEncoding},
-        CapabilityKind, Kind,
+    graph::{
+        definition::r#struct::StructDefinition,
+        type_::{
+            edge::TypeEdgeEncoding,
+            property::{TypeEdgePropertyEncoding, TypeVertexPropertyEncoding},
+            vertex::{TypeVertex, TypeVertexEncoding},
+            CapabilityKind, Kind,
+        },
     },
     layout::infix::Infix,
-    value::label::Label,
+    value::{label::Label, value_type::ValueType},
 };
 use itertools::Itertools;
 use primitive::maybe_owns::MaybeOwns;
 use resource::constants::snapshot::{BUFFER_KEY_INLINE, BUFFER_VALUE_INLINE};
 use serde::{Deserialize, Serialize};
-use encoding::graph::definition::r#struct::StructDefinition;
-use encoding::value::value_type::ValueType;
 use storage::snapshot::{ReadableSnapshot, WritableSnapshot};
 
 use crate::{
@@ -270,10 +270,16 @@ impl<T: KindAPI> TypeQLSyntax for T {
     }
 }
 
-impl TypeQLSyntax for ValueType  {
-    fn format_syntax(&self, f: &mut impl Write, snapshot: &impl ReadableSnapshot, type_manager: &TypeManager) -> Result<(), Box<ConceptReadError>> {
+impl TypeQLSyntax for ValueType {
+    fn format_syntax(
+        &self,
+        f: &mut impl Write,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<(), Box<ConceptReadError>> {
         if let ValueType::Struct(definition_key) = self {
-            write!(f, "{}", type_manager.get_struct_definition(snapshot, definition_key.clone())?.name).map_err(|err| Box::new(err.into()))
+            write!(f, "{}", type_manager.get_struct_definition(snapshot, definition_key.clone())?.name)
+                .map_err(|err| Box::new(err.into()))
         } else {
             write!(f, "{}", self).map_err(|err| Box::new(err.into()))
         }
@@ -281,15 +287,16 @@ impl TypeQLSyntax for ValueType  {
 }
 
 impl TypeQLSyntax for StructDefinition {
-    fn format_syntax(&self, f: &mut impl Write, snapshot: &impl ReadableSnapshot, type_manager: &TypeManager) -> Result<(), Box<ConceptReadError>> {
+    fn format_syntax(
+        &self,
+        f: &mut impl Write,
+        snapshot: &impl ReadableSnapshot,
+        type_manager: &TypeManager,
+    ) -> Result<(), Box<ConceptReadError>> {
         write!(f, "\n{} {}:", typeql::token::Keyword::Struct, &self.name).map_err(|err| Box::new(err.into()))?;
         for (name, id) in self.field_names.iter().sorted_by_key(|(field_name, _)| field_name.clone()) {
             let field_definition = self.fields.get(id).unwrap();
-            let optional_syntax = if field_definition.optional {
-                typeql::token::Char::Question.as_str()
-            } else {
-                ""
-            };
+            let optional_syntax = if field_definition.optional { typeql::token::Char::Question.as_str() } else { "" };
             write!(f, "\n  {} {} ", name, typeql::token::Keyword::Value).map_err(|err| Box::new(err.into()))?;
             (&field_definition.value_type).format_syntax(f, snapshot, type_manager)?;
             write!(f, "{},", optional_syntax).map_err(|err| Box::new(err.into()))?;

@@ -7,10 +7,9 @@
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    fmt::{ Write},
+    fmt::Write,
     sync::Arc,
 };
-use itertools::Itertools;
 
 use encoding::{
     error::EncodingError,
@@ -22,6 +21,7 @@ use encoding::{
     },
     value::{label::Label, value_type::ValueType},
 };
+use itertools::Itertools;
 use primitive::maybe_owns::MaybeOwns;
 use resource::constants::{concept::RELATION_INDEX_THRESHOLD, encoding::StructFieldIDUInt};
 use storage::snapshot::{ReadableSnapshot, WritableSnapshot};
@@ -53,10 +53,9 @@ use crate::{
         relation_type::{RelationType, RelationTypeAnnotation},
         role_type::{RoleType, RoleTypeAnnotation},
         type_manager::type_reader::TypeReader,
-        Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI,
+        Capability, KindAPI, ObjectTypeAPI, Ordering, OwnerAPI, PlayerAPI, TypeAPI, TypeQLSyntax,
     },
 };
-use crate::type_::TypeQLSyntax;
 
 pub mod type_cache;
 pub mod type_reader;
@@ -1147,10 +1146,7 @@ impl TypeManager {
         }
     }
 
-    pub fn get_types_syntax(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-    ) -> Result<String, Box<ConceptReadError>> {
+    pub fn get_types_syntax(&self, snapshot: &impl ReadableSnapshot) -> Result<String, Box<ConceptReadError>> {
         let mut syntax = String::new();
         for attribute_type in self.get_attribute_types(snapshot)?.iter() {
             attribute_type.format_syntax(&mut syntax, snapshot, self)?;
@@ -1161,9 +1157,8 @@ impl TypeManager {
         for relation_type in self.get_relation_types(snapshot)?.iter() {
             relation_type.format_syntax(&mut syntax, snapshot, self)?;
         }
-        for (_struct_key, struct_definition) in self.get_struct_definitions(snapshot)?
-            .into_iter()
-            .sorted_by_key(|(_, definition)| definition.name.clone())
+        for (_struct_key, struct_definition) in
+            self.get_struct_definitions(snapshot)?.into_iter().sorted_by_key(|(_, definition)| definition.name.clone())
         {
             struct_definition.format_syntax(&mut syntax, snapshot, self)?;
         }

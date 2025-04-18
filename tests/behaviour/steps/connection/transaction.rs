@@ -141,7 +141,7 @@ pub async fn transaction_commits(context: &mut Context, may_error: params::MayEr
             }
         }
         ActiveTransaction::Schema(tx) => {
-            let types_syntax =  tx.type_manager.get_types_syntax(tx.snapshot.as_ref()).unwrap();
+            let types_syntax = tx.type_manager.get_types_syntax(tx.snapshot.as_ref()).unwrap();
             if let Either::Right(error) = may_error.check(tx.commit()) {
                 match error {
                     SchemaCommitError::ConceptWriteErrors { write_errors: errors, .. } => {

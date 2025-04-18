@@ -223,10 +223,7 @@ impl FunctionManager {
         }
     }
 
-    pub fn get_functions_syntax(
-        &self,
-        snapshot: &impl ReadableSnapshot,
-    ) -> Result<String, FunctionReadError> {
+    pub fn get_functions_syntax(&self, snapshot: &impl ReadableSnapshot) -> Result<String, FunctionReadError> {
         let mut syntax = String::new();
         for function in FunctionReader::get_functions_all(snapshot)? {
             write!(&mut syntax, "\n{}", function.parsed.unparsed).map_err(|err| err.into())?;

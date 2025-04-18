@@ -264,7 +264,7 @@ impl fmt::Display for Decimal {
             let sign = if is_negative { "-" } else { "" };
 
             let fractional_width = FRACTIONAL_PART_DENOMINATOR_LOG10 - tail_0s;
-            write!(f, "{}{}.{:0width$}dec",sign, int, fractional, width = fractional_width as usize)?;
+            write!(f, "{}{}.{:0width$}dec", sign, int, fractional, width = fractional_width as usize)?;
         }
         Ok(())
     }

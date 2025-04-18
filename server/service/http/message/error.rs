@@ -36,7 +36,7 @@ impl IntoResponse for HttpServiceError {
                 ServiceError::OperationNotPermitted { .. } => StatusCode::FORBIDDEN,
                 ServiceError::DatabaseDoesNotExist { .. } => StatusCode::NOT_FOUND,
                 ServiceError::UserDoesNotExist { .. } => StatusCode::NOT_FOUND,
-                ServiceError::FailedToOpenPrerequisiteTransaction { .. } =>  StatusCode::BAD_REQUEST,
+                ServiceError::FailedToOpenPrerequisiteTransaction { .. } => StatusCode::BAD_REQUEST,
                 ServiceError::ConceptReadError { .. } => StatusCode::BAD_REQUEST,
                 ServiceError::FunctionReadError { .. } => StatusCode::BAD_REQUEST,
             },

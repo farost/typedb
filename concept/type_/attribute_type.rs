@@ -41,11 +41,10 @@ use crate::{
         object_type::ObjectType,
         owns::Owns,
         type_manager::TypeManager,
-        KindAPI, ThingTypeAPI, TypeAPI,
+        KindAPI, ThingTypeAPI, TypeAPI, TypeQLSyntax,
     },
     ConceptAPI,
 };
-use crate::type_::TypeQLSyntax;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct AttributeType {

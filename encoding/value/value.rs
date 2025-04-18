@@ -464,7 +464,7 @@ impl fmt::Display for Value<'_> {
                 } else {
                     write!(f, "{double}")
                 }
-            },
+            }
             Value::Decimal(decimal) => write!(f, "{decimal}"),
             Value::Date(date) => write!(f, "{date}"),
             Value::DateTime(datetime) => write!(f, "{}", datetime.format("%FT%T%.9f")),
@@ -476,7 +476,7 @@ impl fmt::Display for Value<'_> {
             Value::String(string) => {
                 let escaped = string.replace("\"", "\\\"");
                 write!(f, "\"{escaped}\"")
-            },
+            }
             // TODO: this string will not have field names, only field IDs!
             Value::Struct(struct_) => write!(f, "{struct_}"),
         }

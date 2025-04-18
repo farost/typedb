@@ -3,10 +3,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
-use error::typedb_error;
-use serde::{Deserialize, Serialize};
 use concept::error::ConceptReadError;
+use error::typedb_error;
 use ir::pipeline::FunctionReadError;
+use serde::{Deserialize, Serialize};
 
 pub(crate) mod grpc;
 pub mod http;
