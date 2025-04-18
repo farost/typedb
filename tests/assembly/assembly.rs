@@ -5,6 +5,8 @@
  */
 
 use std::process::{Child, Command, Output};
+use std::thread;
+use std::time::Duration;
 
 fn build_cmd(cmd_str: &str) -> Command {
     let mut cmd = Command::new("sh");
@@ -46,6 +48,7 @@ fn test_assembly() {
         panic!("{:?}", extract_output);
     }
     let server_process = build_cmd("typedb-extracted/typedb server").spawn().expect("Failed to spawn server process");
+    thread::sleep(Duration::from_secs(10));
     let console_process_output = run_test_against_server();
     let server_process_output = kill_process(server_process);
 
