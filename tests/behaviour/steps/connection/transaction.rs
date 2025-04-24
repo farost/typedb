@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
-
+use std::error::Error;
 use std::sync::Arc;
 
 use cucumber::gherkin::Step;
@@ -14,6 +14,7 @@ use database::{
 use futures::future::join_all;
 use itertools::Either;
 use macro_rules_attribute::apply;
+use error::TypeDBError;
 use options::TransactionOptions;
 use params::{self, check_boolean};
 use server::server::Server;
@@ -175,28 +176,39 @@ fn test_schema_export(context: &mut Context, types_syntax: &str) {
         const REIMPORT_DB: &str = "schema_reimport_from_test_tmp";
         database_manager.create_database(REIMPORT_DB).unwrap();
         let reimport = database_manager.database(REIMPORT_DB).unwrap();
-        let mut transaction = TransactionSchema::open(reimport.clone(), TransactionOptions::default()).unwrap();
-        let schema_define = format!("define\n{}", types_syntax);
-        transaction
-            .query_manager
-            .execute_schema(
-                Arc::get_mut(&mut transaction.snapshot).unwrap(),
-                &transaction.type_manager,
-                &transaction.thing_manager,
-                &transaction.function_manager,
-                typeql::parse_query(&schema_define).unwrap().into_schema(),
-                &schema_define,
-            )
-            .unwrap();
-        transaction.commit().unwrap();
-
-        let re_exported_syntax = get_types_syntax(reimport.clone());
-        assert_eq!(re_exported_syntax, types_syntax);
-        drop(reimport);
-        let result = database_manager.delete_database(REIMPORT_DB);
-
-        result.unwrap();
+        match execute_schema_transaction(reimport.clone(), types_syntax) {
+            Ok(_) => {
+                let re_exported_syntax = get_types_syntax(reimport.clone());
+                assert_eq!(re_exported_syntax, types_syntax);
+                drop(reimport);
+                let result = database_manager.delete_database(REIMPORT_DB);
+                result.unwrap();
+            }
+            Err(err) => {
+                drop(reimport);
+                let result = database_manager.delete_database(REIMPORT_DB);
+                drop(guard); // release the lock to avoid lock poisoning, which would crash
+                result.unwrap();
+                assert!(false, "Failed to execute schema re-import: {}", err);
+            }
+        }
     }
+}
+
+fn execute_schema_transaction(reimport: Arc<Database<WALClient>>, types_syntax: &str) -> Result<(), Box<dyn TypeDBError>> {
+    let mut transaction = TransactionSchema::open(reimport, TransactionOptions::default())
+        .map_err(|err| Box::new(err) as Box<dyn TypeDBError>)?;
+    let schema_define = format!("define\n{}", types_syntax);
+    transaction.query_manager.execute_schema(
+        Arc::get_mut(&mut transaction.snapshot).ok_or("Failed to get mutable reference").unwrap(),
+        &transaction.type_manager,
+        &transaction.thing_manager,
+        &transaction.function_manager,
+        typeql::parse_query(&schema_define).map_err(|err| Box::new(err) as Box<dyn TypeDBError>)?.into_schema(),
+        &schema_define,
+    ).map_err(|err| Box::new(err) as Box<dyn TypeDBError>)?;
+    transaction.commit().map_err(|err| Box::new(err) as Box<dyn TypeDBError>)?;
+    Ok(())
 }
 
 fn get_types_syntax(database: Arc<Database<WALClient>>) -> String {
