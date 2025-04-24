@@ -170,6 +170,9 @@ pub async fn transaction_commits(context: &mut Context, may_error: params::MayEr
 
 fn test_schema_export(context: &mut Context, types_syntax: &str) {
     // export, re-import, and export schema and verify that's equal!
+    if types_syntax.trim().is_empty() {
+        return;
+    }
     let guard = context.server.as_ref().unwrap().lock().unwrap();
     let database_manager = guard.database_manager();
     if !types_syntax.trim().is_empty() {
