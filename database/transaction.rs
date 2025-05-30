@@ -40,7 +40,7 @@ pub struct TransactionRead<D> {
     pub thing_manager: Arc<ThingManager>,
     pub function_manager: Arc<FunctionManager>,
     pub query_manager: Arc<QueryManager>,
-    pub database: SyncDatabaseDropGuard<D>,
+    pub database: FnDatabaseDropGuard<D>,
     transaction_options: TransactionOptions,
     pub profile: TransactionProfile,
 }
@@ -101,7 +101,7 @@ pub struct TransactionWrite<D> {
     pub thing_manager: Arc<ThingManager>,
     pub function_manager: Arc<FunctionManager>,
     pub query_manager: Arc<QueryManager>,
-    pub database: SyncDatabaseDropGuard<D>,
+    pub database: FnDatabaseDropGuard<D>,
     pub transaction_options: TransactionOptions,
     pub profile: TransactionProfile,
 }
@@ -147,7 +147,7 @@ impl<D: DurabilityClient> TransactionWrite<D> {
         thing_manager: Arc<ThingManager>,
         function_manager: Arc<FunctionManager>,
         query_manager: Arc<QueryManager>,
-        database: SyncDatabaseDropGuard<D>,
+        database: FnDatabaseDropGuard<D>,
         transaction_options: TransactionOptions,
         profile: TransactionProfile,
     ) -> Self {
@@ -219,7 +219,7 @@ pub struct TransactionSchema<D> {
     pub thing_manager: Arc<ThingManager>,
     pub function_manager: Arc<FunctionManager>,
     pub query_manager: Arc<QueryManager>,
-    pub database: SyncDatabaseDropGuard<D>,
+    pub database: FnDatabaseDropGuard<D>,
     pub transaction_options: TransactionOptions,
     pub profile: TransactionProfile,
 }
@@ -263,7 +263,7 @@ impl<D: DurabilityClient> TransactionSchema<D> {
         thing_manager: Arc<ThingManager>,
         function_manager: Arc<FunctionManager>,
         query_manager: Arc<QueryManager>,
-        database: SyncDatabaseDropGuard<D>,
+        database: FnDatabaseDropGuard<D>,
         transaction_options: TransactionOptions,
         profile: TransactionProfile,
     ) -> Self {
@@ -466,7 +466,7 @@ impl<D, F: FnOnce(&Database<D>)> std::fmt::Debug for DatabaseDropGuard<D, F> {
     }
 }
 
-type SyncDatabaseDropGuard<D> = DatabaseDropGuard<D, fn(&Database<D>)>;
+type FnDatabaseDropGuard<D> = DatabaseDropGuard<D, fn(&Database<D>)>;
 
 // TODO: Same issue with ConceptWriteErrors vs ErrorsFirst as for DataCommitError
 typedb_error! {
