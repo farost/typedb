@@ -452,7 +452,6 @@ impl<D, F: FnOnce(&Database<D>)> Deref for DatabaseDropGuard<D, F> {
 
 impl<D, F: FnOnce(&Database<D>)> Drop for DatabaseDropGuard<D, F> {
     fn drop(&mut self) {
-        println!("DROP ON GUARD!");
         if let Some(on_drop_fn) = self.on_drop_fn.take() {
             let database = self.database.take().expect("Expected database");
             on_drop_fn(&database);
