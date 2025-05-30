@@ -3,8 +3,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
-
-use std::sync::{mpsc::RecvTimeoutError, Arc};
+use std::{
+    fmt::Formatter,
+    ops::Deref,
+    sync::{mpsc::RecvTimeoutError, Arc},
+};
 
 use concept::{
     error::ConceptWriteError,
@@ -37,7 +40,7 @@ pub struct TransactionRead<D> {
     pub thing_manager: Arc<ThingManager>,
     pub function_manager: Arc<FunctionManager>,
     pub query_manager: Arc<QueryManager>,
-    pub database: Arc<Database<D>>,
+    pub database: SyncDatabaseDropGuard<D>,
     transaction_options: TransactionOptions,
     pub profile: TransactionProfile,
 }
@@ -76,7 +79,7 @@ impl<D: DurabilityClient> TransactionRead<D> {
             thing_manager,
             function_manager,
             query_manager,
-            database,
+            database: DatabaseDropGuard::new(database),
             transaction_options,
             profile: TransactionProfile::new(tracing::enabled!(Level::TRACE)),
         })
@@ -87,9 +90,7 @@ impl<D: DurabilityClient> TransactionRead<D> {
     }
 
     pub fn close(self) {
-        // TODO: Should be done automatically
-        // drop(self.thing_manager);
-        // drop(self.type_manager);
+        drop(self)
     }
 }
 
@@ -100,7 +101,7 @@ pub struct TransactionWrite<D> {
     pub thing_manager: Arc<ThingManager>,
     pub function_manager: Arc<FunctionManager>,
     pub query_manager: Arc<QueryManager>,
-    pub database: Arc<Database<D>>,
+    pub database: SyncDatabaseDropGuard<D>,
     pub transaction_options: TransactionOptions,
     pub profile: TransactionProfile,
 }
@@ -134,7 +135,7 @@ impl<D: DurabilityClient> TransactionWrite<D> {
             thing_manager,
             function_manager,
             query_manager,
-            database,
+            database: DatabaseDropGuard::new_with_fn(database, Database::release_write_transaction),
             transaction_options,
             profile: TransactionProfile::new(tracing::enabled!(Level::TRACE)),
         })
@@ -146,7 +147,7 @@ impl<D: DurabilityClient> TransactionWrite<D> {
         thing_manager: Arc<ThingManager>,
         function_manager: Arc<FunctionManager>,
         query_manager: Arc<QueryManager>,
-        database: Arc<Database<D>>,
+        database: SyncDatabaseDropGuard<D>,
         transaction_options: TransactionOptions,
         profile: TransactionProfile,
     ) -> Self {
@@ -164,9 +165,7 @@ impl<D: DurabilityClient> TransactionWrite<D> {
 
     pub fn commit(mut self) -> (TransactionProfile, Result<(), DataCommitError>) {
         self.profile.commit_profile().start();
-        let database = self.database.clone();
         let (mut profile, result) = self.try_commit();
-        database.release_write_transaction();
         profile.commit_profile().end();
         (profile, result)
     }
@@ -197,7 +196,7 @@ impl<D: DurabilityClient> TransactionWrite<D> {
     }
 
     pub fn close(self) {
-        self.database.release_write_transaction();
+        drop(self)
     }
 }
 
@@ -220,7 +219,7 @@ pub struct TransactionSchema<D> {
     pub thing_manager: Arc<ThingManager>,
     pub function_manager: Arc<FunctionManager>,
     pub query_manager: Arc<QueryManager>,
-    pub database: Arc<Database<D>>,
+    pub database: SyncDatabaseDropGuard<D>,
     pub transaction_options: TransactionOptions,
     pub profile: TransactionProfile,
 }
@@ -252,7 +251,7 @@ impl<D: DurabilityClient> TransactionSchema<D> {
             thing_manager: Arc::new(thing_manager),
             function_manager,
             query_manager,
-            database,
+            database: DatabaseDropGuard::new_with_fn(database, Database::release_schema_transaction),
             transaction_options,
             profile: TransactionProfile::new(tracing::enabled!(Level::TRACE)),
         })
@@ -264,7 +263,7 @@ impl<D: DurabilityClient> TransactionSchema<D> {
         thing_manager: Arc<ThingManager>,
         function_manager: Arc<FunctionManager>,
         query_manager: Arc<QueryManager>,
-        database: Arc<Database<D>>,
+        database: SyncDatabaseDropGuard<D>,
         transaction_options: TransactionOptions,
         profile: TransactionProfile,
     ) -> Self {
@@ -282,9 +281,7 @@ impl<D: DurabilityClient> TransactionSchema<D> {
 
     pub fn commit(mut self) -> (TransactionProfile, Result<(), SchemaCommitError>) {
         self.profile.commit_profile().start();
-        let database = self.database.clone(); // TODO: can we get away without cloning the database before?
         let (mut profile, result) = self.try_commit(); // TODO include
-        database.release_schema_transaction();
         profile.commit_profile().end();
         (profile, result)
     }
@@ -388,11 +385,7 @@ impl<D: DurabilityClient> TransactionSchema<D> {
     }
 
     pub fn close(self) {
-        // TODO: Should work by itself
-        self.database.release_schema_transaction();
-        // drop(self.thing_manager);
-        // drop(self.type_manager);
-        // Arc::into_inner(self.snapshot).unwrap().close_resources();
+        drop(self)
     }
 }
 
@@ -429,6 +422,51 @@ macro_rules! with_transaction_parts {
         ($transaction, result)
     }};
 }
+
+pub struct DatabaseDropGuard<D, F: FnOnce(&Database<D>)> {
+    database: Option<Arc<Database<D>>>,
+    on_drop_fn: Option<F>,
+}
+
+impl<D, F: FnOnce(&Database<D>)> DatabaseDropGuard<D, F> {
+    pub fn new(database: Arc<Database<D>>) -> Self {
+        Self { database: Some(database), on_drop_fn: None }
+    }
+
+    pub fn new_with_fn(database: Arc<Database<D>>, on_drop_fn: F) -> Self {
+        Self { database: Some(database), on_drop_fn: Some(on_drop_fn) }
+    }
+
+    fn database(&self) -> &Arc<Database<D>> {
+        self.database.as_ref().expect("Expected a database in the guard")
+    }
+}
+
+impl<D, F: FnOnce(&Database<D>)> Deref for DatabaseDropGuard<D, F> {
+    type Target = Arc<Database<D>>;
+
+    fn deref(&self) -> &Self::Target {
+        self.database()
+    }
+}
+
+impl<D, F: FnOnce(&Database<D>)> Drop for DatabaseDropGuard<D, F> {
+    fn drop(&mut self) {
+        println!("DROP ON GUARD!");
+        if let Some(on_drop_fn) = self.on_drop_fn.take() {
+            let database = self.database.take().expect("Expected database");
+            on_drop_fn(&database);
+        }
+    }
+}
+
+impl<D, F: FnOnce(&Database<D>)> std::fmt::Debug for DatabaseDropGuard<D, F> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.database)
+    }
+}
+
+type SyncDatabaseDropGuard<D> = DatabaseDropGuard<D, fn(&Database<D>)>;
 
 // TODO: Same issue with ConceptWriteErrors vs ErrorsFirst as for DataCommitError
 typedb_error! {
