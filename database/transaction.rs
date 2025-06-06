@@ -40,7 +40,7 @@ pub struct TransactionRead<D> {
     pub thing_manager: Arc<ThingManager>,
     pub function_manager: Arc<FunctionManager>,
     pub query_manager: Arc<QueryManager>,
-    pub database: FnDatabaseDropGuard<D>,
+    pub database: DatabaseDropGuard<D>,
     transaction_options: TransactionOptions,
     pub profile: TransactionProfile,
 }
@@ -101,7 +101,7 @@ pub struct TransactionWrite<D> {
     pub thing_manager: Arc<ThingManager>,
     pub function_manager: Arc<FunctionManager>,
     pub query_manager: Arc<QueryManager>,
-    pub database: FnDatabaseDropGuard<D>,
+    pub database: DatabaseDropGuard<D>,
     pub transaction_options: TransactionOptions,
     pub profile: TransactionProfile,
 }
@@ -147,7 +147,7 @@ impl<D: DurabilityClient> TransactionWrite<D> {
         thing_manager: Arc<ThingManager>,
         function_manager: Arc<FunctionManager>,
         query_manager: Arc<QueryManager>,
-        database: FnDatabaseDropGuard<D>,
+        database: DatabaseDropGuard<D>,
         transaction_options: TransactionOptions,
         profile: TransactionProfile,
     ) -> Self {
@@ -219,7 +219,7 @@ pub struct TransactionSchema<D> {
     pub thing_manager: Arc<ThingManager>,
     pub function_manager: Arc<FunctionManager>,
     pub query_manager: Arc<QueryManager>,
-    pub database: FnDatabaseDropGuard<D>,
+    pub database: DatabaseDropGuard<D>,
     pub transaction_options: TransactionOptions,
     pub profile: TransactionProfile,
 }
@@ -263,7 +263,7 @@ impl<D: DurabilityClient> TransactionSchema<D> {
         thing_manager: Arc<ThingManager>,
         function_manager: Arc<FunctionManager>,
         query_manager: Arc<QueryManager>,
-        database: FnDatabaseDropGuard<D>,
+        database: DatabaseDropGuard<D>,
         transaction_options: TransactionOptions,
         profile: TransactionProfile,
     ) -> Self {
@@ -404,7 +404,7 @@ macro_rules! with_transaction_parts {
             transaction_options,
             profile,
         } = $transaction;
-        let mut $inner_snapshot = Arc::into_inner(snapshot).unwrap();
+        let mut $inner_snapshot = snapshot.into_inner();
 
         let result = $expr;
 
@@ -423,17 +423,17 @@ macro_rules! with_transaction_parts {
     }};
 }
 
-pub struct DatabaseDropGuard<D, F: FnOnce(&Database<D>)> {
+pub struct DatabaseDropGuard<D> {
     database: Option<Arc<Database<D>>>,
-    on_drop_fn: Option<F>,
+    on_drop_fn: Option<fn(&Database<D>)>,
 }
 
-impl<D, F: FnOnce(&Database<D>)> DatabaseDropGuard<D, F> {
+impl<D> DatabaseDropGuard<D> {
     pub fn new(database: Arc<Database<D>>) -> Self {
         Self { database: Some(database), on_drop_fn: None }
     }
 
-    pub fn new_with_fn(database: Arc<Database<D>>, on_drop_fn: F) -> Self {
+    pub fn new_with_fn(database: Arc<Database<D>>, on_drop_fn: fn(&Database<D>)) -> Self {
         Self { database: Some(database), on_drop_fn: Some(on_drop_fn) }
     }
 
@@ -442,7 +442,7 @@ impl<D, F: FnOnce(&Database<D>)> DatabaseDropGuard<D, F> {
     }
 }
 
-impl<D, F: FnOnce(&Database<D>)> Deref for DatabaseDropGuard<D, F> {
+impl<D> Deref for DatabaseDropGuard<D> {
     type Target = Arc<Database<D>>;
 
     fn deref(&self) -> &Self::Target {
@@ -450,7 +450,7 @@ impl<D, F: FnOnce(&Database<D>)> Deref for DatabaseDropGuard<D, F> {
     }
 }
 
-impl<D, F: FnOnce(&Database<D>)> Drop for DatabaseDropGuard<D, F> {
+impl<D> Drop for DatabaseDropGuard<D> {
     fn drop(&mut self) {
         if let Some(on_drop_fn) = self.on_drop_fn.take() {
             let database = self.database.take().expect("Expected database");
@@ -459,13 +459,11 @@ impl<D, F: FnOnce(&Database<D>)> Drop for DatabaseDropGuard<D, F> {
     }
 }
 
-impl<D, F: FnOnce(&Database<D>)> std::fmt::Debug for DatabaseDropGuard<D, F> {
+impl<D> std::fmt::Debug for DatabaseDropGuard<D> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.database)
     }
 }
-
-type FnDatabaseDropGuard<D> = DatabaseDropGuard<D, fn(&Database<D>)>;
 
 // TODO: Same issue with ConceptWriteErrors vs ErrorsFirst as for DataCommitError
 typedb_error! {

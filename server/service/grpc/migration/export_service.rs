@@ -22,11 +22,8 @@ use crate::service::{
     export_service::{get_transaction_schema, DatabaseExportError},
     grpc::{
         error::{IntoGrpcStatus, IntoProtocolErrorMessage},
-        migration::{
-            item::{
-                encode_attribute_item, encode_checksums_item, encode_entity_item, encode_header_item,
-                encode_relation_item,
-            },
+        migration::item::{
+            encode_attribute_item, encode_checksums_item, encode_entity_item, encode_header_item, encode_relation_item,
         },
         response_builders::database::{
             database_export_initial_res_ok, database_export_res_done, database_export_res_part_items,

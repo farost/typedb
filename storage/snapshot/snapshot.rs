@@ -642,7 +642,7 @@ impl<S: ReadableSnapshot> SnapshotDropGuard<S> {
     }
 
     pub fn try_into_inner(mut self) -> Option<S> {
-        self.inner.take().map(|inner| Arc::into_inner(inner))?
+        self.inner.take().and_then(Arc::into_inner)
     }
 
     pub fn as_ref(&self) -> &S {
@@ -655,15 +655,18 @@ impl<S: ReadableSnapshot> SnapshotDropGuard<S> {
     }
 
     fn unwrap_arc(arc: Arc<S>) -> S {
-        Arc::into_inner(arc).expect("Arc<WritableSnapshot> expected a unique ownership in a guard")
+        Arc::into_inner(arc)
+            .unwrap_or_else(|| panic!("Arc<{}> expected a unique ownership in a guard", type_name::<Self>()))
     }
 
     fn unwrap_arc_ref_mut(arc: &mut Arc<S>) -> &mut S {
-        Arc::get_mut(arc).expect("Arc<WritableSnapshot> expected a unique ownership in a guard for mutating")
+        Arc::get_mut(arc).unwrap_or_else(|| {
+            panic!("Arc<{}> expected a unique ownership in a guard for mutating", type_name::<Self>())
+        })
     }
 
     fn unwrap_optional<T>(option: Option<T>) -> T {
-        option.expect("WritableSnapshotDropGuard expected a unique ownership")
+        option.unwrap_or_else(|| panic!("{} expected a unique ownership", type_name::<Self>()))
     }
 }
 
@@ -683,9 +686,8 @@ impl<S: ReadableSnapshot> DerefMut for SnapshotDropGuard<S> {
 
 impl<S: ReadableSnapshot> Drop for SnapshotDropGuard<S> {
     fn drop(&mut self) {
-        match self.inner.take() {
-            Some(inner) => Self::unwrap_arc(inner).close_resources(),
-            None => {}
+        if let Some(inner) = self.inner.take() {
+            Self::unwrap_arc(inner).close_resources()
         }
     }
 }
