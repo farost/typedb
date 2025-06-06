@@ -33,7 +33,7 @@ pub async fn relation_type_create_role_unordered(
         let relation_type =
             tx.type_manager.get_relation_type(tx.snapshot.as_ref(), &type_label.into_typedb()).unwrap().unwrap();
         relation_type.create_relates(
-            tx.snapshot.deref_mut(),
+            tx.snapshot.as_mut().unwrap(),
             &tx.type_manager,
             &tx.thing_manager,
             role_label.into_typedb().name().as_str(),
@@ -56,7 +56,7 @@ pub async fn relation_type_create_role_ordered(
         let relation_type =
             tx.type_manager.get_relation_type(tx.snapshot.as_ref(), &type_label.into_typedb()).unwrap().unwrap();
         relation_type.create_relates(
-            tx.snapshot.deref_mut(),
+            tx.snapshot.as_mut().unwrap(),
             &tx.type_manager,
             &tx.thing_manager,
             role_label.into_typedb().name().as_str(),
@@ -97,7 +97,7 @@ pub async fn relation_role_set_specialise(
                 .unwrap()
             {
                 let res = relates.set_specialise(
-                    tx.snapshot.deref_mut(),
+                    tx.snapshot.as_mut().unwrap(),
                     &tx.type_manager,
                     &tx.thing_manager,
                     specialised_relates,
@@ -132,7 +132,7 @@ pub async fn relation_role_unset_specialise(
             )
             .unwrap()
             .unwrap();
-        let res = relates.unset_specialise(tx.snapshot.deref_mut(), &tx.type_manager, &tx.thing_manager);
+        let res = relates.unset_specialise(tx.snapshot.as_mut().unwrap(), &tx.type_manager, &tx.thing_manager);
         may_error.check_concept_write_without_read_errors(&res);
     });
 }
@@ -423,7 +423,7 @@ pub async fn relation_type_delete_role(
             .unwrap()
             .unwrap()
             .role();
-        let res = role.delete(tx.snapshot.deref_mut(), &tx.type_manager, &tx.thing_manager);
+        let res = role.delete(tx.snapshot.as_mut().unwrap(), &tx.type_manager, &tx.thing_manager);
         may_error.check_concept_write_without_read_errors(&res);
     });
 }
@@ -625,7 +625,7 @@ pub async fn relation_role_set_name(
             .unwrap()
             .unwrap()
             .role();
-        let res = role.set_name(tx.snapshot.deref_mut(), &tx.type_manager, to_label.into_typedb().name.as_str());
+        let res = role.set_name(tx.snapshot.as_mut().unwrap(), &tx.type_manager, to_label.into_typedb().name.as_str());
         may_error.check_concept_write_without_read_errors(&res);
     });
 }
@@ -653,7 +653,7 @@ pub async fn relation_role_set_annotation(
 
         let parsed_annotation = annotation.into_typedb(None);
         let res = relates.set_annotation(
-            tx.snapshot.deref_mut(),
+            tx.snapshot.as_mut().unwrap(),
             &tx.type_manager,
             &tx.thing_manager,
             parsed_annotation.try_into().unwrap(),
@@ -685,7 +685,7 @@ pub async fn relation_role_unset_annotation(
 
         let parsed_annotation_category = annotation_category.into_typedb();
         let res = relates.unset_annotation(
-            tx.snapshot.deref_mut(),
+            tx.snapshot.as_mut().unwrap(),
             &tx.type_manager,
             &tx.thing_manager,
             parsed_annotation_category,
@@ -984,8 +984,12 @@ pub async fn relation_role_set_ordering(
             .unwrap()
             .unwrap()
             .role();
-        let res =
-            role.set_ordering(tx.snapshot.deref_mut(), &tx.type_manager, &tx.thing_manager, ordering.into_typedb());
+        let res = role.set_ordering(
+            tx.snapshot.as_mut().unwrap(),
+            &tx.type_manager,
+            &tx.thing_manager,
+            ordering.into_typedb(),
+        );
         may_error.check_concept_write_without_read_errors(&res);
     });
 }

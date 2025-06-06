@@ -30,7 +30,7 @@ pub(super) fn object_set_has_impl(
     attribute: &Attribute,
 ) -> Result<(), Box<ConceptWriteError>> {
     with_write_tx!(context, |tx| object.set_has_unordered(
-        tx.snapshot.deref_mut(),
+        tx.snapshot.as_mut().unwrap(),
         &tx.thing_manager,
         attribute,
         StorageCounters::DISABLED
@@ -44,7 +44,7 @@ pub(super) fn object_set_has_ordered_impl(
     attributes: Vec<Attribute>,
 ) -> Result<(), Box<ConceptWriteError>> {
     with_write_tx!(context, |tx| object.set_has_ordered(
-        tx.snapshot.deref_mut(),
+        tx.snapshot.as_mut().unwrap(),
         &tx.thing_manager,
         attribute_type,
         attributes,
@@ -58,7 +58,7 @@ fn object_unset_has_impl(
     key: &Attribute,
 ) -> Result<(), Box<ConceptWriteError>> {
     with_write_tx!(context, |tx| object.unset_has_unordered(
-        tx.snapshot.deref_mut(),
+        tx.snapshot.as_mut().unwrap(),
         &tx.thing_manager,
         key,
         StorageCounters::DISABLED
@@ -76,7 +76,12 @@ fn object_unset_has_ordered_impl(
             .get_attribute_type(tx.snapshot.as_ref(), &attribute_type_label.into_typedb())
             .unwrap()
             .unwrap();
-        object.unset_has_ordered(tx.snapshot.deref_mut(), &tx.thing_manager, attribute_type, StorageCounters::DISABLED)
+        object.unset_has_ordered(
+            tx.snapshot.as_mut().unwrap(),
+            &tx.thing_manager,
+            attribute_type,
+            StorageCounters::DISABLED,
+        )
     })
 }
 

@@ -649,6 +649,10 @@ impl<S: ReadableSnapshot> SnapshotDropGuard<S> {
         Self::unwrap_optional(self.inner.as_ref().map(|inner| &**inner))
     }
 
+    pub fn as_mut(&mut self) -> Option<&mut S> {
+        self.inner.as_mut().and_then(Arc::get_mut)
+    }
+
     // ATTENTION: Make sure to drop the clones before Self goes out of scope and drops!
     pub fn clone_inner(&self) -> Arc<S> {
         Self::unwrap_optional(self.inner.as_ref()).clone()
@@ -675,12 +679,6 @@ impl<S: ReadableSnapshot> Deref for SnapshotDropGuard<S> {
 
     fn deref(&self) -> &Self::Target {
         Self::unwrap_optional(self.inner.as_ref().map(|inner| &**inner))
-    }
-}
-
-impl<S: ReadableSnapshot> DerefMut for SnapshotDropGuard<S> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        Self::unwrap_arc_ref_mut(Self::unwrap_optional(self.inner.as_mut()))
     }
 }
 

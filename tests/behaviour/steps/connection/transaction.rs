@@ -207,7 +207,7 @@ fn execute_schema_transaction(
     transaction
         .query_manager
         .execute_schema(
-            transaction.snapshot.deref_mut(),
+            transaction.snapshot.as_mut().unwrap(),
             &transaction.type_manager,
             &transaction.thing_manager,
             &transaction.function_manager,

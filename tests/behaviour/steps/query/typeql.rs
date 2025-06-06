@@ -219,7 +219,7 @@ async fn typeql_schema_query(context: &mut Context, may_error: params::TypeQLMay
 
     with_schema_tx!(context, |tx| {
         let result = tx.query_manager.execute_schema(
-            tx.snapshot.deref_mut(),
+            tx.snapshot.as_mut().unwrap(),
             &tx.type_manager,
             &tx.thing_manager,
             &tx.function_manager,

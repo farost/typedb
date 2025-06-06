@@ -30,7 +30,7 @@ pub async fn attribute_type_set_value_type(
             tx.type_manager.get_attribute_type(tx.snapshot.as_ref(), &type_label.into_typedb()).unwrap().unwrap();
         let parsed_value_type = value_type.into_typedb(&tx.type_manager, tx.snapshot.as_ref());
         let res = attribute_type.set_value_type(
-            tx.snapshot.deref_mut(),
+            tx.snapshot.as_mut().unwrap(),
             &tx.type_manager,
             &tx.thing_manager,
             parsed_value_type,
@@ -49,7 +49,7 @@ pub async fn attribute_type_unset_value_type(
     with_schema_tx!(context, |tx| {
         let attribute_type =
             tx.type_manager.get_attribute_type(tx.snapshot.as_ref(), &type_label.into_typedb()).unwrap().unwrap();
-        let res = attribute_type.unset_value_type(tx.snapshot.deref_mut(), &tx.type_manager, &tx.thing_manager);
+        let res = attribute_type.unset_value_type(tx.snapshot.as_mut().unwrap(), &tx.type_manager, &tx.thing_manager);
         may_error.check_concept_write_without_read_errors(&res);
     });
 }

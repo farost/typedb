@@ -192,7 +192,7 @@ impl<D: DurabilityClient> TransactionWrite<D> {
     }
 
     pub fn rollback(&mut self) {
-        self.snapshot.clear()
+        self.snapshot.as_mut().expect("Expected owning snapshot on rollback").clear()
     }
 
     pub fn close(self) {
@@ -381,7 +381,7 @@ impl<D: DurabilityClient> TransactionSchema<D> {
     }
 
     pub fn rollback(&mut self) {
-        self.snapshot.clear()
+        self.snapshot.as_mut().expect("Expected owning snapshot on rollback").clear()
     }
 
     pub fn close(self) {
