@@ -39,8 +39,11 @@ impl TokioIntervalRunner {
                 tokio::select! {
                     _ = tokio::time::sleep(initial_delay) => (),
                     done_sender = shutdown_receiver.recv() => {
+                        println!("Tokio shutdown received!");
                         drop(action);
+                        println!("Drop action done!");
                         done_sender.unwrap().send(()).unwrap();
+                        println!("Done sender done!");
                         return;
                     }
                 }
