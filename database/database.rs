@@ -281,6 +281,7 @@ impl<D: DurabilityClient> Database<D> {
         snapshot: SchemaSnapshot<D>,
         commit_profile: &mut CommitProfile,
     ) -> Result<(), SchemaCommitError> {
+        println!("SCHEMA COMMIT WITH SNAPSHOT");
         // Schema commits must wait for all other data operations to finish. No new read or write
         // transaction may open until the commit completes.
         let mut schema_commit_guard = self.schema.write().unwrap();
