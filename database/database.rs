@@ -247,6 +247,7 @@ impl<D: DurabilityClient> Database<D> {
         snapshot: WriteSnapshot<D>,
         commit_profile: &mut CommitProfile,
     ) -> Result<(), DataCommitError> {
+        println!("DATA COMMIT!");
         let commit_record_opt = snapshot
             .finalise(commit_profile)
             .map_err(|error| DataCommitError::SnapshotError { typedb_source: error })?;
@@ -259,6 +260,7 @@ impl<D: DurabilityClient> Database<D> {
                     let error = DataCommitError::SnapshotError {
                         typedb_source: storage::snapshot::SnapshotError::Commit { typedb_source: error },
                     };
+                    println!("ERROR: {error:?}");
                     Err(error)
                 }
             }
@@ -281,6 +283,7 @@ impl<D: DurabilityClient> Database<D> {
         snapshot: SchemaSnapshot<D>,
         commit_profile: &mut CommitProfile,
     ) -> Result<(), SchemaCommitError> {
+        println!("SCHEMA COMMIT!");
         // Schema commits must wait for all other data operations to finish. No new read or write
         // transaction may open until the commit completes.
         let mut schema_commit_guard = self.schema.write().unwrap();
@@ -297,6 +300,7 @@ impl<D: DurabilityClient> Database<D> {
                     let error = SnapshotError {
                         typedb_source: storage::snapshot::SnapshotError::Commit { typedb_source: error },
                     };
+                    println!("ERROR: {error:?}");
                     return Err(error);
                 }
             };
