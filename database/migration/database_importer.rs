@@ -972,6 +972,7 @@ impl DatabaseImporter {
     }
 
     async fn commit_write_transaction(transaction: TransactionWrite<WALClient>) -> Result<(), DatabaseImportError> {
+        // TODO: These commits are not suitable to TypeDB Cluster
         spawn_blocking(move || {
             let (_, result) = transaction.commit();
             result.map_err(|typedb_source| DatabaseImportError::DataCommitFailed { typedb_source })
@@ -981,6 +982,7 @@ impl DatabaseImporter {
     }
 
     async fn commit_schema_transaction(transaction: TransactionSchema<WALClient>) -> Result<(), SchemaCommitError> {
+        // TODO: These commits are not suitable to TypeDB Cluster
         spawn_blocking(move || {
             let (_, result) = transaction.commit();
             result
