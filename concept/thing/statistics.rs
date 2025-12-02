@@ -130,7 +130,7 @@ impl Statistics {
 
         let storage_watermark = storage.snapshot_watermark();
         debug_assert!(self.sequence_number <= storage_watermark);
-        println!("Seqnum: {:?}, storage watermark: {:?}", self.sequence_number, storage_watermark);
+        println!("NAME: {:?}, Seqnum: {:?}, storage watermark: {:?}", storage.name(), self.sequence_number, storage_watermark);
         if self.sequence_number == storage_watermark {
             return Ok(());
         }

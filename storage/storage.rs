@@ -157,7 +157,7 @@ impl<Durability> MVCCStorage<Durability> {
         durability_client.register_record_type::<StatusRecord>();
     }
 
-    fn name(&self) -> Arc<String> {
+    pub fn name(&self) -> Arc<String> {
         self.name.clone()
     }
 
