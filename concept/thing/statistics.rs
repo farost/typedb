@@ -130,6 +130,7 @@ impl Statistics {
 
         let storage_watermark = storage.snapshot_watermark();
         debug_assert!(self.sequence_number <= storage_watermark);
+        println!("Seqnum: {:?}, storage watermark: {:?}", self.sequence_number, storage_watermark);
         if self.sequence_number == storage_watermark {
             return Ok(());
         }
@@ -140,6 +141,7 @@ impl Statistics {
         let load_start = DurabilitySequenceNumber::new(
             self.sequence_number.number().saturating_sub(Self::COMMIT_CONTEXT_SIZE).max(1),
         );
+        println!("New seqnum after sub: {:?}, load_start: {:?}", self.sequence_number, load_start);
 
         let mut data_commits = BTreeMap::new();
         for (seq, status) in load_commit_data_from(load_start, storage.durability(), usize::MAX)
@@ -151,6 +153,7 @@ impl Statistics {
                     break;
                 }
                 RecoveryCommitStatus::Validated(record) => {
+                    println!("VALIDATED seq: {:?}, record: {:?}", seq, record);
                     let commit_type = record.commit_type();
                     let writes = CommittedWrites {
                         open_sequence_number: record.open_sequence_number(),
@@ -188,6 +191,7 @@ impl Statistics {
         if count_change_since_last_durable_write.abs() > STATISTICS_DURABLE_WRITE_CHANGE_COUNT as i64
             || sequence_numbers_since_last_durable_write > STATISTICS_DURABLE_WRITE_SEQ_NUMBERS
         {
+            println!("DURABLY WRITE!!!");
             self.durably_write(storage.durability())?;
         }
 
