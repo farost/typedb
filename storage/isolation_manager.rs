@@ -417,6 +417,7 @@ impl Timeline {
                         )
                         .is_ok()
                 {
+                    println!("UPDATE ISOL WATERMARK to: {:?}", candidate_watermark.number());
                     candidate_watermark += 1;
                     if candidate_watermark >= window.as_ref().unwrap().end() {
                         drop(window.take());

@@ -235,6 +235,7 @@ impl<Durability> MVCCStorage<Durability> {
             .sequenced_write(&commit_record)
             .map_err(|error| Durability { name: self.name.clone(), typedb_source: error })?;
         commit_profile.snapshot_durable_write_data_submitted();
+        println!("NEW COMMIT SEQ NUM: {:?}", commit_sequence_number);
 
         let sync_notifier = self.durability_client.request_sync();
         let validate_result =
@@ -262,6 +263,7 @@ impl<Durability> MVCCStorage<Durability> {
                     .map_err(|error| Durability { name: self.name.clone(), typedb_source: error })?;
                 commit_profile.snapshot_durable_write_commit_status_submitted();
 
+                println!("COMMITTED SEQ NUM: {:?}", commit_sequence_number);
                 Ok(commit_sequence_number)
             }
             Ok(ValidatedCommit::Conflict(conflict)) => {
