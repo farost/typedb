@@ -53,6 +53,8 @@ impl ServerApplication {
     fn run(self) {
         self.runtime.block_on(async {
             let server = ServerBuilder::default().server_info(SERVER_INFO).build(self.config).await.unwrap();
+            panic!("Test panic from core do not panic WITH UPDATED DEPS");
+
             match server.serve().await {
                 Ok(_) => println!("Exited."),
                 Err(err) => println!("Exited with error: {:?}", err),
@@ -62,22 +64,35 @@ impl ServerApplication {
 }
 
 fn initialise_abort_on_panic() {
-    std::panic::set_hook({
-        let default_panic = std::panic::take_hook();
-        Box::new(move |info| {
-            default_panic(info);
-            std::process::exit(1);
-        })
-    });
+    // std::panic::set_hook({
+    //     let default_panic = std::panic::take_hook();
+    //     Box::new(move |info| {
+    //         default_panic(info);
+    //         std::process::exit(1);
+    //     })
+    // });
 }
 
 fn may_initialise_error_reporting(config: &Config) -> Option<SentryGuard> {
-    if config.diagnostics.reporting.report_errors && !config.development_mode.enabled {
+    // if config.diagnostics.reporting.report_errors && !config.development_mode.enabled {
+    if true {
         let options = (
             SENTRY_REPORTING_URI,
             sentry::ClientOptions { release: Some(SERVER_INFO.version.into()), ..Default::default() },
         );
-        Some(sentry::init(options))
+
+        eprintln!("SENTRY_REPORTING_URI = {:?}", SENTRY_REPORTING_URI);
+
+        let guard = sentry::init(options);
+
+        eprintln!("sentry::is_enabled() = {}", guard.is_enabled());
+        eprintln!("hub has client = {}", sentry::Hub::current().client().is_some());
+
+        // Force a synchronous-ish delivery attempt:
+        sentry::capture_message("startup test event", sentry::Level::Info);
+        let flushed = guard.flush(Some(std::time::Duration::from_secs(5)));
+        eprintln!("sentry::flush(5s) = {flushed}");
+        Some(guard)
     } else {
         None
     }
