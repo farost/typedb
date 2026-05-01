@@ -326,36 +326,45 @@ impl Files {
     }
 
     pub(crate) fn sync_all(&mut self) -> Result<(), DurabilityServiceError> {
-        self.files
+        let __t_file = std::time::Instant::now();
+        let file_sync_result = self
+            .files
             .last_mut()
             .expect("Expected at least one file")
             .writer()
             .expect("Expected file writer on sync all")
             .get_mut()
             .sync_all()
-            .map_err(|err| WALError::Sync { source: Arc::new(err) })?;
+            .map_err(|err| WALError::Sync { source: Arc::new(err) });
+        resource::perf_counters::WAL_FSYNC_FILE.record(__t_file.elapsed().as_nanos() as u64);
+        file_sync_result?;
         self.sync_directory_best_effort()
     }
 
     fn sync_directory_best_effort(&mut self) -> Result<(), DurabilityServiceError> {
-        #[cfg(unix)]
-        {
-            StdFile::open(&self.directory)
-                .map_err(|err| WALError::Sync { source: Arc::new(err) })?
-                .sync_all()
-                .map_err(|err| WALError::Sync { source: Arc::new(err) }.into())
-        }
-
-        #[cfg(windows)]
-        {
-            // On Windows, FlushFileBuffers doesn't support directory handles, so it's likely
-            // a noop or an error (which is ignored), but we try it for symmetry.
-            // TODO: This requires additional testing and probably a separate OS-specific impl.
-            if let Ok(dir) = StdFile::open(&self.directory) {
-                let _ = dir.sync_all();
+        let __t_dir = std::time::Instant::now();
+        let result = {
+            #[cfg(unix)]
+            {
+                StdFile::open(&self.directory)
+                    .map_err(|err| WALError::Sync { source: Arc::new(err) })?
+                    .sync_all()
+                    .map_err(|err| WALError::Sync { source: Arc::new(err) }.into())
             }
-            Ok(())
-        }
+
+            #[cfg(windows)]
+            {
+                // On Windows, FlushFileBuffers doesn't support directory handles, so it's likely
+                // a noop or an error (which is ignored), but we try it for symmetry.
+                // TODO: This requires additional testing and probably a separate OS-specific impl.
+                if let Ok(dir) = StdFile::open(&self.directory) {
+                    let _ = dir.sync_all();
+                }
+                Ok(())
+            }
+        };
+        resource::perf_counters::WAL_FSYNC_DIRECTORY.record(__t_dir.elapsed().as_nanos() as u64);
+        result
     }
 
     fn iter(&self) -> impl DoubleEndedIterator<Item = &File> {

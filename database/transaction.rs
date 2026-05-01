@@ -416,6 +416,7 @@ impl<D: DurabilityClient> CommitIntent for DataCommitIntent<D> {
     }
 
     fn has_changes(&self) -> bool {
+        resource::perf_counters::COMMIT_HAS_CHANGES_CALLS.increment();
         self.write_snapshot.has_changes()
     }
 

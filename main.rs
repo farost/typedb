@@ -32,6 +32,9 @@ fn main() {
     }
 
     initialise_abort_on_panic();
+    if std::env::var("TYPEDB_PERF_DUMP").as_deref() == Ok("1") {
+        resource::perf_counters::spawn_periodic_dump(std::time::Duration::from_secs(5));
+    }
     let cli_args: CLIArgs = CLIArgs::parse();
     let config_file = match cli_args.config_file_override.as_ref() {
         None => ConfigBuilder::resolve_path_from_executable(Path::new(DEFAULT_CONFIG_PATH)),

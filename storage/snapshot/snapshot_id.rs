@@ -26,6 +26,7 @@ impl SnapshotId {
     pub const UNSET: Self = Self { number: 0 };
 
     pub fn new() -> Self {
+        resource::perf_counters::SNAPSHOT_ID_NEW.increment();
         Self { number: UNIQUE_ID_GEN.fetch_add(1, Ordering::Relaxed) }
     }
 

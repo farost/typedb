@@ -194,7 +194,10 @@ impl DatabaseOperator for LocalDatabaseOperator {
         commit_intent: DataCommitIntent<WALClient>,
         mut commit_profile: CommitProfile,
     ) -> (CommitProfile, Result<(), ArcServerStateError>) {
+        let __scheduled_at = std::time::Instant::now();
         tokio::task::spawn_blocking(move || {
+            resource::perf_counters::COMMIT_WRITE_SPAWN_BLOCKING_GAP
+                .record(__scheduled_at.elapsed().as_nanos() as u64);
             let result = commit_intent.commit(&mut commit_profile).map_err(|typedb_source| {
                 arc_server_state_err(LocalServerStateError::DatabaseDataCommitFailed { typedb_source })
             });

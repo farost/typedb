@@ -79,8 +79,13 @@ impl LocalTransactionOperator {
         owner: String,
         close_sender: Sender<()>,
     ) {
+        let __t_record = std::time::Instant::now();
+        let __t_lock = std::time::Instant::now();
         let mut transactions = self.transactions.write().await;
+        resource::perf_counters::TXN_OPEN_RECORD_LOCK_WAIT.record(__t_lock.elapsed().as_nanos() as u64);
         transactions.insert(transaction_id, TransactionInfo { transaction_type, owner, close_sender });
+        resource::perf_counters::TXN_TABLE_SIZE_PEAK.update_max(transactions.len() as u64);
+        resource::perf_counters::TXN_OPEN_RECORD.record(__t_record.elapsed().as_nanos() as u64);
     }
 }
 
@@ -94,14 +99,18 @@ impl TransactionOperator for LocalTransactionOperator {
         owner: String,
         close_sender: Sender<()>,
     ) -> Result<Transaction, ArcServerStateError> {
+        let __t_open_total = std::time::Instant::now();
         let database = self.database_manager.database(database_name).ok_or_else(|| {
             arc_server_state_err(LocalServerStateError::DatabaseNotFound { name: database_name.to_string() })
         })?;
+        let __t_open_blocking = std::time::Instant::now();
         let transaction =
             open_transaction_blocking(database, transaction_type, options).await.map_err(|typedb_source| {
                 arc_server_state_err(LocalServerStateError::TransactionOpenFailed { typedb_source })
             })?;
+        resource::perf_counters::TXN_OPEN_BLOCKING.record(__t_open_blocking.elapsed().as_nanos() as u64);
         self.record(transaction.id(), transaction_type, owner, close_sender).await;
+        resource::perf_counters::TXN_OPEN_TOTAL.record(__t_open_total.elapsed().as_nanos() as u64);
         Ok(transaction)
     }
 

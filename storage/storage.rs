@@ -261,6 +261,21 @@ impl<Durability> MVCCStorage<Durability> {
     where
         Durability: DurabilityClient,
     {
+        let __t_snapshot_commit = std::time::Instant::now();
+        let __snapshot_commit_inner_result = self.snapshot_commit_inner(snapshot, commit_profile);
+        resource::perf_counters::STORAGE_SNAPSHOT_COMMIT
+            .record(__t_snapshot_commit.elapsed().as_nanos() as u64);
+        __snapshot_commit_inner_result
+    }
+
+    fn snapshot_commit_inner(
+        &self,
+        snapshot: impl CommittableSnapshot<Durability>,
+        commit_profile: &mut CommitProfile,
+    ) -> Result<SequenceNumber, StorageCommitError>
+    where
+        Durability: DurabilityClient,
+    {
         use StorageCommitError::{Durability, Internal, Keyspace, MVCCRead};
 
         self.set_initial_put_status(&snapshot, commit_profile.storage_counters())
@@ -333,6 +348,21 @@ impl<Durability> MVCCStorage<Durability> {
     }
 
     fn set_initial_put_status(
+        &self,
+        snapshot: &impl CommittableSnapshot<Durability>,
+        storage_counters: StorageCounters,
+    ) -> Result<(), MVCCReadError>
+    where
+        Durability: DurabilityClient,
+    {
+        let __t_sips = std::time::Instant::now();
+        let __sips_result = self.set_initial_put_status_inner(snapshot, storage_counters);
+        resource::perf_counters::STORAGE_SET_INITIAL_PUT_STATUS
+            .record(__t_sips.elapsed().as_nanos() as u64);
+        __sips_result
+    }
+
+    fn set_initial_put_status_inner(
         &self,
         snapshot: &impl CommittableSnapshot<Durability>,
         storage_counters: StorageCounters,

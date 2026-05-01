@@ -69,14 +69,21 @@ pub(crate) async fn commit_write_transaction(
     server_state: Arc<ServerState>,
     transaction: TransactionWrite<WALClient>,
 ) -> (TransactionProfile, Result<(), ArcServerStateError>) {
-    let (mut profile, result) = match transaction.finalise() {
+    let __t_total = std::time::Instant::now();
+    let __t_finalise = std::time::Instant::now();
+    let finalise_outcome = transaction.finalise();
+    resource::perf_counters::COMMIT_WRITE_FINALISE.record(__t_finalise.elapsed().as_nanos() as u64);
+    let (mut profile, result) = match finalise_outcome {
         (mut profile, Ok(commit_intent)) => {
             if !commit_intent.has_changes() {
                 (profile, Ok(()))
             } else {
                 let commit_profile = profile.take_commit_profile();
+                let __t_data_commit = std::time::Instant::now();
                 let (commit_profile, result) =
                     server_state.databases().data_commit(commit_intent, commit_profile).await;
+                resource::perf_counters::COMMIT_WRITE_DATA_COMMIT
+                    .record(__t_data_commit.elapsed().as_nanos() as u64);
                 profile.set_commit_profile(commit_profile);
                 (profile, result)
             }
@@ -89,6 +96,7 @@ pub(crate) async fn commit_write_transaction(
     if profile.is_enabled() {
         event!(Level::INFO, "data commit done.\n{}", profile);
     }
+    resource::perf_counters::COMMIT_WRITE_TOTAL.record(__t_total.elapsed().as_nanos() as u64);
     (profile, result)
 }
 
