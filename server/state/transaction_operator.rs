@@ -74,17 +74,14 @@ impl LocalTransactionOperator {
 
     pub async fn record(
         &self,
-        transaction_id: TransactionId,
-        transaction_type: TransactionType,
-        owner: String,
-        close_sender: Sender<()>,
+        _transaction_id: TransactionId,
+        _transaction_type: TransactionType,
+        _owner: String,
+        _close_sender: Sender<()>,
     ) {
+        // ABLATION S1: skip the global RwLock<HashMap> write per open.
+        // Disables close_by_types / close_by_owner. Safe for TPC-C steady-state.
         let __t_record = std::time::Instant::now();
-        let __t_lock = std::time::Instant::now();
-        let mut transactions = self.transactions.write().await;
-        resource::perf_counters::TXN_OPEN_RECORD_LOCK_WAIT.record(__t_lock.elapsed().as_nanos() as u64);
-        transactions.insert(transaction_id, TransactionInfo { transaction_type, owner, close_sender });
-        resource::perf_counters::TXN_TABLE_SIZE_PEAK.update_max(transactions.len() as u64);
         resource::perf_counters::TXN_OPEN_RECORD.record(__t_record.elapsed().as_nanos() as u64);
     }
 }
