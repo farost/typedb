@@ -342,29 +342,12 @@ impl Files {
     }
 
     fn sync_directory_best_effort(&mut self) -> Result<(), DurabilityServiceError> {
+        // ABLATION S2: stub the per-batch directory fsync.
+        // Loses the durability guarantee that the directory entry for a fresh segment
+        // is itself durable on power loss — acceptable for a perf measurement, NOT prod.
         let __t_dir = std::time::Instant::now();
-        let result = {
-            #[cfg(unix)]
-            {
-                StdFile::open(&self.directory)
-                    .map_err(|err| WALError::Sync { source: Arc::new(err) })?
-                    .sync_all()
-                    .map_err(|err| WALError::Sync { source: Arc::new(err) }.into())
-            }
-
-            #[cfg(windows)]
-            {
-                // On Windows, FlushFileBuffers doesn't support directory handles, so it's likely
-                // a noop or an error (which is ignored), but we try it for symmetry.
-                // TODO: This requires additional testing and probably a separate OS-specific impl.
-                if let Ok(dir) = StdFile::open(&self.directory) {
-                    let _ = dir.sync_all();
-                }
-                Ok(())
-            }
-        };
         resource::perf_counters::WAL_FSYNC_DIRECTORY.record(__t_dir.elapsed().as_nanos() as u64);
-        result
+        Ok(())
     }
 
     fn iter(&self) -> impl DoubleEndedIterator<Item = &File> {
