@@ -479,6 +479,9 @@ impl TransactionService {
         // finish executing any remaining writes so they make it into the commit
         self.finish_queued_write_queries(InterruptType::TransactionCommitted).await?;
 
+        // ABLATION S3: skip the outer `tokio::spawn` wrapper and inline the future.
+        // Removes one task-pool hop + scheduler enqueue per commit. The inner
+        // `spawn_blocking` inside `commit_write_transaction` is preserved.
         let diagnostics_manager = self.server_state.diagnostics_manager().clone();
         let server_state = self.server_state.clone();
         match self.transaction.take().expect("Expected existing transaction") {
@@ -486,7 +489,7 @@ impl TransactionService {
                 self.transaction = Some(Transaction::Read(transaction));
                 Err(TransactionServiceError::CannotCommitReadTransaction {}.into_proto_error_message().into_status())
             }
-            Transaction::Write(transaction) => spawn(async move {
+            Transaction::Write(transaction) => {
                 diagnostics_manager.decrement_load_count(
                     ClientEndpoint::Grpc,
                     transaction.database.name(),
@@ -496,10 +499,8 @@ impl TransactionService {
                 commit_result.map_err(|typedb_source| {
                     TransactionServiceError::DataCommitFailed { typedb_source }.into_proto_error_message().into_status()
                 })
-            })
-            .await
-            .expect("Expected write transaction commit completion"),
-            Transaction::Schema(transaction) => spawn(async move {
+            }
+            Transaction::Schema(transaction) => {
                 diagnostics_manager.decrement_load_count(
                     ClientEndpoint::Grpc,
                     transaction.database.name(),
@@ -511,9 +512,7 @@ impl TransactionService {
                         .into_proto_error_message()
                         .into_status()
                 })
-            })
-            .await
-            .expect("Expected schema transaction commit completion"),
+            }
         }?;
 
         send_ok_message!(
