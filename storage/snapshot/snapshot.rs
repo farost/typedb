@@ -235,6 +235,7 @@ impl<D> ReadSnapshot<D> {
     pub(crate) fn new(storage: Arc<MVCCStorage<D>>, open_sequence_number: SequenceNumber) -> Self {
         // Note: for serialisability, we would need to register the open transaction to the IsolationManager
         let id = SnapshotId::from_number(storage.state_counters().allocate(CounterId::SnapshotId));
+        println!("Read snapshot id: {id:?}");
         ReadSnapshot { open_sequence_number, id, iterator_pool: IteratorPool::new(), storage }
     }
 }
@@ -360,6 +361,7 @@ impl<D> WriteSnapshot<D> {
         let reader_guard = storage.isolation_manager.opened_for_read(open_sequence_number);
         let mut counters = SnapshotCounters::new(storage.state_counters().clone());
         let id = id.unwrap_or_else(|| SnapshotId::from_number(counters.allocate(CounterId::SnapshotId)));
+        println!("Write snapshot id: {id:?}");
         WriteSnapshot {
             storage,
             operations,
@@ -553,6 +555,7 @@ impl<D> SchemaSnapshot<D> {
         let reader_guard = storage.isolation_manager.opened_for_read(open_sequence_number);
         let mut counters = SnapshotCounters::new(storage.state_counters().clone());
         let id = id.unwrap_or_else(|| SnapshotId::from_number(counters.allocate(CounterId::SnapshotId)));
+        println!("Schema snapshot id: {id:?}");
         SchemaSnapshot {
             storage,
             operations,

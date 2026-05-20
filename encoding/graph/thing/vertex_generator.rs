@@ -153,6 +153,7 @@ impl ThingVertexGenerator {
         Snapshot: WritableSnapshot,
     {
         let entity_id = snapshot.allocate_counter(CounterId::EntityVertex { type_id: type_id.as_u16() });
+        println!("Entity id: {entity_id:?}");
         let vertex = ObjectVertex::build_entity(type_id, ObjectID::new(entity_id));
         snapshot.insert(vertex.into_storage_key().into_owned_array());
         vertex
@@ -163,6 +164,7 @@ impl ThingVertexGenerator {
         Snapshot: WritableSnapshot,
     {
         let relation_id = snapshot.allocate_counter(CounterId::RelationVertex { type_id: type_id.as_u16() });
+        println!("Relation id: {relation_id:?}");
         let vertex = ObjectVertex::build_relation(type_id, ObjectID::new(relation_id));
         snapshot.insert(vertex.into_storage_key().into_owned_array());
         vertex
