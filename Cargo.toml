@@ -157,6 +157,11 @@ features = {}
 
 	[workspace.dependencies]
 
+		[workspace.dependencies.hyper-util]
+			features = ["client", "client-legacy", "default", "http1", "http2", "server", "server-auto", "service", "tokio"]
+			version = "0.1.20"
+			default-features = false
+
 		[workspace.dependencies.logger]
 			path = "common/logger"
 			features = []
@@ -330,7 +335,7 @@ features = {}
 
 		[workspace.dependencies.tower-http]
 			features = ["cors", "default"]
-			version = "0.6.8"
+			version = "0.6.11"
 			default-features = false
 
 		[workspace.dependencies.serde]
@@ -390,7 +395,7 @@ features = {}
 
 		[workspace.dependencies.serde_json]
 			features = ["default", "raw_value", "std"]
-			version = "1.0.149"
+			version = "1.0.150"
 			default-features = false
 
 		[workspace.dependencies.xoshiro]
@@ -460,7 +465,7 @@ features = {}
 
 		[workspace.dependencies.serde_with]
 			features = ["alloc", "default", "macros", "std"]
-			version = "3.18.0"
+			version = "3.20.0"
 			default-features = false
 
 		[workspace.dependencies.hyper]
@@ -521,17 +526,12 @@ features = {}
 
 		[workspace.dependencies.http]
 			features = ["default", "std"]
-			version = "1.4.0"
+			version = "1.4.1"
 			default-features = false
 
 		[workspace.dependencies.hyper-rustls]
 			features = ["acceptor", "default", "http1", "log", "logging", "native-tokio", "ring", "rustls-native-certs", "tls12", "tokio-runtime"]
 			version = "0.25.0"
-			default-features = false
-
-		[workspace.dependencies.hyper-util]
-			features = ["tokio"]
-			version = "0.1.18"
 			default-features = false
 
 		[workspace.dependencies.rand_core]
@@ -616,7 +616,7 @@ features = {}
 
 		[workspace.dependencies.tokio]
 			features = ["bytes", "default", "fs", "io-std", "io-util", "libc", "macros", "mio", "net", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "test-util", "time", "tokio-macros"]
-			version = "1.52.1"
+			version = "1.52.3"
 			default-features = false
 
 		[workspace.dependencies.structural_equality]
