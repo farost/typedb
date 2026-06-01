@@ -101,7 +101,7 @@ assemble_zip(
     output_filename = "typedb-server-mac-x86_64",
     permissions = other_permissions,
     targets = ["//:package-typedb-server-only"],
-    visibility = ["//tests/assembly:__subpackages__"],
+    visibility = ["//tests/assembly:__subpackages__", "//admin:__pkg__"],
     target_compatible_with = constraint_mac_x86_64,
 )
 
@@ -112,7 +112,7 @@ assemble_zip(
     output_filename = "typedb-server-mac-arm64",
     permissions = other_permissions,
     targets = ["//:package-typedb-server-only"],
-    visibility = ["//tests/assembly:__subpackages__"],
+    visibility = ["//tests/assembly:__subpackages__", "//admin:__pkg__"],
     target_compatible_with = constraint_mac_arm64,
 )
 
@@ -123,7 +123,7 @@ assemble_targz(
     output_filename = "typedb-server-linux-x86_64",
     permissions = other_permissions,
     targets = ["//:package-typedb-server-only"],
-    visibility = ["//tests/assembly:__subpackages__"],
+    visibility = ["//tests/assembly:__subpackages__", "//admin:__pkg__"],
     target_compatible_with = constraint_linux_x86_64,
 )
 
@@ -134,7 +134,7 @@ assemble_targz(
     output_filename = "typedb-server-linux-arm64",
     permissions = other_permissions,
     targets = ["//:package-typedb-server-only"],
-    visibility = ["//tests/assembly:__subpackages__"],
+    visibility = ["//tests/assembly:__subpackages__", "//admin:__pkg__"],
     target_compatible_with = constraint_linux_arm64,
 )
 
@@ -145,7 +145,7 @@ assemble_zip(
     output_filename = "typedb-server-windows-x86_64",
     permissions = other_permissions,
     targets = ["//:package-typedb-server-only"],
-    visibility = ["//tests/assembly:__subpackages__"],
+    visibility = ["//tests/assembly:__subpackages__", "//admin:__pkg__"],
     target_compatible_with = constraint_win_x86_64,
 )
 
@@ -168,7 +168,7 @@ assemble_zip(
     output_filename = "typedb-all-mac-x86_64",
     permissions = other_permissions,
     targets = ["//:package-typedb-all"],
-    visibility = ["//tests/assembly:__subpackages__"],
+    visibility = ["//tests/assembly:__subpackages__", "//admin:__pkg__"],
     target_compatible_with = constraint_mac_x86_64,
 )
 
@@ -179,7 +179,7 @@ assemble_zip(
     output_filename = "typedb-all-mac-arm64",
     permissions = other_permissions,
     targets = ["//:package-typedb-all"],
-    visibility = ["//tests/assembly:__subpackages__"],
+    visibility = ["//tests/assembly:__subpackages__", "//admin:__pkg__"],
     target_compatible_with = constraint_mac_arm64,
 )
 
@@ -190,7 +190,7 @@ assemble_targz(
     output_filename = "typedb-all-linux-x86_64",
     permissions = other_permissions,
     targets = ["//:package-typedb-all"],
-    visibility = ["//tests/assembly:__subpackages__"],
+    visibility = ["//tests/assembly:__subpackages__", "//admin:__pkg__"],
     target_compatible_with = constraint_linux_x86_64,
 )
 
@@ -201,7 +201,7 @@ assemble_targz(
     output_filename = "typedb-all-linux-arm64",
     permissions = other_permissions,
     targets = ["//:package-typedb-all"],
-    visibility = ["//tests/assembly:__subpackages__"],
+    visibility = ["//tests/assembly:__subpackages__", "//admin:__pkg__"],
     target_compatible_with = constraint_linux_arm64,
 )
 
@@ -212,7 +212,7 @@ assemble_zip(
     output_filename = "typedb-all-windows-x86_64",
     permissions = other_permissions,
     targets = ["//:package-typedb-all"],
-    visibility = ["//tests/assembly:__subpackages__"],
+    visibility = ["//tests/assembly:__subpackages__", "//admin:__pkg__"],
     target_compatible_with = constraint_win_x86_64,
 )
 
@@ -271,7 +271,7 @@ alias(
         "@typedb_bazel_distribution//platform:is_mac_x86_64" : ":assemble-all-mac-x86_64-zip",
         "@typedb_bazel_distribution//platform:is_windows_x86_64" : ":assemble-all-windows-x86_64-zip"
     }),
-    visibility = ["//tests/assembly:__subpackages__"],
+    visibility = ["//tests/assembly:__subpackages__", "//admin:__pkg__"],
 )
 alias(
     name = "deploy-typedb-server",
