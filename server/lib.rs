@@ -452,7 +452,10 @@ impl Server {
         }
 
         if let Some(admin_address) = server_status.admin_address() {
-            println!("  Admin: {admin_address} (Unix socket, mode 0600)");
+            #[cfg(unix)]
+            println!("  Admin: {admin_address} (Unix socket)");
+            #[cfg(windows)]
+            println!("  Admin: {admin_address} (Named Pipe)");
         }
 
         if encryption_config.enabled {
