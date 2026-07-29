@@ -302,7 +302,7 @@ impl AttributesInfo {
 }
 
 pub struct DatabaseImporter {
-    committer: Box<dyn ImportCommitter>,
+    committer: Arc<dyn ImportCommitter>,
     database_name: String,
     database: Option<Arc<Database<WALClient>>>,
     schema_info: SchemaInfo,
@@ -328,7 +328,7 @@ impl DatabaseImporter {
     pub fn new(
         database: Arc<Database<WALClient>>,
         import_directory: PathBuf,
-        committer: Box<dyn ImportCommitter>,
+        committer: Arc<dyn ImportCommitter>,
     ) -> Self {
         let database_name = database.name().to_string();
         let data_info = DataInfo::new(&import_directory, &database_name);
