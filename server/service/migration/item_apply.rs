@@ -23,8 +23,6 @@ use crate::service::{
     migration::item::{decode_checksums, decode_migration_value},
 };
 
-// The transport-agnostic import item application: decodes and applies one exported item to a
-// DatabaseImporter, exactly as the gRPC import service applies items received over the wire.
 pub fn process_item(
     item_proto: MigrationItemProto,
     database_importer: &mut DatabaseImporter,
