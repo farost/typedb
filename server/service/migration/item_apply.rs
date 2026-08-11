@@ -79,12 +79,7 @@ fn process_relation(
     let label = Label::parse_from(&label_text, None);
 
     database_importer
-        .import_relation(
-            id,
-            label,
-            convert_owned_attributes(attributes),
-            convert_related_role_players(roles),
-        )
+        .import_relation(id, label, convert_owned_attributes(attributes), convert_related_role_players(roles))
         .map_err(|typedb_source| DatabaseImportServiceError::DatabaseImport { typedb_source })
 }
 
@@ -136,4 +131,3 @@ fn convert_related_role_players(roles: Vec<MigrationRoleProto>) -> Vec<(Label, V
         })
         .collect_vec()
 }
-
