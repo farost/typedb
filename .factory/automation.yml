@@ -21,6 +21,11 @@ build:
             export CARGO_BAZEL_GENERATOR_URL="$CARGO_BAZEL_GENERATOR_URL_LINUX_X86_64"
             export CARGO_BAZEL_GENERATOR_SHA256="$CARGO_BAZEL_GENERATOR_SHA256_LINUX_X86_64"
         fi
+        echo "--- netrc ---";  cat ~/.netrc 2>/dev/null | sed 's/password .*/password ***/' || echo none
+        echo "--- git config ---"; git config --global --list 2>/dev/null | grep -iE 'url|http|credential' || echo none
+        echo "--- env ---"; env | grep -iE 'github|token|proxy' | sed 's/=.*/=***/' || echo none
+        echo "--- probe ---"
+        GIT_TERMINAL_PROMPT=0 GIT_CURL_VERBOSE=1 git ls-remote https://github.com/bazelbuild/rules_rust tags/0.56.0 2>&1 | tail -40
         bazel run @typedb_dependencies//tool/bazelinstall:remote_cache_setup.sh
         bazel build --config=ci --build_tag_filters=-manual_build //...
         bazel run --config=ci @typedb_dependencies//tool/checkstyle:test-coverage
